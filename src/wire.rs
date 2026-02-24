@@ -174,36 +174,36 @@ impl From<&[u8; 12]> for Command {
             .trim_matches(char::from(0));
 
         match cmd {
-            "version"     => Command::Version,
-            "verack"      => Command::Verack,
-            "addr"        => Command::Addr,
-            "addrv2"      => Command::AddrV2,
-            "sendaddrv2"  => Command::SendAddrV2,
-            "getaddr"     => Command::GetAddr,
-            "ping"        => Command::Ping,
-            "pong"        => Command::Pong,
+            "version" => Command::Version,
+            "verack" => Command::Verack,
+            "addr" => Command::Addr,
+            "addrv2" => Command::AddrV2,
+            "sendaddrv2" => Command::SendAddrV2,
+            "getaddr" => Command::GetAddr,
+            "ping" => Command::Ping,
+            "pong" => Command::Pong,
             "sendheaders" => Command::SendHeaders,
-            "sendcmpct"   => Command::SendCmpct,
-            "feefilter"   => Command::FeeFilter,
-            "reject"      => Command::Reject,
-            "alert"       => Command::Alert,
-            "inv"         => Command::Inv,
-            "getdata"     => Command::GetData,
-            "notfound"    => Command::NotFound,
-            "getblocks"   => Command::GetBlocks,
-            "getheaders"  => Command::GetHeaders,
-            "headers"     => Command::Headers,
-            "block"       => Command::Block,
-            "tx"          => Command::Tx,
+            "sendcmpct" => Command::SendCmpct,
+            "feefilter" => Command::FeeFilter,
+            "reject" => Command::Reject,
+            "alert" => Command::Alert,
+            "inv" => Command::Inv,
+            "getdata" => Command::GetData,
+            "notfound" => Command::NotFound,
+            "getblocks" => Command::GetBlocks,
+            "getheaders" => Command::GetHeaders,
+            "headers" => Command::Headers,
+            "block" => Command::Block,
+            "tx" => Command::Tx,
             "getblocktxn" => Command::GetBlockTxn,
-            "blocktxn"    => Command::BlockTxn,
-            "cmpctblock"  => Command::CmpctBlock,
-            "mempool"     => Command::Mempool,
+            "blocktxn" => Command::BlockTxn,
+            "cmpctblock" => Command::CmpctBlock,
+            "mempool" => Command::Mempool,
             "merkleblock" => Command::MerkleBlock,
-            "filterload"  => Command::FilterLoad,
-            "filteradd"   => Command::FilterAdd,
+            "filterload" => Command::FilterLoad,
+            "filteradd" => Command::FilterAdd,
             "filterclear" => Command::FilterClear,
-            _             => Command::Unknown,
+            _ => Command::Unknown,
         }
     }
 }
@@ -214,37 +214,39 @@ impl TryFrom<RawMessage> for Message {
     fn try_from(raw: RawMessage) -> io::Result<Self> {
         match raw.command {
             // decoded
-            Command::Version     => Ok(Message::Version(VersionMessage::decode(&raw.payload)?)),
-            Command::Verack      => Ok(Message::Verack),
-            Command::Addr        => Ok(Message::Addr(Vec::<AddrEntry>::decode(&raw.payload)?)),
-            Command::AddrV2      => Ok(Message::AddrV2(Vec::<AddrV2Entry>::decode(&raw.payload)?)),
+            Command::Version => Ok(Message::Version(VersionMessage::decode(&raw.payload)?)),
+            Command::Verack => Ok(Message::Verack),
+            Command::Addr => Ok(Message::Addr(Vec::<AddrEntry>::decode(&raw.payload)?)),
+            Command::AddrV2 => Ok(Message::AddrV2(Vec::<AddrV2Entry>::decode(&raw.payload)?)),
             // TODO: implement Decode
-            Command::SendAddrV2  => Ok(Message::SendAddrV2(raw.payload)),
-            Command::GetAddr     => Ok(Message::GetAddr(raw.payload)),
-            Command::Ping        => Ok(Message::Ping(raw.payload)),
-            Command::Pong        => Ok(Message::Pong(raw.payload)),
+            Command::SendAddrV2 => Ok(Message::SendAddrV2(raw.payload)),
+            Command::GetAddr => Ok(Message::GetAddr(raw.payload)),
+            Command::Ping => Ok(Message::Ping(raw.payload)),
+            Command::Pong => Ok(Message::Pong(raw.payload)),
             Command::SendHeaders => Ok(Message::SendHeaders(raw.payload)),
-            Command::SendCmpct   => Ok(Message::SendCmpct(raw.payload)),
-            Command::FeeFilter   => Ok(Message::FeeFilter(raw.payload)),
-            Command::Reject      => Ok(Message::Reject(raw.payload)),
-            Command::Alert       => Ok(Message::Alert(raw.payload)),
-            Command::Inv         => Ok(Message::Inv(raw.payload)),
-            Command::GetData     => Ok(Message::GetData(raw.payload)),
-            Command::NotFound    => Ok(Message::NotFound(raw.payload)),
-            Command::GetBlocks   => Ok(Message::GetBlocks(raw.payload)),
-            Command::GetHeaders  => Ok(Message::GetHeaders(raw.payload)),
-            Command::Headers     => Ok(Message::Headers(raw.payload)),
-            Command::Block       => Ok(Message::Block(raw.payload)),
-            Command::Tx          => Ok(Message::Tx(raw.payload)),
+            Command::SendCmpct => Ok(Message::SendCmpct(raw.payload)),
+            Command::FeeFilter => Ok(Message::FeeFilter(raw.payload)),
+            Command::Reject => Ok(Message::Reject(raw.payload)),
+            Command::Alert => Ok(Message::Alert(raw.payload)),
+            Command::Inv => Ok(Message::Inv(raw.payload)),
+            Command::GetData => Ok(Message::GetData(raw.payload)),
+            Command::NotFound => Ok(Message::NotFound(raw.payload)),
+            Command::GetBlocks => Ok(Message::GetBlocks(raw.payload)),
+            Command::GetHeaders => Ok(Message::GetHeaders(raw.payload)),
+            Command::Headers => Ok(Message::Headers(raw.payload)),
+            Command::Block => Ok(Message::Block(raw.payload)),
+            Command::Tx => Ok(Message::Tx(raw.payload)),
             Command::GetBlockTxn => Ok(Message::GetBlockTxn(raw.payload)),
-            Command::BlockTxn    => Ok(Message::BlockTxn(raw.payload)),
-            Command::CmpctBlock  => Ok(Message::CmpctBlock(raw.payload)),
-            Command::Mempool     => Ok(Message::Mempool(raw.payload)),
+            Command::BlockTxn => Ok(Message::BlockTxn(raw.payload)),
+            Command::CmpctBlock => Ok(Message::CmpctBlock(raw.payload)),
+            Command::Mempool => Ok(Message::Mempool(raw.payload)),
             Command::MerkleBlock => Ok(Message::MerkleBlock(raw.payload)),
-            Command::FilterLoad  => Ok(Message::FilterLoad(raw.payload)),
-            Command::FilterAdd   => Ok(Message::FilterAdd(raw.payload)),
+            Command::FilterLoad => Ok(Message::FilterLoad(raw.payload)),
+            Command::FilterAdd => Ok(Message::FilterAdd(raw.payload)),
             Command::FilterClear => Ok(Message::FilterClear(raw.payload)),
-            Command::Unknown     => Ok(Message::Unknown { payload: raw.payload }),
+            Command::Unknown => Ok(Message::Unknown {
+                payload: raw.payload,
+            }),
         }
     }
 }
@@ -253,16 +255,18 @@ impl Decode for VersionMessage {
     fn decode(payload: &[u8]) -> io::Result<Self> {
         let mut c = 0;
 
-        let version     = read_i32(payload, &mut c)?;
-        let services    = read_u64(payload, &mut c)?;
-        let timestamp   = read_i64(payload, &mut c)?;
-        let addr_recv   = decode_net_addr(payload, &mut c)?;
-        let addr_from   = decode_net_addr(payload, &mut c)?;
-        let nonce       = read_u64(payload, &mut c)?;
+        let version = read_i32(payload, &mut c)?;
+        let services = read_u64(payload, &mut c)?;
+        let timestamp = read_i64(payload, &mut c)?;
+        let addr_recv = decode_net_addr(payload, &mut c)?;
+        let addr_from = decode_net_addr(payload, &mut c)?;
+        let nonce = read_u64(payload, &mut c)?;
 
         let ua_len = read_varint(payload, &mut c)? as usize;
         let user_agent = std::str::from_utf8(
-            payload.get(c..c + ua_len).ok_or_else(|| eof("version: user_agent"))?,
+            payload
+                .get(c..c + ua_len)
+                .ok_or_else(|| eof("version: user_agent"))?,
         )
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
         .to_string();
@@ -271,7 +275,17 @@ impl Decode for VersionMessage {
         let start_height = read_i32(payload, &mut c)?;
         let relay = payload.get(c).map(|&b| b != 0);
 
-        Ok(VersionMessage { version, services, timestamp, addr_recv, addr_from, nonce, user_agent, start_height, relay })
+        Ok(VersionMessage {
+            version,
+            services,
+            timestamp,
+            addr_recv,
+            addr_from,
+            nonce,
+            user_agent,
+            start_height,
+            relay,
+        })
     }
 }
 
@@ -308,7 +322,7 @@ impl Decode for Vec<AddrV2Entry> {
 
         for _ in 0..count {
             let timestamp = read_u32(payload, &mut c)?;
-            let services  = read_varint(payload, &mut c)?; // CompactSize on wire
+            let services = read_varint(payload, &mut c)?; // CompactSize on wire
             let network_id = *payload.get(c).ok_or_else(|| eof("addrv2: network_id"))?;
             c += 1;
 
@@ -329,15 +343,24 @@ impl Decode for Vec<AddrV2Entry> {
             let addr = match network_id {
                 0x01 => {
                     if addr_bytes.len() != 4 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: IPv4 must be 4 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: IPv4 must be 4 bytes",
+                        ));
                     }
                     AddrV2Addr::IPv4(std::net::Ipv4Addr::new(
-                        addr_bytes[0], addr_bytes[1], addr_bytes[2], addr_bytes[3],
+                        addr_bytes[0],
+                        addr_bytes[1],
+                        addr_bytes[2],
+                        addr_bytes[3],
                     ))
                 }
                 0x02 => {
                     if addr_bytes.len() != 16 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: IPv6 must be 16 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: IPv6 must be 16 bytes",
+                        ));
                     }
                     AddrV2Addr::IPv6(std::net::Ipv6Addr::from(
                         <[u8; 16]>::try_from(addr_bytes).unwrap(),
@@ -345,25 +368,37 @@ impl Decode for Vec<AddrV2Entry> {
                 }
                 0x03 => {
                     if addr_bytes.len() != 10 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: TorV2 must be 10 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: TorV2 must be 10 bytes",
+                        ));
                     }
                     AddrV2Addr::TorV2(addr_bytes.try_into().unwrap())
                 }
                 0x04 => {
                     if addr_bytes.len() != 32 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: TorV3 must be 32 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: TorV3 must be 32 bytes",
+                        ));
                     }
                     AddrV2Addr::TorV3(addr_bytes.try_into().unwrap())
                 }
                 0x05 => {
                     if addr_bytes.len() != 32 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: I2P must be 32 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: I2P must be 32 bytes",
+                        ));
                     }
                     AddrV2Addr::I2P(addr_bytes.try_into().unwrap())
                 }
                 0x06 => {
                     if addr_bytes.len() != 16 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: CJDNS must be 16 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: CJDNS must be 16 bytes",
+                        ));
                     }
                     AddrV2Addr::Cjdns(std::net::Ipv6Addr::from(
                         <[u8; 16]>::try_from(addr_bytes).unwrap(),
@@ -371,16 +406,27 @@ impl Decode for Vec<AddrV2Entry> {
                 }
                 0x07 => {
                     if addr_bytes.len() != 16 {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "addrv2: Yggdrasil must be 16 bytes"));
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "addrv2: Yggdrasil must be 16 bytes",
+                        ));
                     }
                     AddrV2Addr::Yggdrasil(std::net::Ipv6Addr::from(
                         <[u8; 16]>::try_from(addr_bytes).unwrap(),
                     ))
                 }
-                id => AddrV2Addr::Unknown { network_id: id, bytes: addr_bytes.to_vec() },
+                id => AddrV2Addr::Unknown {
+                    network_id: id,
+                    bytes: addr_bytes.to_vec(),
+                },
             };
 
-            entries.push(AddrV2Entry { timestamp, services, addr, port });
+            entries.push(AddrV2Entry {
+                timestamp,
+                services,
+                addr,
+                port,
+            });
         }
 
         Ok(entries)
@@ -420,7 +466,12 @@ pub fn read_message(stream: &mut TcpStream) -> io::Result<RawMessage> {
     let mut payload = vec![0u8; length as usize];
     stream.read_exact(&mut payload)?;
 
-    Ok(RawMessage { magic, command, payload, checksum })
+    Ok(RawMessage {
+        magic,
+        command,
+        payload,
+        checksum,
+    })
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -433,10 +484,19 @@ fn read_varint(p: &[u8], c: &mut usize) -> io::Result<u64> {
     let first = *p.get(*c).ok_or_else(|| eof("varint"))?;
     *c += 1;
     match first {
-        0xFD => { let v = u16::from_le_bytes(slice2(p, c, "varint:fd")?); Ok(v as u64) }
-        0xFE => { let v = u32::from_le_bytes(slice4(p, c, "varint:fe")?); Ok(v as u64) }
-        0xFF => { let v = u64::from_le_bytes(slice8(p, c, "varint:ff")?); Ok(v) }
-        n    => Ok(n as u64),
+        0xFD => {
+            let v = u16::from_le_bytes(slice2(p, c, "varint:fd")?);
+            Ok(v as u64)
+        }
+        0xFE => {
+            let v = u32::from_le_bytes(slice4(p, c, "varint:fe")?);
+            Ok(v as u64)
+        }
+        0xFF => {
+            let v = u64::from_le_bytes(slice8(p, c, "varint:ff")?);
+            Ok(v)
+        }
+        n => Ok(n as u64),
     }
 }
 
@@ -454,7 +514,10 @@ fn decode_net_addr(p: &[u8], c: &mut usize) -> io::Result<NetAddr> {
 
     let ip = if ip_bytes[..12] == [0u8; 12] {
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(
-            ip_bytes[12], ip_bytes[13], ip_bytes[14], ip_bytes[15],
+            ip_bytes[12],
+            ip_bytes[13],
+            ip_bytes[14],
+            ip_bytes[15],
         ))
     } else {
         std::net::IpAddr::V6(std::net::Ipv6Addr::from(ip_bytes))
@@ -463,25 +526,45 @@ fn decode_net_addr(p: &[u8], c: &mut usize) -> io::Result<NetAddr> {
     Ok(NetAddr { services, ip, port })
 }
 
-fn read_i32(p: &[u8], c: &mut usize) -> io::Result<i32> { Ok(i32::from_le_bytes(slice4(p, c, "i32")?)) }
-fn read_i64(p: &[u8], c: &mut usize) -> io::Result<i64> { Ok(i64::from_le_bytes(slice8(p, c, "i64")?)) }
-fn read_u32(p: &[u8], c: &mut usize) -> io::Result<u32> { Ok(u32::from_le_bytes(slice4(p, c, "u32")?)) }
-fn read_u64(p: &[u8], c: &mut usize) -> io::Result<u64> { Ok(u64::from_le_bytes(slice8(p, c, "u64")?)) }
+fn read_i32(p: &[u8], c: &mut usize) -> io::Result<i32> {
+    Ok(i32::from_le_bytes(slice4(p, c, "i32")?))
+}
+fn read_i64(p: &[u8], c: &mut usize) -> io::Result<i64> {
+    Ok(i64::from_le_bytes(slice8(p, c, "i64")?))
+}
+fn read_u32(p: &[u8], c: &mut usize) -> io::Result<u32> {
+    Ok(u32::from_le_bytes(slice4(p, c, "u32")?))
+}
+fn read_u64(p: &[u8], c: &mut usize) -> io::Result<u64> {
+    Ok(u64::from_le_bytes(slice8(p, c, "u64")?))
+}
 
 fn slice2(p: &[u8], c: &mut usize, ctx: &'static str) -> io::Result<[u8; 2]> {
-    let b = p.get(*c..*c + 2).ok_or_else(|| eof(ctx))?.try_into().unwrap();
+    let b = p
+        .get(*c..*c + 2)
+        .ok_or_else(|| eof(ctx))?
+        .try_into()
+        .unwrap();
     *c += 2;
     Ok(b)
 }
 
 fn slice4(p: &[u8], c: &mut usize, ctx: &'static str) -> io::Result<[u8; 4]> {
-    let b = p.get(*c..*c + 4).ok_or_else(|| eof(ctx))?.try_into().unwrap();
+    let b = p
+        .get(*c..*c + 4)
+        .ok_or_else(|| eof(ctx))?
+        .try_into()
+        .unwrap();
     *c += 4;
     Ok(b)
 }
 
 fn slice8(p: &[u8], c: &mut usize, ctx: &'static str) -> io::Result<[u8; 8]> {
-    let b = p.get(*c..*c + 8).ok_or_else(|| eof(ctx))?.try_into().unwrap();
+    let b = p
+        .get(*c..*c + 8)
+        .ok_or_else(|| eof(ctx))?
+        .try_into()
+        .unwrap();
     *c += 8;
     Ok(b)
 }
@@ -516,7 +599,9 @@ mod tests {
         cmd[..cmd_str.len()].copy_from_slice(cmd_str);
         stream.write_all(&MAINNET_MAGIC).unwrap();
         stream.write_all(&cmd).unwrap();
-        stream.write_all(&(payload.len() as u32).to_le_bytes()).unwrap();
+        stream
+            .write_all(&(payload.len() as u32).to_le_bytes())
+            .unwrap();
         stream.write_all(&[0u8; 4]).unwrap(); // checksum (not validated)
         stream.write_all(payload).unwrap();
     }
@@ -540,13 +625,13 @@ mod tests {
         p.extend_from_slice(&1033u64.to_le_bytes());
         p.extend_from_slice(&1700000000i64.to_le_bytes());
         p.extend(net_addr_bytes(1033, [192, 168, 1, 1], 8333)); // addr_recv
-        p.extend(net_addr_bytes(1033, [10, 0, 0, 1], 8333));    // addr_from
+        p.extend(net_addr_bytes(1033, [10, 0, 0, 1], 8333)); // addr_from
         p.extend_from_slice(&0x1234567890abcdefu64.to_le_bytes()); // nonce
         let ua = b"/Satoshi:25.0.0/";
         p.push(ua.len() as u8);
         p.extend_from_slice(ua);
         p.extend_from_slice(&820000i32.to_le_bytes()); // start_height (~late 2023)
-        p.push(1);                                     // relay = true
+        p.push(1); // relay = true
         p
     }
 
@@ -728,17 +813,12 @@ mod tests {
     #[test]
     fn decode_net_addr_ipv6() {
         // 2001:db8::1 — documentation prefix (RFC 3849)
-        let ip: [u8; 16] = [
-            0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        ];
+        let ip: [u8; 16] = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
         let payload = raw_net_addr(8, ip, 8333); // services: NODE_WITNESS
 
         let addr = decode_net_addr(&payload, &mut 0).unwrap();
         assert_eq!(addr.port, 8333);
-        assert_eq!(
-            addr.ip,
-            std::net::IpAddr::V6(std::net::Ipv6Addr::from(ip))
-        );
+        assert_eq!(addr.ip, std::net::IpAddr::V6(std::net::Ipv6Addr::from(ip)));
     }
 
     #[test]
@@ -858,9 +938,9 @@ mod tests {
     fn addrv2_entry_bytes(network_id: u8, addr: &[u8], port: u16) -> Vec<u8> {
         let mut b = vec![];
         b.extend_from_slice(&1700001000u32.to_le_bytes()); // timestamp
-        b.push(0x09);                                       // services = 9 as varint
+        b.push(0x09); // services = 9 as varint
         b.push(network_id);
-        b.push(addr.len() as u8);                          // addr length as varint
+        b.push(addr.len() as u8); // addr length as varint
         b.extend_from_slice(addr);
         b.extend_from_slice(&port.to_be_bytes());
         b
@@ -892,9 +972,7 @@ mod tests {
 
     #[test]
     fn decode_addrv2_ipv6() {
-        let ip: [u8; 16] = [
-            0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-        ];
+        let ip: [u8; 16] = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
         let entry = addrv2_entry_bytes(0x02, &ip, 8333);
         let entries = Vec::<AddrV2Entry>::decode(&addrv2_payload(&[entry])).unwrap();
 
@@ -969,7 +1047,11 @@ mod tests {
         let entries_raw = vec![
             addrv2_entry_bytes(0x01, &[5, 5, 5, 5], 8333),
             addrv2_entry_bytes(0x04, &[0xCCu8; 32], 9050),
-            addrv2_entry_bytes(0x02, &[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], 8333),
+            addrv2_entry_bytes(
+                0x02,
+                &[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                8333,
+            ),
         ];
         let entries = Vec::<AddrV2Entry>::decode(&addrv2_payload(&entries_raw)).unwrap();
 
