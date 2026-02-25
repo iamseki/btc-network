@@ -18,6 +18,7 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use rand::Rng;
 use std::io::{self, Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::fmt::{Debug, Formatter, Result};
 
 /// Network magic value used in the Bitcoin P2P message header.
 ///
@@ -317,7 +318,7 @@ pub struct NetAddr {
 #[derive(Debug)]
 pub struct VersionMessage {
     pub version: i32,
-    pub services: u64,
+    pub services: Services,
     pub timestamp: i64,
     pub addr_recv: NetAddr,
     pub addr_from: NetAddr,
@@ -549,12 +550,148 @@ impl TryFrom<RawMessage> for Message {
     }
 }
 
+/// Service flags as defined by the Bitcoin P2P protocol.
+///
+/// This is a bitfield (`u64`) transmitted in the `version` message.
+/// Each bit represents a capability supported by the node.
+///
+/// Official reference:
+/// https://developer.bitcoin.org/reference/p2p_networking.html#version
+///
+/// The flags are forward-compatible: unknown bits must be preserved.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Services(u64);
+
+impl Services {
+    /// Creates a new `Services` from raw bits.
+    pub const fn new(bits: u64) -> Self {
+        Self(bits)
+    }
+
+    /// Returns the raw bitfield value.
+    pub const fn bits(self) -> u64 {
+        self.0
+    }
+
+    /// Returns true if all bits in `other` are set.
+    pub const fn contains(self, other: Services) -> bool {
+        (self.0 & other.0) == other.0
+    }
+
+    /// Returns true if no bits are set.
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    // ---- Assigned Service Flags ----
+
+    /// 0x00 — Unnamed
+    ///
+    /// This node is not a full node.
+    /// It may not be able to provide any data except for transactions it originates.
+    pub const NONE: Services = Services(0x00);
+
+    /// 0x01 — NODE_NETWORK
+    ///
+    /// This is a full node and can be asked for full blocks.
+    /// It should implement all protocol features available in
+    /// its self-reported protocol version.
+    pub const NODE_NETWORK: Services = Services(0x01);
+
+    /// 0x02 — NODE_GETUTXO
+    ///
+    /// This node can respond to `getutxo` requests.
+    /// Defined in BIP64.
+    ///
+    /// Not supported by currently maintained Bitcoin Core versions.
+    pub const NODE_GETUTXO: Services = Services(0x02);
+
+    /// 0x04 — NODE_BLOOM
+    ///
+    /// Supports bloom-filtered connections.
+    /// Defined in BIP111.
+    pub const NODE_BLOOM: Services = Services(0x04);
+
+    /// 0x08 — NODE_WITNESS
+    ///
+    /// Can provide blocks and transactions including witness data.
+    /// Defined in BIP144.
+    pub const NODE_WITNESS: Services = Services(0x08);
+
+    /// 0x10 — NODE_XTHIN
+    ///
+    /// Supports Xtreme Thinblocks.
+    ///
+    /// Not supported by currently maintained Bitcoin Core versions.
+    pub const NODE_XTHIN: Services = Services(0x10);
+
+    /// 0x0400 — NODE_NETWORK_LIMITED
+    ///
+    /// Same as NODE_NETWORK but guarantees at least the last 288 blocks
+    /// (~2 days).
+    /// Defined in BIP159.
+    pub const NODE_NETWORK_LIMITED: Services = Services(0x0400);
+
+    pub fn names(self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+
+        if self.is_empty() {
+            names.push("NONE");
+            return names;
+        }
+
+        if self.contains(Self::NODE_NETWORK) {
+            names.push("NODE_NETWORK");
+        }
+        if self.contains(Self::NODE_GETUTXO) {
+            names.push("NODE_GETUTXO");
+        }
+        if self.contains(Self::NODE_BLOOM) {
+            names.push("NODE_BLOOM");
+        }
+        if self.contains(Self::NODE_WITNESS) {
+            names.push("NODE_WITNESS");
+        }
+        if self.contains(Self::NODE_XTHIN) {
+            names.push("NODE_XTHIN");
+        }
+        if self.contains(Self::NODE_NETWORK_LIMITED) {
+            names.push("NODE_NETWORK_LIMITED");
+        }
+
+        names
+    }
+}
+
+impl From<u64> for Services {
+    fn from(value: u64) -> Self {
+        Services::new(value)
+    }
+}
+
+impl Debug for Services {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        if self.is_empty() {
+            return write!(f, "Services(NONE)");
+        }
+
+        let names = self.names().join(" | ");
+
+        write!(
+            f,
+            "Services({}) [0x{:016x}]",
+            names,
+            self.bits()
+        )
+    }
+}
+
 impl Decode for VersionMessage {
     fn decode(payload: &[u8]) -> io::Result<Self> {
         let mut c = 0;
 
         let version = read_i32(payload, &mut c)?;
-        let services = read_u64(payload, &mut c)?;
+        let services = Services::from(read_u64(payload, &mut c)?);
         let timestamp = read_i64(payload, &mut c)?;
         let addr_recv = decode_net_addr(payload, &mut c)?;
         let addr_from = decode_net_addr(payload, &mut c)?;
@@ -932,7 +1069,7 @@ mod tests {
         let msg = VersionMessage::decode(&version_payload_v70016()).unwrap();
 
         assert_eq!(msg.version, 70016);
-        assert_eq!(msg.services, 1033);
+        assert_eq!(msg.services.bits(), 1033);
         assert_eq!(msg.timestamp, 1700000000);
         assert_eq!(msg.user_agent, "/Satoshi:25.0.0/");
         assert_eq!(msg.start_height, 820000);
