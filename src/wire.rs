@@ -1,5 +1,251 @@
-use std::io::{self, Read};
-use std::net::TcpStream;
+//! Bitcoin P2P wire protocol primitives.
+//!
+//! This module provides low-level utilities to read and decode
+//! Bitcoin P2P messages directly from a TCP stream.
+//!
+//! It implements:
+//! - Parsing of the 24-byte Bitcoin message header
+//! - Extraction of command name and payload
+//! - Raw message reading from `std::net::TcpStream`
+//!
+//! Higher-level message decoding is handled by [`Message`],
+//! which converts raw payloads into strongly typed variants.
+//!
+//! Protocol reference:
+//! https://developer.bitcoin.org/reference/p2p_networking.html
+
+use byteorder::{LittleEndian, WriteBytesExt};
+use rand::Rng;
+use std::io::{self, Read, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Network magic value used in the Bitcoin P2P message header.
+///
+/// The first 4 bytes of every Bitcoin P2P message identify the
+/// network (mainnet, testnet, regtest, signet) and act as a
+/// message boundary marker in the TCP stream.
+///
+/// For mainnet, the magic value is `0xD9B4BEF9` (F9 BE B4 D9 in bytes).
+///
+/// You can also see how Bitcoin Core maps magic values to networks
+/// in `GetNetworkForMagic`:
+/// https://github.com/bitcoin/bitcoin/blob/master/src/kernel/chainparams.cpp#L703-L723
+///
+/// Other network magic values:
+/// - Mainnet:  0xD9B4BEF9
+/// - Testnet3: 0x0709110B
+/// - Regtest:  0xDAB5BFFA
+/// - Signet:   0x40CF030A
+const MAGIC: u32 = 0xD9B4BEF9;
+
+/// Reads a raw Bitcoin P2P message frame from any [`Read`] source.
+///
+/// This function:
+/// 1. Reads the 24-byte Bitcoin message header
+/// 2. Extracts magic, command, length and checksum
+/// 3. Reads the payload according to the length field
+///
+/// It does **not** validate:
+/// - Network magic
+/// - Checksum correctness
+///
+/// # Example
+///
+/// ```
+/// use std::io::Cursor;
+/// use btc_network::wire::{self, Command};
+///
+/// // Build a minimal fake "verack" frame:
+/// let mut bytes = vec![];
+///
+/// // Magic (mainnet)
+/// bytes.extend_from_slice(&[0xF9, 0xBE, 0xB4, 0xD9]);
+///
+/// // Command "verack" padded to 12 bytes
+/// let mut cmd = [0u8; 12];
+/// cmd[..6].copy_from_slice(b"verack");
+/// bytes.extend_from_slice(&cmd);
+///
+/// // Payload length = 0
+/// bytes.extend_from_slice(&0u32.to_le_bytes());
+///
+/// // Checksum (not validated here)
+/// bytes.extend_from_slice(&[0u8; 4]);
+///
+/// let mut cursor = Cursor::new(bytes);
+///
+/// let raw = wire::read_message(&mut cursor).unwrap();
+/// assert_eq!(raw.command, Command::Verack);
+/// assert!(raw.payload.is_empty());
+/// ```
+pub fn read_message<R: Read>(reader: &mut R) -> io::Result<RawMessage> {
+    let mut header = [0u8; 24];
+    reader.read_exact(&mut header)?;
+
+    let magic: [u8; 4] = header[0..4]
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid magic field"))?;
+
+    let cmd = header[4..16]
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid cmd field"))?;
+
+    let command = Command::from(&cmd);
+
+    let length = u32::from_le_bytes(
+        header[16..20]
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length field"))?,
+    );
+
+    let checksum: [u8; 4] = header[20..24]
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid checksum field"))?;
+
+    let mut payload = vec![0u8; length as usize];
+    reader.read_exact(&mut payload)?;
+
+    Ok(RawMessage {
+        magic,
+        command,
+        payload,
+        checksum,
+    })
+}
+
+/// Writes a complete Bitcoin P2P message frame to the given writer.
+///
+/// This function serializes a message according to the Bitcoin
+/// P2P message format:
+///
+/// ```text
+/// +------------+--------------+---------------+------------+
+/// | magic (4)  | command (12) | length (4 LE) | checksum(4)|
+/// +------------+--------------+---------------+------------+
+/// | payload (variable)                                ...  |
+/// +----------------------------------------------------------
+/// ```
+///
+/// The checksum is defined as the first 4 bytes of:
+///
+/// ```text
+/// SHA256(SHA256(payload))
+/// ```
+///
+/// # Arguments
+///
+/// * `writer`  - Any type implementing [`Write`] (e.g. `TcpStream`,
+///               `Cursor<Vec<u8>>`, `BufWriter`, TLS streams, etc.)
+/// * `command` - The Bitcoin P2P command to send
+/// * `payload` - The raw payload bytes
+///
+/// # Example
+///
+/// ```
+/// use btc_network::wire::{self, Command};
+///
+/// let mut buffer = Vec::new();
+///
+/// wire::send_message(&mut buffer, Command::Verack, &[]).unwrap();
+///
+/// // The buffer now contains a full Bitcoin message frame.
+/// assert!(buffer.len() >= 24);
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if writing to the underlying stream fails.
+pub fn send_message<W: Write>(writer: &mut W, command: Command, payload: &[u8]) -> io::Result<()> {
+    use byteorder::{LittleEndian, WriteBytesExt};
+    use sha2::{Digest, Sha256};
+
+    writer.write_u32::<LittleEndian>(MAGIC)?;
+
+    writer.write_all(&command.as_bytes())?;
+
+    writer.write_u32::<LittleEndian>(payload.len() as u32)?;
+
+    let checksum = Sha256::digest(&Sha256::digest(payload));
+    writer.write_all(&checksum[..4])?;
+
+    writer.write_all(payload)?;
+
+    Ok(())
+}
+
+/// Builds a `version` message payload as defined by the Bitcoin P2P protocol.
+///
+/// This constructs a minimal version payload suitable for initiating
+/// a handshake with a peer.
+///
+/// The payload layout is:
+///
+/// ```text
+/// int32    version
+/// uint64   services
+/// int64    timestamp
+/// net_addr addr_recv
+/// net_addr addr_from
+/// uint64   nonce
+/// var_str  user_agent
+/// int32    start_height
+/// bool     relay
+/// ```
+///
+/// This implementation:
+///
+/// - Uses the current UNIX timestamp
+/// - Uses zeroed `addr_recv` and `addr_from`
+/// - Uses an empty user agent
+/// - Sets `start_height` to 0
+///
+/// # Arguments
+///
+/// * `protocol_version` - Protocol version (e.g. 70015+)
+/// * `services`         - Service flags supported by this node
+///
+/// # Example
+///
+/// ```
+/// use btc_network::wire;
+///
+/// let payload = wire::build_version_payload(70015, 0).unwrap();
+/// assert!(!payload.is_empty());
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if serialization fails (unlikely).
+pub fn build_version_payload(protocol_version: i32, services: u64) -> io::Result<Vec<u8>> {
+    let mut payload = vec![];
+
+    payload.write_i32::<LittleEndian>(protocol_version)?;
+    payload.write_u64::<LittleEndian>(services)?;
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        .as_secs();
+
+    payload.write_i64::<LittleEndian>(now as i64)?;
+
+    // addr_recv (26 bytes: services + 16-byte IP + port)
+    payload.extend([0u8; 26]);
+
+    // addr_from
+    payload.extend([0u8; 26]);
+
+    let nonce: u64 = rand::thread_rng().r#gen();
+    payload.write_u64::<LittleEndian>(nonce)?;
+
+    // user agent (empty string => CompactSize 0)
+    payload.push(0);
+
+    payload.write_i32::<LittleEndian>(0)?; // start_height
+    payload.push(0); // relay = false
+
+    Ok(payload)
+}
 
 /// A raw Bitcoin P2P message frame.
 ///
@@ -123,7 +369,15 @@ pub struct AddrV2Entry {
     pub port: u16,
 }
 
-/// A fully-decoded Bitcoin P2P message.
+/// Represents a decoded Bitcoin P2P message.
+///
+/// Each variant corresponds to a known Bitcoin protocol command.
+///
+/// Unknown or unsupported commands may be mapped to
+/// [`Message::Unknown`].
+///
+/// See:
+/// https://developer.bitcoin.org/reference/p2p_networking.html
 #[derive(Debug)]
 pub enum Message {
     // --- decoded ---
@@ -205,6 +459,50 @@ impl From<&[u8; 12]> for Command {
             "filterclear" => Command::FilterClear,
             _ => Command::Unknown,
         }
+    }
+}
+
+impl Command {
+    /// Returns the 12-byte command field as defined by the Bitcoin P2P protocol.
+    ///
+    /// The command string is ASCII and padded with zero bytes.
+    pub fn as_bytes(&self) -> [u8; 12] {
+        let name: &[u8] = match self {
+            Command::Version => b"version",
+            Command::Verack => b"verack",
+            Command::Addr => b"addr",
+            Command::AddrV2 => b"addrv2",
+            Command::SendAddrV2 => b"sendaddrv2",
+            Command::GetAddr => b"getaddr",
+            Command::Ping => b"ping",
+            Command::Pong => b"pong",
+            Command::SendHeaders => b"sendheaders",
+            Command::SendCmpct => b"sendcmpct",
+            Command::FeeFilter => b"feefilter",
+            Command::Reject => b"reject",
+            Command::Alert => b"alert",
+            Command::Inv => b"inv",
+            Command::GetData => b"getdata",
+            Command::NotFound => b"notfound",
+            Command::GetBlocks => b"getblocks",
+            Command::GetHeaders => b"getheaders",
+            Command::Headers => b"headers",
+            Command::Block => b"block",
+            Command::Tx => b"tx",
+            Command::GetBlockTxn => b"getblocktxn",
+            Command::BlockTxn => b"blocktxn",
+            Command::CmpctBlock => b"cmpctblock",
+            Command::Mempool => b"mempool",
+            Command::MerkleBlock => b"merkleblock",
+            Command::FilterLoad => b"filterload",
+            Command::FilterAdd => b"filteradd",
+            Command::FilterClear => b"filterclear",
+            Command::Unknown => b"",
+        };
+
+        let mut padded = [0u8; 12];
+        padded[..name.len()].copy_from_slice(name);
+        padded
     }
 }
 
@@ -433,47 +731,6 @@ impl Decode for Vec<AddrV2Entry> {
     }
 }
 
-/// Reads a single Bitcoin P2P message frame from the TCP stream.
-///
-/// This function reads the header and payload and returns a [`RawMessage`].
-/// It does not validate the magic value or checksum.
-///
-/// Returns an [`io::Error`] if the stream fails or the header is malformed.
-pub fn read_message(stream: &mut TcpStream) -> io::Result<RawMessage> {
-    let mut header = [0u8; 24];
-    stream.read_exact(&mut header)?;
-
-    let magic: [u8; 4] = header[0..4]
-        .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid magic field"))?;
-
-    let cmd = header[4..16]
-        .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid cmd field"))?;
-
-    let command = Command::from(&cmd);
-
-    let length = u32::from_le_bytes(
-        header[16..20]
-            .try_into()
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length field"))?,
-    );
-
-    let checksum: [u8; 4] = header[20..24]
-        .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid checksum field"))?;
-
-    let mut payload = vec![0u8; length as usize];
-    stream.read_exact(&mut payload)?;
-
-    Ok(RawMessage {
-        magic,
-        command,
-        payload,
-        checksum,
-    })
-}
-
 // --- helpers ----------------------------------------------------------------
 
 fn eof(context: &'static str) -> io::Error {
@@ -574,36 +831,32 @@ fn slice8(p: &[u8], c: &mut usize, ctx: &'static str) -> io::Result<[u8; 8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use std::net::TcpListener;
-    use std::thread;
+    use std::io::Cursor;
 
-    // 4-byte network identifier that prefixes every mainnet message header.
-    // Each network has its own value (testnet, signet, regtest differ).
-    // https://developer.bitcoin.org/reference/p2p_networking.html#message-headers
-    const MAINNET_MAGIC: [u8; 4] = [0xF9, 0xBE, 0xB4, 0xD9];
+    /// Builds a full Bitcoin message frame (header + payload).
+    fn build_frame(cmd_str: &[u8], payload: &[u8]) -> Vec<u8> {
+        const MAINNET_MAGIC: [u8; 4] = [0xF9, 0xBE, 0xB4, 0xD9];
 
-    /// Creates a connected local TcpStream pair (client, server).
-    fn tcp_pair() -> (TcpStream, TcpStream) {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        let client = TcpStream::connect(addr).unwrap();
-        let (server, _) = listener.accept().unwrap();
-        (client, server)
-    }
+        let mut bytes = vec![];
 
-    /// Writes a complete framed Bitcoin message into a stream.
-    /// Checksum is zeroed — read_message does not validate it.
-    fn write_frame(stream: &mut TcpStream, cmd_str: &[u8], payload: &[u8]) {
+        // magic
+        bytes.extend_from_slice(&MAINNET_MAGIC);
+
+        // command padded to 12 bytes
         let mut cmd = [0u8; 12];
         cmd[..cmd_str.len()].copy_from_slice(cmd_str);
-        stream.write_all(&MAINNET_MAGIC).unwrap();
-        stream.write_all(&cmd).unwrap();
-        stream
-            .write_all(&(payload.len() as u32).to_le_bytes())
-            .unwrap();
-        stream.write_all(&[0u8; 4]).unwrap(); // checksum (not validated)
-        stream.write_all(payload).unwrap();
+        bytes.extend_from_slice(&cmd);
+
+        // length
+        bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+
+        // checksum (still not validated)
+        bytes.extend_from_slice(&[0u8; 4]);
+
+        // payload
+        bytes.extend_from_slice(payload);
+
+        bytes
     }
 
     /// Encodes a single NetAddr field as used in version / addr payloads.
@@ -646,40 +899,33 @@ mod tests {
         p
     }
 
-    // --- read_message -------------------------------------------------------
-
     #[test]
     fn read_message_recognises_version_command() {
-        let (mut client, mut server) = tcp_pair();
-        let payload = version_payload_v70016();
-        thread::spawn(move || write_frame(&mut server, b"version", &payload));
+        let mut cursor = Cursor::new(build_frame(b"version", &version_payload_v70016()));
 
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         assert_eq!(raw.command, Command::Version);
         assert!(!raw.payload.is_empty());
     }
 
     #[test]
     fn read_message_verack_has_empty_payload() {
-        let (mut client, mut server) = tcp_pair();
-        thread::spawn(move || write_frame(&mut server, b"verack", &[]));
+        let bytes = build_frame(b"verack", &[]);
+        let mut cursor = Cursor::new(bytes);
 
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         assert_eq!(raw.command, Command::Verack);
         assert!(raw.payload.is_empty());
     }
 
     #[test]
     fn read_message_unknown_command_preserved_in_payload() {
-        let (mut client, mut server) = tcp_pair();
-        thread::spawn(move || write_frame(&mut server, b"wtfmessage", &[1, 2, 3]));
+        let mut cursor = Cursor::new(build_frame(b"wtfmessage", &[1, 2, 3]));
 
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         assert_eq!(raw.command, Command::Unknown);
         assert_eq!(raw.payload, vec![1, 2, 3]);
     }
-
-    // --- Decode: VersionMessage ---------------------------------------------
 
     #[test]
     fn decode_version_v70016_all_fields() {
@@ -715,8 +961,6 @@ mod tests {
     fn decode_version_truncated_payload_returns_error() {
         assert!(VersionMessage::decode(&[0u8; 10]).is_err());
     }
-
-    // --- Decode: Vec<AddrEntry> ---------------------------------------------
 
     #[test]
     fn decode_addr_two_entries() {
@@ -838,23 +1082,18 @@ mod tests {
     }
 
     // --- Message dispatch (TryFrom) -----------------------------------------
-
     #[test]
     fn message_from_verack_raw() {
-        let (mut client, mut server) = tcp_pair();
-        thread::spawn(move || write_frame(&mut server, b"verack", &[]));
+        let mut cursor = Cursor::new(build_frame(b"verack", &[]));
 
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         assert!(matches!(Message::try_from(raw).unwrap(), Message::Verack));
     }
 
     #[test]
     fn message_from_version_raw_yields_decoded_struct() {
-        let (mut client, mut server) = tcp_pair();
-        let payload = version_payload_v70016();
-        thread::spawn(move || write_frame(&mut server, b"version", &payload));
-
-        let raw = read_message(&mut client).unwrap();
+        let mut cursor = Cursor::new(build_frame(b"version", &version_payload_v70016()));
+        let raw = read_message(&mut cursor).unwrap();
         let Message::Version(v) = Message::try_from(raw).unwrap() else {
             panic!("expected Message::Version");
         };
@@ -863,11 +1102,9 @@ mod tests {
 
     #[test]
     fn message_from_addr_raw_yields_entries() {
-        let (mut client, mut server) = tcp_pair();
-        let payload = addr_payload_two_entries();
-        thread::spawn(move || write_frame(&mut server, b"addr", &payload));
+        let mut cursor = Cursor::new(build_frame(b"addr", &addr_payload_two_entries()));
 
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         let Message::Addr(entries) = Message::try_from(raw).unwrap() else {
             panic!("expected Message::Addr");
         };
@@ -876,46 +1113,13 @@ mod tests {
 
     #[test]
     fn message_from_unimplemented_command_holds_raw_bytes() {
-        let (mut client, mut server) = tcp_pair();
-        thread::spawn(move || write_frame(&mut server, b"inv", &[0xAB, 0xCD]));
+        let mut cursor = Cursor::new(build_frame(b"inv", &[0xAB, 0xCD]));
 
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         let Message::Inv(bytes) = Message::try_from(raw).unwrap() else {
             panic!("expected Message::Inv");
         };
         assert_eq!(bytes, vec![0xAB, 0xCD]);
-    }
-
-    // --- Handshake sequence -------------------------------------------------
-
-    /// Simulates the version → verack exchange of protocol v70016,
-    /// as performed by /Satoshi:25.0.0/ (Bitcoin Core ~25.x).
-    #[test]
-    fn handshake_v70016_version_then_verack() {
-        let (mut client, mut server) = tcp_pair();
-        let version_bytes = version_payload_v70016();
-
-        let server_thread = thread::spawn(move || {
-            write_frame(&mut server, b"version", &version_bytes);
-            write_frame(&mut server, b"verack", &[]);
-        });
-
-        // step 1 — read version
-        let raw = read_message(&mut client).unwrap();
-        assert_eq!(raw.command, Command::Version);
-        let Message::Version(v) = Message::try_from(raw).unwrap() else {
-            panic!("expected Version");
-        };
-        assert_eq!(v.version, 70016);
-        assert_eq!(v.user_agent, "/Satoshi:25.0.0/");
-        assert_eq!(v.relay, Some(true));
-
-        // step 2 — read verack
-        let raw = read_message(&mut client).unwrap();
-        assert_eq!(raw.command, Command::Verack);
-        assert!(matches!(Message::try_from(raw).unwrap(), Message::Verack));
-
-        server_thread.join().unwrap();
     }
 
     // --- AddrV2 (BIP 155) ---------------------------------------------------
@@ -1081,11 +1285,9 @@ mod tests {
     fn message_from_addrv2_raw_yields_decoded_entries() {
         let entry = addrv2_entry_bytes(0x01, &[127, 0, 0, 1], 8333);
         let payload = addrv2_payload(&[entry]);
+        let mut cursor = Cursor::new(build_frame(b"addrv2", &payload));
 
-        let (mut client, mut server) = tcp_pair();
-        thread::spawn(move || write_frame(&mut server, b"addrv2", &payload));
-
-        let raw = read_message(&mut client).unwrap();
+        let raw = read_message(&mut cursor).unwrap();
         assert_eq!(raw.command, Command::AddrV2);
         let Message::AddrV2(entries) = Message::try_from(raw).unwrap() else {
             panic!("expected Message::AddrV2");
