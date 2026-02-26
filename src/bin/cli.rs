@@ -4,7 +4,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use btc_network::session::Session;
-use btc_network::wire::{Command, Message};
+use btc_network::wire::{self, Command, Message};
 
 use std::time::Instant;
 
@@ -126,16 +126,10 @@ fn get_addresses(session: &mut Session) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-// from bitcoin core: https://github.com/bitcoin/bitcoin/blob/707ad466968b947b364cfc25bcb4d6895e799418/src/kernel/chainparams.cpp#L136
-const GENESIS: [u8; 32] = [
-    0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72, 0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
-    0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c, 0x68, 0xd6, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00,
-];
-
 fn get_headers(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> {
     println!("Requesting headers from genesis...");
 
-    let payload = build_getheaders_payload(&[GENESIS]);
+    let payload = wire::build_getheaders_payload(&[wire::constants::GENESIS_BLOCK_HASH_MAINNET]);
 
     session.send(Command::GetHeaders, &payload)?;
 
@@ -195,7 +189,7 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
     let start = Instant::now();
     let mut round = 0usize;
     let mut total_headers = 0usize;
-    let mut current_locator = GENESIS;
+    let mut current_locator = wire::constants::GENESIS_BLOCK_HASH_MAINNET;
 
     loop {
         round += 1;
@@ -205,7 +199,7 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
             round, total_headers
         );
 
-        let payload = build_getheaders_payload(&[current_locator]);
+        let payload = wire::build_getheaders_payload(&[current_locator]);
         session.send(Command::GetHeaders, &payload)?;
 
         let headers = loop {
@@ -256,39 +250,4 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
     }
 
     Ok(())
-}
-
-fn build_getheaders_payload(locator: &[[u8; 32]]) -> Vec<u8> {
-    let mut payload = Vec::new();
-
-    payload.extend(&70016i32.to_le_bytes());
-
-    write_varint(locator.len() as u64, &mut payload);
-
-    for hash in locator {
-        payload.extend(hash);
-    }
-
-    // stop hash = zero (no stop)
-    payload.extend([0u8; 32]);
-
-    payload
-}
-
-fn write_varint(value: u64, out: &mut Vec<u8>) {
-    match value {
-        0..=0xFC => out.push(value as u8),
-        0xFD..=0xFFFF => {
-            out.push(0xFD);
-            out.extend(&(value as u16).to_le_bytes());
-        }
-        0x1_0000..=0xFFFF_FFFF => {
-            out.push(0xFE);
-            out.extend(&(value as u32).to_le_bytes());
-        }
-        _ => {
-            out.push(0xFF);
-            out.extend(&value.to_le_bytes());
-        }
-    }
 }
