@@ -4,7 +4,7 @@ use std::time::Duration;
 
 fn handshake(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     // Send version
-    let version_payload = wire::build_version_payload(70015, 0)?;
+    let version_payload = wire::build_version_payload(wire::constants::PROTOCOL_VERSION, 0)?;
     wire::send_message(stream, wire::Command::Version, &version_payload)?;
 
     // Receive peer version

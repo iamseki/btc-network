@@ -3,20 +3,9 @@ use std::io::ErrorKind;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-// seeds from bitcoin core node codebase: https://github.com/bitcoin/bitcoin/blob/master/src/kernel/chainparams.cpp#L139-L151
-const SEED_NODES: &[&str] = &[
-    "seed.bitcoin.sipa.be:8333",
-    // "dnsseed.bluematt.me:8333",
-    "seed.bitcoin.jonasschnelli.ch:8333",
-    "seed.btc.petertodd.net:8333",
-    "seed.bitcoin.sprovoost.nl:8333",
-    "dnsseed.emzy.de:8333",
-    "seed.bitcoin.wiz.biz:8333",
-    "seed.mainnet.achownodes.xyz:8333",
-];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    for node in SEED_NODES {
+    for node in wire::constants::MAINNET_DNS_SEEDS {
         let seed = node.to_string();
         println!("Connecting to: {seed}");
 
@@ -41,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 2️⃣ Send version
         // protocol version (latest of 2017)
         // services (Unnamed, not a full node)
-        let version_payload = wire::build_version_payload(70015, 0)?;
+        let version_payload = wire::build_version_payload(wire::constants::PROTOCOL_VERSION, 0)?;
         wire::send_message(&mut stream, wire::Command::Version, &version_payload)?;
 
         // 3️⃣ Read + decode version

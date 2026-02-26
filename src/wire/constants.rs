@@ -54,3 +54,26 @@ pub const GENESIS_BLOCK_HASH_MAINNET: [u8; 32] = [
     0x6f, 0xe2, 0x8c, 0x0a, 0xb6, 0xf1, 0xb3, 0x72, 0xc1, 0xa6, 0xa2, 0x46, 0xae, 0x63, 0xf7, 0x4f,
     0x93, 0x1e, 0x83, 0x65, 0xe1, 0x5a, 0x08, 0x9c, 0x68, 0xd6, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
+
+/// DNS seed nodes for Bitcoin mainnet.
+///
+/// These hostnames are hardcoded bootstrap entry points used for initial peer discovery. When a node starts without known peers,
+/// it queries one or more DNS seeds to obtain a list of reachable
+/// Bitcoin nodes.
+///
+/// Each seed operates a DNS server that returns IP addresses of active nodes it has recently observed on the network. The client
+/// then connects directly to those peers over TCP (port 8333).
+///
+/// These seeds are defined in Bitcoin Core chain parameters: https://github.com/bitcoin/bitcoin/blob/master/src/kernel/chainparams.cpp#L139-L151
+/// 
+/// This list corresponds to Bitcoin mainnet.
+pub const MAINNET_DNS_SEEDS: &[&str] = &[
+    "seed.bitcoin.sipa.be:8333",
+    "dnsseed.bluematt.me:8333",
+    "seed.bitcoin.jonasschnelli.ch:8333",
+    "seed.btc.petertodd.net:8333",
+    "seed.bitcoin.sprovoost.nl:8333",
+    "dnsseed.emzy.de:8333",
+    "seed.bitcoin.wiz.biz:8333",
+    "seed.mainnet.achownodes.xyz:8333",
+];
