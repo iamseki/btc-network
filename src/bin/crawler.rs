@@ -3,7 +3,6 @@ use std::io::ErrorKind;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     for node in wire::constants::MAINNET_DNS_SEEDS {
         let seed = node.to_string();

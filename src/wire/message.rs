@@ -46,6 +46,7 @@ pub enum Message {
     Addr(Vec<AddrEntry>),
     AddrV2(Vec<AddrV2Entry>),
     Headers(Vec<BlockHeader>),
+    Block(Block),
 
     // --- TODO: implement Decode ---
     SendAddrV2(Vec<u8>),
@@ -62,7 +63,6 @@ pub enum Message {
     NotFound(Vec<u8>),
     GetBlocks(Vec<u8>),
     GetHeaders(Vec<u8>),
-    Block(Vec<u8>),
     Tx(Vec<u8>),
     GetBlockTxn(Vec<u8>),
     BlockTxn(Vec<u8>),
@@ -86,6 +86,10 @@ impl TryFrom<RawMessage> for Message {
             Command::Verack => Ok(Message::Verack),
             Command::Addr => Ok(Message::Addr(Vec::<AddrEntry>::decode(&raw.payload)?)),
             Command::AddrV2 => Ok(Message::AddrV2(Vec::<AddrV2Entry>::decode(&raw.payload)?)),
+            Command::Headers => Ok(Message::Headers(Vec::<BlockHeader>::decode(&raw.payload)?)),
+            Command::Block => Ok(Message::Block(Block::decode(&raw.payload)?)),
+
+            Command::GetHeaders => Ok(Message::GetHeaders(raw.payload)),
             // TODO: implement Decode
             Command::SendAddrV2 => Ok(Message::SendAddrV2(raw.payload)),
             Command::GetAddr => Ok(Message::GetAddr(raw.payload)),
@@ -100,9 +104,6 @@ impl TryFrom<RawMessage> for Message {
             Command::GetData => Ok(Message::GetData(raw.payload)),
             Command::NotFound => Ok(Message::NotFound(raw.payload)),
             Command::GetBlocks => Ok(Message::GetBlocks(raw.payload)),
-            Command::GetHeaders => Ok(Message::GetHeaders(raw.payload)),
-            Command::Headers => Ok(Message::Headers(Vec::<BlockHeader>::decode(&raw.payload)?)),
-            Command::Block => Ok(Message::Block(raw.payload)),
             Command::Tx => Ok(Message::Tx(raw.payload)),
             Command::GetBlockTxn => Ok(Message::GetBlockTxn(raw.payload)),
             Command::BlockTxn => Ok(Message::BlockTxn(raw.payload)),
@@ -507,6 +508,13 @@ impl Debug for Services {
 
         write!(f, "Services({}) [0x{:016x}]", names, self.bits())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Block {
+    pub header: BlockHeader,
+    pub tx_count: u64,
+    pub serialized_size: usize,
 }
 
 #[cfg(test)]

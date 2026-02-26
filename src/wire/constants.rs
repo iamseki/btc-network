@@ -65,7 +65,7 @@ pub const GENESIS_BLOCK_HASH_MAINNET: [u8; 32] = [
 /// then connects directly to those peers over TCP (port 8333).
 ///
 /// These seeds are defined in Bitcoin Core chain parameters: https://github.com/bitcoin/bitcoin/blob/master/src/kernel/chainparams.cpp#L139-L151
-/// 
+///
 /// This list corresponds to Bitcoin mainnet.
 pub const MAINNET_DNS_SEEDS: &[&str] = &[
     "seed.bitcoin.sipa.be:8333",

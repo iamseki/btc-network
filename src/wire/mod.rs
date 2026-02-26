@@ -23,4 +23,4 @@ pub mod constants;
 
 pub use codec::{read_message, send_message};
 pub use message::{Command, Message};
-pub use payload::{build_getheaders_payload, build_version_payload};
+pub use payload::*;

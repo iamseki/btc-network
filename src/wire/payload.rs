@@ -115,6 +115,21 @@ pub fn build_getheaders_payload(locator: &[[u8; 32]]) -> Vec<u8> {
     payload
 }
 
+pub fn build_getdata_block_payload(hash: [u8; 32]) -> Vec<u8> {
+    let mut payload = Vec::new();
+
+    // 1 inventory entry
+    write_varint(1, &mut payload);
+
+    // type = MSG_BLOCK (2): TODO improve
+    payload.extend(&2u32.to_le_bytes());
+
+    // block hash (little-endian wire format)
+    payload.extend(hash);
+
+    payload
+}
+
 fn write_varint(value: u64, out: &mut Vec<u8>) {
     match value {
         0..=0xFC => out.push(value as u8),

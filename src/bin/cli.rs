@@ -26,6 +26,10 @@ enum Commands {
     GetAddr,
     GetHeaders,
     LastBlockHeader,
+    GetBlock {
+        #[arg(long)]
+        hash: String,
+    },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -51,6 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::GetAddr => get_addresses(&mut session)?,
         Commands::GetHeaders => get_headers(&mut session)?,
         Commands::LastBlockHeader => last_block_header(&mut session)?,
+        Commands::GetBlock { hash } => get_block(&mut session, hash)?,
     }
 
     Ok(())
@@ -247,6 +252,47 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
         }
 
         current_locator = last.hash();
+    }
+
+    Ok(())
+}
+
+fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn std::error::Error>> {
+    // Convert hex (big-endian) → little-endian wire format
+    let mut hash = hex::decode(hash_hex)?;
+    hash.reverse(); // convert to little-endian
+
+    let mut hash_arr = [0u8; 32];
+    hash_arr.copy_from_slice(&hash);
+
+    let payload = wire::build_getdata_block_payload(hash_arr);
+
+    session.send(Command::GetData, &payload)?;
+
+    loop {
+        match session.recv()? {
+            // TODO: improve decoding of Block and implement decoding of txns
+            // the size is not match with blockchain https://www.blockchain.com/explorer/blocks/btc/00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde
+            Message::Block(block) => {
+                let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
+                println!(
+                    "Received block with header ({:?}), hash: ({:?}), tx_count: {}, block_serialized_size: {:.2} MB",
+                    block.header,
+                    hex::encode(block.header.hash()),
+                    block.tx_count,
+                    mb
+                );
+                break;
+            }
+
+            Message::Ping(p) => {
+                session.send(Command::Pong, &p)?;
+            }
+
+            other => {
+                println!("Received: {:?}", other);
+            }
+        }
     }
 
     Ok(())

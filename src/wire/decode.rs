@@ -1,7 +1,8 @@
 use std::io::{self};
 
 use crate::wire::message::{
-    AddrEntry, AddrV2Addr, AddrV2Entry, BlockHeader, Decode, NetAddr, Services, VersionMessage,
+    AddrEntry, AddrV2Addr, AddrV2Entry, Block, BlockHeader, Decode, NetAddr, Services,
+    VersionMessage,
 };
 
 impl Decode for VersionMessage {
@@ -242,6 +243,49 @@ impl Decode for Vec<BlockHeader> {
     }
 }
 
+impl Decode for Block {
+    fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut cursor = 0;
+
+        if payload.len() < 80 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "block: header too short",
+            ));
+        }
+
+        // Decode header (reuse your existing logic)
+        let header = {
+            let version = read_i32(payload, &mut cursor)?;
+
+            let prev_blockhash = slice32(payload, &mut cursor, "block:prev")?;
+            let merkle_root = slice32(payload, &mut cursor, "block:merkle")?;
+
+            let time = read_u32(payload, &mut cursor)?;
+            let bits = read_u32(payload, &mut cursor)?;
+            let nonce = read_u32(payload, &mut cursor)?;
+
+            BlockHeader {
+                version,
+                prev_blockhash,
+                merkle_root,
+                time,
+                bits,
+                nonce,
+            }
+        };
+
+        // Read CompactSize tx_count
+        let tx_count = read_varint(payload, &mut cursor)?;
+
+        Ok(Block {
+            header,
+            tx_count,
+            serialized_size: payload.len(),
+        })
+    }
+}
+
 fn decode_net_addr(p: &[u8], c: &mut usize) -> io::Result<NetAddr> {
     let services = read_u64(p, c)?;
 
@@ -332,6 +376,16 @@ fn slice8(p: &[u8], c: &mut usize, ctx: &'static str) -> io::Result<[u8; 8]> {
         .try_into()
         .unwrap();
     *c += 8;
+    Ok(b)
+}
+
+fn slice32(p: &[u8], c: &mut usize, ctx: &'static str) -> io::Result<[u8; 32]> {
+    let b = p
+        .get(*c..*c + 32)
+        .ok_or_else(|| eof(ctx))?
+        .try_into()
+        .unwrap();
+    *c += 32;
     Ok(b)
 }
 
@@ -765,5 +819,27 @@ mod tests {
         payload.push(0xFD);
         payload.extend_from_slice(&1001u16.to_le_bytes());
         assert!(Vec::<AddrV2Entry>::decode(&payload).is_err());
+    }
+
+    #[test]
+    fn test_decode_minimal_block() {
+        let mut payload = Vec::new();
+        // 80B header
+        payload.extend(sample_header_bytes());
+
+        // tx_count = 1
+        payload.push(1);
+
+        // fake tx bytes (we're not decoding them yet)
+        payload.extend([0xaa; 10]);
+
+        let block = Block::decode(&payload).expect("decode block");
+
+        assert_eq!(block.tx_count, 1);
+        assert_eq!(block.header.version, 1);
+        assert_eq!(block.header.time, 1234567890);
+        assert_eq!(block.header.bits, 0x1d00ffff);
+        assert_eq!(block.header.nonce, 42);
+        assert_eq!(block.serialized_size, payload.len());
     }
 }
