@@ -1,8 +1,8 @@
 use std::io::{self};
 
 use crate::wire::message::{
-    AddrEntry, AddrV2Addr, AddrV2Entry, Block, BlockHeader, Decode, NetAddr, Services,
-    VersionMessage,
+    AddrEntry, AddrV2Addr, AddrV2Entry, Block, BlockHeader, Decode, NetAddr, OutPoint, Services,
+    Transaction, TxIn, TxOut, VersionMessage,
 };
 
 impl Decode for VersionMessage {
@@ -276,12 +276,116 @@ impl Decode for Block {
 
         let tx_count = read_varint(payload, &mut cursor)?;
 
+        let mut transactions = Vec::with_capacity(tx_count as usize);
+
+        for _ in 0..tx_count {
+            let tx = Transaction::decode_from(payload, &mut cursor)?;
+            transactions.push(tx);
+        }
+
         Ok(Block {
             header,
             tx_count,
             serialized_size: payload.len(),
+            transactions,
         })
     }
+}
+
+impl Transaction {
+    pub fn decode_from(payload: &[u8], cursor: &mut usize) -> io::Result<Self> {
+        let start = *cursor;
+
+        let version = read_i32(payload, cursor)?;
+
+        // ---- Detect SegWit ----
+        let mut has_witness = false;
+
+        if payload.get(*cursor) == Some(&0x00) && payload.get(*cursor + 1) == Some(&0x01) {
+            has_witness = true;
+            *cursor += 2; // consume marker + flag
+        }
+
+        // ---- Inputs ----
+        let input_count = read_varint(payload, cursor)?;
+        let mut inputs = Vec::with_capacity(input_count as usize);
+
+        for _ in 0..input_count {
+            let previous_output = OutPoint {
+                txid: slice32(payload, cursor, "tx:prev_txid")?,
+                vout: read_u32(payload, cursor)?,
+            };
+
+            let script_len = read_varint(payload, cursor)?;
+            let script_sig = slice_n(payload, cursor, script_len as usize, "tx:script")?.to_vec();
+
+            let sequence = read_u32(payload, cursor)?;
+
+            inputs.push(TxIn {
+                previous_output,
+                script_sig,
+                sequence,
+                witness: Vec::new(), // filled later if segwit
+            });
+        }
+
+        // ---- Outputs ----
+        let output_count = read_varint(payload, cursor)?;
+        let mut outputs = Vec::with_capacity(output_count as usize);
+
+        for _ in 0..output_count {
+            let value = read_u64(payload, cursor)?;
+
+            let script_len = read_varint(payload, cursor)?;
+            let script_pubkey =
+                slice_n(payload, cursor, script_len as usize, "tx:pk_script")?.to_vec();
+
+            outputs.push(TxOut {
+                value,
+                script_pubkey,
+            });
+        }
+
+        // ---- Witness Section ----
+        if has_witness {
+            for input in &mut inputs {
+                let item_count = read_varint(payload, cursor)?;
+                let mut stack = Vec::with_capacity(item_count as usize);
+
+                for _ in 0..item_count {
+                    let item_len = read_varint(payload, cursor)?;
+                    let item = slice_n(payload, cursor, item_len as usize, "tx:witness")?.to_vec();
+
+                    stack.push(item);
+                }
+
+                input.witness = stack;
+            }
+        }
+
+        let locktime = read_u32(payload, cursor)?;
+
+        let serialized_size = *cursor - start;
+
+        Ok(Transaction {
+            version,
+            inputs,
+            outputs,
+            locktime,
+            has_witness,
+            serialized_size,
+        })
+    }
+}
+
+fn slice_n<'a>(p: &'a [u8], c: &mut usize, n: usize, ctx: &'static str) -> io::Result<&'a [u8]> {
+    if *c > p.len() || n > p.len() - *c {
+        return Err(eof(ctx));
+    }
+
+    let slice = &p[*c..*c + n];
+    *c += n;
+    Ok(slice)
 }
 
 fn decode_net_addr(p: &[u8], c: &mut usize) -> io::Result<NetAddr> {
@@ -454,6 +558,72 @@ mod tests {
         header[76..80].copy_from_slice(&42u32.to_le_bytes());
 
         header
+    }
+
+    fn minimal_legacy_tx() -> Vec<u8> {
+        let mut tx = Vec::new();
+
+        // version
+        tx.extend(&1i32.to_le_bytes());
+
+        // input_count = 1
+        tx.push(1);
+
+        // prev_txid (null)
+        tx.extend([0u8; 32]);
+
+        // vout = 0xffffffff
+        tx.extend(&0xffffffffu32.to_le_bytes());
+
+        // script_len = 0
+        tx.push(0);
+
+        // sequence
+        tx.extend(&0xffffffffu32.to_le_bytes());
+
+        // output_count = 1
+        tx.push(1);
+
+        // value (50 BTC in satoshis for test)
+        tx.extend(&50_0000_0000u64.to_le_bytes());
+
+        // script_len = 0
+        tx.push(0);
+
+        // locktime
+        tx.extend(&0u32.to_le_bytes());
+
+        tx
+    }
+
+    fn minimal_segwit_tx() -> Vec<u8> {
+        let mut tx = Vec::new();
+
+        tx.extend(&1i32.to_le_bytes());
+
+        // marker + flag
+        tx.push(0x00);
+        tx.push(0x01);
+
+        tx.push(1); // input_count
+
+        tx.extend([0u8; 32]);
+        tx.extend(&0xffffffffu32.to_le_bytes());
+        tx.push(0); // script_len
+        tx.extend(&0xffffffffu32.to_le_bytes());
+
+        tx.push(1); // output_count
+        tx.extend(&1u64.to_le_bytes());
+        tx.push(0);
+
+        // witness stack for 1 input
+        tx.push(1); // 1 item
+        tx.push(1); // 1 byte
+        tx.push(0x01);
+
+        tx.extend(&0u32.to_le_bytes());
+
+        tx
     }
 
     #[test]
@@ -820,24 +990,62 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_minimal_block() {
+    fn test_decode_minimal_block_with_tx() {
         let mut payload = Vec::new();
+
         // 80B header
         payload.extend(sample_header_bytes());
 
         // tx_count = 1
         payload.push(1);
 
-        // fake tx bytes (we're not decoding them yet)
-        payload.extend([0xaa; 10]);
+        // real minimal tx
+        let tx = minimal_legacy_tx();
+        payload.extend(&tx);
 
         let block = Block::decode(&payload).expect("decode block");
 
         assert_eq!(block.tx_count, 1);
-        assert_eq!(block.header.version, 1);
-        assert_eq!(block.header.time, 1234567890);
-        assert_eq!(block.header.bits, 0x1d00ffff);
-        assert_eq!(block.header.nonce, 42);
+        assert_eq!(block.transactions.len(), 1);
+
+        let tx = &block.transactions[0];
+
+        assert_eq!(tx.version, 1);
+        assert_eq!(tx.inputs.len(), 1);
+        assert_eq!(tx.outputs.len(), 1);
+        assert_eq!(tx.locktime, 0);
+        assert_eq!(tx.has_witness, false);
+
+        assert_eq!(block.serialized_size, payload.len());
+    }
+
+    #[test]
+    fn test_decode_minimal_block_with_tx_segwit() {
+        let mut payload = Vec::new();
+
+        // 80B header
+        payload.extend(sample_header_bytes());
+
+        // tx_count = 1
+        payload.push(1);
+
+        // real minimal tx with segwit
+        let tx = minimal_segwit_tx();
+        payload.extend(&tx);
+
+        let block = Block::decode(&payload).expect("decode block");
+
+        assert_eq!(block.tx_count, 1);
+        assert_eq!(block.transactions.len(), 1);
+
+        let tx = &block.transactions[0];
+
+        assert_eq!(tx.version, 1);
+        assert_eq!(tx.inputs.len(), 1);
+        assert_eq!(tx.outputs.len(), 1);
+        assert_eq!(tx.locktime, 0);
+        assert!(tx.has_witness);
+
         assert_eq!(block.serialized_size, payload.len());
     }
 }

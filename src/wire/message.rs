@@ -1,4 +1,6 @@
+use chrono::{DateTime, Utc};
 use sha2::{Digest, Sha256};
+use std::fmt;
 use std::fmt::{Debug, Formatter, Result};
 use std::io::{self};
 
@@ -565,7 +567,288 @@ impl Debug for Services {
 pub struct Block {
     pub header: BlockHeader,
     pub tx_count: u64,
+    pub transactions: Vec<Transaction>,
     pub serialized_size: usize,
+}
+
+/// A minimally decoded Bitcoin transaction as serialized inside a block
+/// or transmitted via the P2P `tx` / `block` messages.
+///
+/// Serialization format (legacy):
+///
+/// ```text
+/// int32      version
+/// varint     input_count
+/// TxIn[]     inputs
+/// varint     output_count
+/// TxOut[]    outputs
+/// uint32     locktime
+/// ```
+///
+/// SegWit serialization (BIP141):
+///
+/// ```text
+/// int32      version
+/// uint8      marker (0x00)
+/// uint8      flag   (0x01)
+/// varint     input_count
+/// TxIn[]     inputs
+/// varint     output_count
+/// TxOut[]    outputs
+/// witness[]  (per-input witness stacks)
+/// uint32     locktime
+/// ```
+///
+/// References:
+/// - Transaction format:
+///   https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+/// - SegWit serialization (BIP141):
+///   https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
+///
+/// # Coinbase Transaction
+///
+/// In the context of a block:
+///
+/// - The **first transaction** (`block.transactions[0]`) is always the
+///   *coinbase transaction*.
+/// - A block must contain at least one transaction.
+/// - The coinbase transaction creates new bitcoin (block subsidy + fees).
+///
+/// Coinbase-specific rules (consensus semantics):
+///
+/// - It must contain exactly one input.
+/// - That input has:
+///     - `prev_txid = [0u8; 32]`
+///     - `vout = 0xffffffff`
+/// - Its `script_sig` encodes the block height (BIP34) followed by
+///   arbitrary miner data.
+/// - It has no real previous outpoint.
+/// - Its outputs define the block reward.
+/// - `locktime` is typically zero.
+///
+/// These rules are validation constraints; the binary serialization
+/// layout is identical to any other transaction.
+///
+/// # Locktime Semantics
+///
+/// - If `locktime < 500_000_000`, it is interpreted as a block height.
+/// - If `locktime >= 500_000_000`, it is interpreted as a Unix timestamp.
+/// - Locktime is only enforced if at least one input has
+///   `sequence != 0xffffffff`.
+///
+/// # SegWit
+///
+/// If `has_witness == true`, the transaction was decoded using the
+/// SegWit serialization format (marker + flag present).
+///
+/// Witness data:
+/// - Is not included in the legacy `txid` hash.
+/// - Is included in the `wtxid`.
+/// - Affects block weight but not the block header hash.
+#[derive(Clone)]
+pub struct Transaction {
+    pub version: i32,
+    pub inputs: Vec<TxIn>,
+    pub outputs: Vec<TxOut>,
+    pub locktime: u32,
+    pub has_witness: bool,
+    pub serialized_size: usize,
+}
+
+impl Transaction {
+    pub fn is_coinbase(&self) -> bool {
+        self.inputs.len() == 1 && self.inputs[0].is_coinbase()
+    }
+    /// Returns a human-readable representation of this transaction's
+    /// `locktime` field.
+    ///
+    /// # What Is `locktime`?
+    ///
+    /// `locktime` is a transaction-level field that specifies the earliest
+    /// point at which the transaction is considered valid for inclusion
+    /// in a block.
+    ///
+    /// It allows a transaction to be:
+    ///
+    /// - Valid only after a specific **block height**, or
+    /// - Valid only after a specific **Unix timestamp**
+    ///
+    /// This enables time-locked transactions, delayed settlements,
+    /// payment channels, and other smart-contract-like constructions.
+    ///
+    /// # Interpretation Rules
+    ///
+    /// Bitcoin interprets `locktime` using the following consensus rule:
+    ///
+    /// - If `locktime < 500_000_000`, it represents a **block height**.
+    /// - If `locktime >= 500_000_000`, it represents a **Unix timestamp**
+    ///   (seconds since 1970-01-01 UTC).
+    ///
+    /// The threshold `500_000_000` was chosen to distinguish heights
+    /// from timestamps. It corresponds to a date in 1985 and is well below
+    /// modern Unix timestamps.
+    ///
+    /// # References
+    /// - https://developer.bitcoin.org/devguide/transactions.html#locktime-and-sequence-number
+    pub fn locktime_human(&self) -> String {
+        if self.locktime < 500_000_000 {
+            format!("block height {}", self.locktime)
+        } else {
+            match DateTime::<Utc>::from_timestamp(self.locktime as i64, 0) {
+                Some(dt) => format!("timestamp {}", dt),
+                None => format!("invalid timestamp {}", self.locktime),
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Transaction")
+            .field("version", &self.version)
+            .field("inputs", &self.inputs.len())
+            .field("outputs", &self.outputs.len())
+            .field("has_witness", &self.has_witness)
+            .field("size_bytes", &self.serialized_size)
+            .field("locktime", &self.locktime_human())
+            .finish()
+    }
+}
+
+/// A transaction input.
+///
+/// A `TxIn` consumes a previously created transaction output (a UTXO)
+/// identified by an [`OutPoint`].
+///
+/// Serialization format:
+///
+/// ```text
+/// OutPoint   previous_output
+/// varint     script_sig_length
+/// byte[]     script_sig
+/// uint32     sequence
+/// [witness]  (only if SegWit)
+/// ```
+///
+/// References:
+/// - https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+/// - BIP141 (SegWit):
+///   https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
+///
+/// # Fields
+///
+/// - `previous_output`:
+///     The referenced UTXO being spent.
+///
+/// - `script_sig`:
+///     Unlocking script that satisfies the spending conditions of the
+///     referenced output's `script_pubkey`.
+///
+/// - `sequence`:
+///     Originally intended for transaction replacement.
+///     Now used for:
+///     - Enabling/disabling absolute `locktime`
+///     - Relative timelocks (BIP68)
+///     - Replace-By-Fee (RBF) signaling
+///
+/// - `witness`:
+///     Present only for SegWit transactions.
+///     Contains witness stack items corresponding to this input.
+///     Witness data is not included in the legacy `txid` hash.
+///
+/// # Coinbase Input
+///
+/// In a coinbase transaction:
+///
+/// - There is exactly one input.
+/// - `previous_output` is null (`txid = 0`, `vout = 0xffffffff`).
+/// - `script_sig` contains the block height (BIP34) followed by
+///   arbitrary miner data.
+/// - The input does not reference a real UTXO.
+#[derive(Debug, Clone)]
+pub struct TxIn {
+    pub previous_output: OutPoint,
+    pub script_sig: Vec<u8>,
+    pub sequence: u32,
+    pub witness: Vec<Vec<u8>>,
+}
+
+impl TxIn {
+    pub fn is_coinbase(&self) -> bool {
+        self.previous_output.txid == [0u8; 32] && self.previous_output.vout == 0xffffffff
+    }
+}
+
+/// A reference to a specific transaction output.
+///
+/// An `OutPoint` uniquely identifies a UTXO by:
+///
+/// - `txid`: the transaction ID (double SHA256 of the legacy
+///   serialization of the transaction)
+/// - `vout`: the zero-based index of the output within that transaction
+///
+/// Serialization format (inside a transaction input):
+///
+/// ```text
+/// char[32]  txid  (little-endian)
+/// uint32    vout
+/// ```
+///
+/// References:
+/// - Transaction format:
+///   https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+///
+/// # Coinbase Special Case
+///
+/// In a coinbase transaction, the input does not reference a previous
+/// transaction. Instead:
+///
+/// - `txid` is 32 bytes of `0x00`
+/// - `vout` is `0xffffffff`
+///
+/// This special outpoint indicates that the input creates new coins
+/// (block subsidy + fees) rather than spending an existing UTXO.
+#[derive(Debug, Clone)]
+pub struct OutPoint {
+    pub txid: [u8; 32],
+    pub vout: u32,
+}
+
+/// A transaction output.
+///
+/// A `TxOut` creates a new spendable UTXO.
+///
+/// Serialization format:
+///
+/// ```text
+/// int64      value
+/// varint     script_pubkey_length
+/// byte[]     script_pubkey
+/// ```
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+///
+/// # Fields
+///
+/// - `value`:
+///     Amount in satoshis (1 BTC = 100_000_000 satoshis).
+///     Must be non-negative and within consensus monetary limits.
+///
+/// - `script_pubkey`:
+///     Locking script that defines the conditions required to spend
+///     this output.
+///
+/// # UTXO Model
+///
+/// - Each `TxOut` becomes a new UTXO.
+/// - It can later be spent by a transaction input referencing
+///   `(txid, vout)`.
+/// - The global UTXO set is composed of all unspent `TxOut`s.
+#[derive(Debug, Clone)]
+pub struct TxOut {
+    pub value: u64,
+    pub script_pubkey: Vec<u8>,
 }
 
 /// Inventory object types used in `inv`, `getdata`, and `notfound` messages.

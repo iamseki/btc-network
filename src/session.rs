@@ -33,9 +33,9 @@ impl Session {
             let msg = Message::try_from(raw)?;
 
             match msg {
-                Message::Version(_) => {
+                Message::Version(v) => {
                     got_version = true;
-
+                    println!("[handshake] - got version msg: {:?}", v);
                     // 2️⃣ Always signal BIP155 support
                     send_message(&mut self.stream, Command::SendAddrV2, &[])?;
 

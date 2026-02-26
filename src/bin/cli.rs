@@ -265,20 +265,28 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
     let payload = wire::build_getdata_block_payload(arr);
     session.send(Command::GetData, &payload)?;
 
-    recv_until(session, |msg| {
-        match msg {
-            Message::Block(block) => {
-                let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
+    recv_until(session, |msg| match msg {
+        Message::Block(block) => {
+            let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
 
-                println!("Block hash: {}", hex::encode(block.header.hash()));
-                println!("Tx count: {}", block.tx_count);
-                println!("Size: {:.2} MB", mb);
-                Ok(true)
+            println!("Block hash: {}", hex::encode(block.header.hash()));
+            println!("Tx count: {}", block.tx_count);
+            println!("Size: {:.2} MB", mb);
+
+            if block.tx_count > 0 {
+                let tx = block
+                    .transactions
+                    .first()
+                    .ok_or("block has no transactions")?;
+
+                println!("tx.is_coinbase => {}, tx: {:?}", tx.is_coinbase(), tx);
             }
-            other => {
-                println!("Received (ignored): {:?}", other);
-                Ok(false)
-            }
+
+            Ok(true)
+        }
+        other => {
+            println!("Received (ignored): {:?}", other);
+            Ok(false)
         }
     })
 }
