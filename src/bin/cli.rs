@@ -268,7 +268,6 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
     recv_until(session, |msg| {
         match msg {
             Message::Block(block) => {
-                // the size is not match with blockchain https://www.blockchain.com/explorer/blocks/btc/00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde why?
                 let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
 
                 println!("Block hash: {}", hex::encode(block.header.hash()));

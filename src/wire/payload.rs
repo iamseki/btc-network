@@ -119,10 +119,24 @@ pub fn build_getheaders_payload(locator: &[[u8; 32]]) -> Vec<u8> {
 pub fn build_getdata_block_payload(hash: [u8; 32]) -> Vec<u8> {
     let mut payload = Vec::new();
 
-    // 1 inventory entry
     write_varint(1, &mut payload);
 
-    payload.extend(&InventoryType::Block.to_le_bytes());
+    // Request full block including witness data (BIP144).
+    //
+    // We use MSG_WITNESS_BLOCK (0x40000002) instead of MSG_BLOCK (2).
+    //
+    // Reference:
+    // - BIP144: Segregated Witness (Peer Services)
+    //   https://github.com/bitcoin/bips/blob/master/bip-0144.mediawiki
+    //
+    // Semantics:
+    //
+    // - MSG_BLOCK (2) allows peers to send the legacy "stripped" block
+    //   serialization (without witness data).
+    //
+    // - MSG_WITNESS_BLOCK (0x40000002) requires peers that support
+    //   NODE_WITNESS to return the block including witness data.
+    payload.extend(&InventoryType::WitnessBlock.to_le_bytes());
 
     // block hash (little-endian wire format)
     payload.extend(hash);
