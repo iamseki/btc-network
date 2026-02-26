@@ -74,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         entries.len(),
                         seed
                     );
-                    for entry in &entries {
+                    for _entry in &entries {
                         // println!("  {:?}:{}", entry.addr, entry.port);
                     }
                     break;
@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         entries.len(),
                         seed
                     );
-                    for entry in &entries {
+                    for _entry in &entries {
                         // println!("  {}:{}", entry.addr.ip, entry.addr.port);
                     }
                     break;
