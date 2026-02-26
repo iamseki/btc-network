@@ -510,11 +510,103 @@ impl Debug for Services {
     }
 }
 
+/// A minimally decoded Bitcoin block as received via the P2P `block` message.
+///
+/// This struct represents the serialized block payload defined by the
+/// Bitcoin wire protocol:
+///
+/// ```text
+/// block
+///   block_header      (80 bytes)
+///   txn_count         (CompactSize)
+///   transactions[]    (raw serialized transactions)
+/// ```
+///
+/// Reference (serialized block format):
+/// https://developer.bitcoin.org/reference/block_chain.html#serialized-blocks
+///
+/// Transaction format reference:
+/// https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+///
+/// Fields:
+///
+/// - `header`:
+///     The 80-byte block header (version, prev_blockhash, merkle_root,
+///     time, bits, nonce). See [`BlockHeader`].
+///
+/// - `tx_count`:
+///     The number of transactions in the block, decoded from the
+///     CompactSize (varint) immediately following the header.
+///
+/// - `serialized_size`:
+///     The total size in bytes of the serialized block payload as
+///     received over the wire. This includes:
+///     - 80-byte header
+///     - CompactSize transaction count
+///     - All serialized transactions
+///     - Witness data (if present)
+///
+///     This value does NOT include the 24-byte P2P message header
+///     (magic, command, length, checksum).
+///
+/// Notes:
+///
+/// - Transactions are not decoded at this stage; only the header and
+///   transaction count are parsed.
+/// - This struct reflects the wire-level representation, not a fully
+///   validated consensus object.
+/// - The block hash is derived from the double SHA256 of the 80-byte
+///   header (not from the full serialized block).
+///
+/// See also:
+/// - `block` message: https://developer.bitcoin.org/reference/p2p_networking.html#block
+/// - BIP141 (SegWit serialization changes)
 #[derive(Debug, Clone)]
 pub struct Block {
     pub header: BlockHeader,
     pub tx_count: u64,
     pub serialized_size: usize,
+}
+
+/// Inventory object types used in `inv`, `getdata`, and `notfound` messages.
+///
+/// Defined by the Bitcoin P2P protocol:
+/// https://developer.bitcoin.org/reference/p2p_networking.html#data-messages
+///
+/// These values are serialized as little-endian 32-bit unsigned integers.
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InventoryType {
+    /// Error / undefined type.
+    Error = 0,
+
+    /// Transaction (legacy txid-based).
+    Tx = 1,
+
+    /// Full block.
+    Block = 2,
+
+    /// Filtered block (BIP37).
+    FilteredBlock = 3,
+
+    /// Compact block (BIP152).
+    CompactBlock = 4,
+
+    /// Witness transaction (BIP144).
+    WitnessTx = 0x40000001,
+
+    /// Witness block (BIP144).
+    WitnessBlock = 0x40000002,
+
+    /// Witness filtered block (BIP144).
+    WitnessFilteredBlock = 0x40000003,
+}
+
+impl InventoryType {
+    /// Serialize the inventory type to little-endian bytes for wire usage.
+    pub fn to_le_bytes(self) -> [u8; 4] {
+        (self as u32).to_le_bytes()
+    }
 }
 
 #[cfg(test)]

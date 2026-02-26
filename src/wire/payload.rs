@@ -1,4 +1,5 @@
 use crate::wire::constants::PROTOCOL_VERSION;
+use crate::wire::message::InventoryType;
 use byteorder::{LittleEndian, WriteBytesExt};
 use rand::Rng;
 use std::io::{self};
@@ -121,8 +122,7 @@ pub fn build_getdata_block_payload(hash: [u8; 32]) -> Vec<u8> {
     // 1 inventory entry
     write_varint(1, &mut payload);
 
-    // type = MSG_BLOCK (2): TODO improve
-    payload.extend(&2u32.to_le_bytes());
+    payload.extend(&InventoryType::Block.to_le_bytes());
 
     // block hash (little-endian wire format)
     payload.extend(hash);
