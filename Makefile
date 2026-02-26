@@ -9,13 +9,9 @@ crawler:
 listener:
 	@cargo run --bin listener
 
-## Run crawler in release mode
-crawler-release:
-	@cargo run --release --bin crawler
-
-## Run listener in release mode
-listener-release:
-	@cargo run --release --bin listener
+## Run btc-cli (pass args via ARGS="")
+cli:
+	@cargo run --bin cli -- $(ARGS)
 
 ## Build all binaries
 build:
@@ -33,9 +29,10 @@ clean:
 help:
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make crawler    - Run crawler binary"
-	@echo "  make listener   - Run listener binary"
-	@echo "  make build      - Build all binaries"
-	@echo "  make test       - Run tests"
-	@echo "  make clean      - Clean target directory"
+	@echo "  make crawler"
+	@echo "  make listener"
+	@echo "  make cli ARGS=\"--node host:port ping\""
+	@echo "  make build"
+	@echo "  make test"
+	@echo "  make clean"
 	@echo ""

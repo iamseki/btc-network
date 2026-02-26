@@ -16,9 +16,9 @@
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use rand::Rng;
+use std::fmt::{Debug, Formatter, Result};
 use std::io::{self, Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::fmt::{Debug, Formatter, Result};
 
 /// Network magic value used in the Bitcoin P2P message header.
 ///
@@ -677,12 +677,7 @@ impl Debug for Services {
 
         let names = self.names().join(" | ");
 
-        write!(
-            f,
-            "Services({}) [0x{:016x}]",
-            names,
-            self.bits()
-        )
+        write!(f, "Services({}) [0x{:016x}]", names, self.bits())
     }
 }
 

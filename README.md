@@ -100,3 +100,14 @@ CLAUDE.md                  # entry point — loaded automatically by Claude Code
 
 > You can also use `@path/to/file` inside any rules file to import additional context.
 > Paths are relative to the file containing the import; imports chain up to 5 levels deep.
+
+---
+
+## btc-cli Usage
+
+Minimal Bitcoin P2P CLI for interacting with a single peer.
+
+### Available Commands
+
+- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 ping"`
+- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-addr"`

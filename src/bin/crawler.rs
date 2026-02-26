@@ -1,8 +1,7 @@
 use btc_network::wire;
-use std::io::{ErrorKind};
+use std::io::ErrorKind;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::time::{Duration};
-
+use std::time::Duration;
 
 // seeds from bitcoin core node codebase: https://github.com/bitcoin/bitcoin/blob/master/src/kernel/chainparams.cpp#L139-L151
 const SEED_NODES: &[&str] = &[
