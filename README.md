@@ -113,4 +113,12 @@ Minimal Bitcoin P2P CLI for interacting with a single peer.
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 ping"`
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-addr"`
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-headers"`
-- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 last-block-header"`
+
+- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 last-block-header"` execute at at 2026-02-26 04:00 AM BR 
+  ```
+  Reached peer tip.
+  Total headers fetched: 938408 // that should eventually match the start_height: 938408 response in handshake Version message
+  Rounds: 470
+  Elapsed: 545.45s
+  Most recent block: 00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde
+  ```

@@ -167,6 +167,28 @@ fn get_headers(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+/// The `headers` message returns block headers in strictly
+/// chronological (forward) order along the peer's active chain.
+///
+/// Semantics:
+/// - The peer finds the first locator hash it recognizes.
+/// - It then returns headers *after* that block.
+/// - Headers are ordered from oldest → newest.
+/// - At most 2000 headers are returned per message.
+///
+/// This ordering allows the client to validate linkage linearly:
+///
+///     header[i].prev_blockhash == header[i-1].hash()
+///
+/// Even though block headers only contain a backward pointer
+/// (`prev_blockhash`), peers maintain a forward index internally
+/// and iterate forward when constructing the response.
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/p2p_networking.html#getheaders
+///
+/// This forward ordering is relied upon by header-first sync
+/// and is required for deterministic chain construction.
 fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting header sync from genesis...");
 
