@@ -16,6 +16,7 @@
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use rand::Rng;
+use sha2::{Digest, Sha256};
 use std::fmt::{Debug, Formatter, Result};
 use std::io::{self, Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -370,6 +371,80 @@ pub struct AddrV2Entry {
     pub port: u16,
 }
 
+/// A Bitcoin block header (exactly 80 bytes on the wire).
+///
+/// The header is defined by the Bitcoin P2P protocol and is transmitted
+/// inside `block` and `headers` messages.
+///
+/// Layout (little-endian fields unless otherwise noted):
+///
+/// ```text
+/// 4  bytes  version
+/// 32 bytes  previous block hash
+/// 32 bytes  merkle root
+/// 4  bytes  timestamp (Unix epoch)
+/// 4  bytes  nBits (compact target encoding)
+/// 4  bytes  nonce
+/// ```
+///
+/// Total: 80 bytes
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/block_chain.html#block-headers
+///
+/// In `headers` messages, each header is followed by a CompactSize
+/// transaction count (always zero). The transaction data is NOT included.
+/// See:
+/// https://developer.bitcoin.org/reference/p2p_networking.html#headers
+#[derive(Debug, Clone)]
+pub struct BlockHeader {
+    pub version: i32,
+    pub prev_blockhash: [u8; 32],
+    pub merkle_root: [u8; 32],
+    pub time: u32,
+    pub bits: u32,
+    pub nonce: u32,
+}
+
+impl BlockHeader {
+    /// Computes the block header hash (block ID).
+    ///
+    /// The block hash is defined as: SHA256(SHA256(header_bytes))
+    ///
+    /// This "double SHA256" construction is part of the original Bitcoin
+    /// design and is used throughout the protocol for:
+    ///
+    /// - Block identifiers
+    /// - Transaction identifiers (txid)
+    /// - Merkle tree internal hashing
+    ///
+    /// Reference:
+    /// https://developer.bitcoin.org/reference/block_chain.html#block-hashes
+    ///
+    /// The returned hash is in little-endian byte order, matching the
+    /// internal representation used on the wire. For human-readable
+    /// display (block explorers), the bytes must be reversed.
+    pub fn hash(&self) -> [u8; 32] {
+        let mut bytes = Vec::with_capacity(80);
+
+        bytes.extend(&self.version.to_le_bytes());
+        bytes.extend(&self.prev_blockhash);
+        bytes.extend(&self.merkle_root);
+        bytes.extend(&self.time.to_le_bytes());
+        bytes.extend(&self.bits.to_le_bytes());
+        bytes.extend(&self.nonce.to_le_bytes());
+
+        // Bitcoin uses double SHA256 to reduce structural weaknesses in
+        // single-round SHA256 and to harden against length-extension attacks.
+        // This construction is consensus-critical and cannot be changed.
+        let hash = Sha256::digest(&Sha256::digest(&bytes));
+
+        let mut result = [0u8; 32];
+        result.copy_from_slice(&hash);
+        result
+    }
+}
+
 /// Represents a decoded Bitcoin P2P message.
 ///
 /// Each variant corresponds to a known Bitcoin protocol command.
@@ -402,7 +477,7 @@ pub enum Message {
     NotFound(Vec<u8>),
     GetBlocks(Vec<u8>),
     GetHeaders(Vec<u8>),
-    Headers(Vec<u8>),
+    Headers(Vec<BlockHeader>),
     Block(Vec<u8>),
     Tx(Vec<u8>),
     GetBlockTxn(Vec<u8>),
@@ -532,7 +607,7 @@ impl TryFrom<RawMessage> for Message {
             Command::NotFound => Ok(Message::NotFound(raw.payload)),
             Command::GetBlocks => Ok(Message::GetBlocks(raw.payload)),
             Command::GetHeaders => Ok(Message::GetHeaders(raw.payload)),
-            Command::Headers => Ok(Message::Headers(raw.payload)),
+            Command::Headers => Ok(Message::Headers(Vec::<BlockHeader>::decode(&raw.payload)?)),
             Command::Block => Ok(Message::Block(raw.payload)),
             Command::Tx => Ok(Message::Tx(raw.payload)),
             Command::GetBlockTxn => Ok(Message::GetBlockTxn(raw.payload)),
@@ -863,6 +938,62 @@ impl Decode for Vec<AddrV2Entry> {
     }
 }
 
+impl Decode for Vec<BlockHeader> {
+    fn decode(payload: &[u8]) -> io::Result<Self> {
+        let mut cursor = 0;
+
+        let count = read_varint(payload, &mut cursor)? as usize;
+
+        if count > 2000 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "headers: exceeds 2000-entry limit",
+            ));
+        }
+
+        let mut headers = Vec::with_capacity(count);
+
+        // Each header consumes exactly 80 bytes (fixed-size structure),
+        // followed by a CompactSize transaction count (always 0 in a
+        // `headers` message). We advance the cursor accordingly.
+        for _ in 0..count {
+            let version = read_i32(payload, &mut cursor)?;
+
+            let prev_blockhash: [u8; 32] = payload
+                .get(cursor..cursor + 32)
+                .ok_or_else(|| eof("headers: prev_blockhash"))?
+                .try_into()
+                .unwrap();
+            cursor += 32;
+
+            let merkle_root: [u8; 32] = payload
+                .get(cursor..cursor + 32)
+                .ok_or_else(|| eof("headers: merkle_root"))?
+                .try_into()
+                .unwrap();
+            cursor += 32;
+
+            let time = read_u32(payload, &mut cursor)?;
+            let bits = read_u32(payload, &mut cursor)?;
+            let nonce = read_u32(payload, &mut cursor)?;
+
+            headers.push(BlockHeader {
+                version,
+                prev_blockhash,
+                merkle_root,
+                time,
+                bits,
+                nonce,
+            });
+
+            // txn_count (always 0 in headers message)
+            let _ = read_varint(payload, &mut cursor)?;
+        }
+
+        Ok(headers)
+    }
+}
+
 // --- helpers ----------------------------------------------------------------
 
 fn eof(context: &'static str) -> io::Error {
@@ -1029,6 +1160,80 @@ mod tests {
         p.extend_from_slice(&1700000200u32.to_le_bytes());
         p.extend(net_addr_bytes(1, [5, 6, 7, 8], 8334));
         p
+    }
+
+    fn sample_header_bytes() -> [u8; 80] {
+        let mut header = [0u8; 80];
+
+        // version
+        header[0..4].copy_from_slice(&1i32.to_le_bytes());
+
+        // prev_blockhash (32 bytes)
+        header[4..36].copy_from_slice(&[0x11; 32]);
+
+        // merkle_root (32 bytes)
+        header[36..68].copy_from_slice(&[0x22; 32]);
+
+        // time
+        header[68..72].copy_from_slice(&1234567890u32.to_le_bytes());
+
+        // bits
+        header[72..76].copy_from_slice(&0x1d00ffffu32.to_le_bytes());
+
+        // nonce
+        header[76..80].copy_from_slice(&42u32.to_le_bytes());
+
+        header
+    }
+
+    #[test]
+    fn decode_headers_single_entry() {
+        let header = sample_header_bytes();
+
+        let mut payload = vec![];
+
+        // varint count = 1
+        payload.push(1);
+
+        // 80-byte header
+        payload.extend(header);
+
+        // txn_count = 0 (varint)
+        payload.push(0);
+
+        let headers = Vec::<BlockHeader>::decode(&payload).unwrap();
+
+        assert_eq!(headers.len(), 1);
+
+        let h = &headers[0];
+
+        assert_eq!(h.version, 1);
+        assert_eq!(h.prev_blockhash, [0x11; 32]);
+        assert_eq!(h.merkle_root, [0x22; 32]);
+        assert_eq!(h.time, 1234567890);
+        assert_eq!(h.bits, 0x1d00ffff);
+        assert_eq!(h.nonce, 42);
+    }
+
+    #[test]
+    fn decode_headers_multiple_entries() {
+        let header = sample_header_bytes();
+
+        let mut payload = vec![];
+
+        payload.push(2); // varint count
+
+        // first header
+        payload.extend(header);
+        payload.push(0); // txn_count
+
+        // second header
+        payload.extend(header);
+        payload.push(0); // txn_count
+
+        let headers = Vec::<BlockHeader>::decode(&payload).unwrap();
+
+        assert_eq!(headers.len(), 2);
     }
 
     #[test]

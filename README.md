@@ -61,13 +61,14 @@ Each message payload type implements `Decode` independently. `TryFrom<RawMessage
 
 ## Current status
 
-| Message    | Decoded |
-|------------|---------|
-| `version`  | ✅      |
-| `verack`   | ✅      |
-| `addr`     | ✅      |
-| `addrv2`   | ✅      |
-| all others | raw `Vec<u8>` — TODO |
+| Message     | Decoded |
+|------------ |---------|
+| `version`   | ✅      |
+| `verack`    | ✅      |
+| `addr`      | ✅      |
+| `addrv2`    | ✅      |
+| `headers`   | ✅      |
+| all others  | raw `Vec<u8>` — TODO |
 
 ---
 
@@ -111,3 +112,5 @@ Minimal Bitcoin P2P CLI for interacting with a single peer.
 
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 ping"`
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-addr"`
+- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-headers"`
+- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 last-block-header"`
