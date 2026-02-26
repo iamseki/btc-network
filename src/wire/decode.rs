@@ -254,7 +254,6 @@ impl Decode for Block {
             ));
         }
 
-        // Decode header (reuse your existing logic)
         let header = {
             let version = read_i32(payload, &mut cursor)?;
 
@@ -275,7 +274,6 @@ impl Decode for Block {
             }
         };
 
-        // Read CompactSize tx_count
         let tx_count = read_varint(payload, &mut cursor)?;
 
         Ok(Block {

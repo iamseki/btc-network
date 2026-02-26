@@ -61,7 +61,12 @@ Get Block info:
 
 Genesis block output (it must have only the coinbase tx):
 ```
-Received block with header (BlockHeader { version: 1, prev_blockhash: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], merkle_root: [59, 163, 237, 253, 122, 123, 18, 178, 122, 199, 44, 62, 103, 118, 143, 97, 127, 200, 27, 195, 136, 138, 81, 50, 58, 159, 184, 170, 75, 30, 94, 74], time: 1231006505, bits: 486604799, nonce: 2083236893 }), hash: ("6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000"), tx_count: 1, block_serialized_size: 0.00 MB
+Connecting to seed.bitcoin.sipa.be:8333
+Received (ignored): SendCmpct([0, 2, 0, 0, 0, 0, 0, 0, 0])
+Received (ignored): FeeFilter([232, 3, 0, 0, 0, 0, 0, 0])
+Block hash: 6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000
+Tx count: 1
+Size: 0.00 MB
 ```
 
 ---

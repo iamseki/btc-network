@@ -61,109 +61,104 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Receives the next decoded Bitcoin P2P message from the peer.
+///
+/// It automatically handle Ping
+///
+/// The name `recv` "receive" follows conventional socket APIs (`recv()` in
+/// POSIX/BSD sockets) and indicates a blocking receive operation.
+fn recv_until<F>(session: &mut Session, mut handler: F) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnMut(Message) -> Result<bool, Box<dyn std::error::Error>>,
+{
+    loop {
+        let msg = session.recv()?;
+
+        if let Message::Ping(payload) = &msg {
+            session.send(Command::Pong, payload)?;
+            continue;
+        }
+
+        if handler(msg)? {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
 fn ping(session: &mut Session) -> Result<(), Box<dyn Error>> {
     let nonce: u64 = rand::thread_rng().r#gen();
 
     println!("Sending ping");
-
     session.send(Command::Ping, &nonce.to_le_bytes())?;
 
-    loop {
-        let msg = session.recv()?;
-
-        match msg {
-            Message::Pong(payload) => {
-                let returned = u64::from_le_bytes(payload[..8].try_into()?);
-
-                if returned == nonce {
-                    println!("Received matching pong");
-                    break;
-                }
-            }
-            _ => {}
+    recv_until(session, |msg| match msg {
+        Message::Pong(payload) => {
+            let returned = u64::from_le_bytes(payload[..8].try_into()?);
+            println!(
+                "Received matching pong. ping nounce: {}, pong nonce: {}",
+                nonce, returned
+            );
+            Ok(true)
         }
-    }
-
-    Ok(())
+        other => {
+            println!("Received (ignored): {:?}", other);
+            Ok(false)
+        }
+    })
 }
 
-fn get_addresses(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> {
+fn get_addresses(session: &mut Session) -> Result<(), Box<dyn Error>> {
     println!("Requesting peer addresses...");
-
-    // 1️⃣ Send getaddr
     session.send(Command::GetAddr, &[])?;
 
-    // 2️⃣ Wait for addr or addrv2
-    loop {
-        let msg = session.recv()?;
-
-        match msg {
-            Message::AddrV2(entries) => {
-                println!("Received {} peers (addrv2)", entries.len());
-
-                for entry in entries {
-                    println!("  {:?}:{:?}", entry.addr, entry.port);
-                }
-
-                break;
+    recv_until(session, |msg| match msg {
+        Message::AddrV2(entries) => {
+            println!("Received {} peers (addrv2)", entries.len());
+            for e in entries {
+                println!("  {:?}:{:?}", e.addr, e.port);
             }
-
-            Message::Addr(entries) => {
-                println!("Received {} peers (legacy addr)", entries.len());
-
-                for entry in entries {
-                    println!("  {}:{}", entry.addr.ip, entry.addr.port);
-                }
-
-                break;
-            }
-
-            Message::Ping(payload) => {
-                session.send(Command::Pong, &payload)?;
-            }
-
-            other => {
-                println!("Other command received from get addresses: {:?}", other);
-            }
+            Ok(true)
         }
-    }
-
-    Ok(())
+        Message::Addr(entries) => {
+            println!("Received {} peers (legacy addr)", entries.len());
+            for e in entries {
+                println!("  {}:{}", e.addr.ip, e.addr.port);
+            }
+            Ok(true)
+        }
+        other => {
+            println!("Received (ignored): {:?}", other);
+            Ok(false)
+        }
+    })
 }
 
-fn get_headers(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> {
+fn get_headers(session: &mut Session) -> Result<(), Box<dyn Error>> {
     println!("Requesting headers from genesis...");
 
     let payload = wire::build_getheaders_payload(&[wire::constants::GENESIS_BLOCK_HASH_MAINNET]);
 
     session.send(Command::GetHeaders, &payload)?;
 
-    loop {
-        match session.recv()? {
-            Message::Headers(headers) => {
-                println!("Received {} headers", headers.len());
+    recv_until(session, |msg| match msg {
+        Message::Headers(headers) => {
+            println!("Received {} headers", headers.len());
 
-                if let Some(last) = headers.last() {
-                    let mut hash = last.hash();
-                    hash.reverse(); // display big-endian
-
-                    println!("Last header hash: {}", hex::encode(hash));
-                }
-
-                break;
+            if let Some(last) = headers.last() {
+                let mut hash = last.hash();
+                hash.reverse();
+                println!("Last header hash: {}", hex::encode(hash));
             }
 
-            Message::Ping(payload) => {
-                session.send(Command::Pong, &payload)?;
-            }
-
-            other => {
-                println!("Received: {:?}", other);
-            }
+            Ok(true)
         }
-    }
-
-    Ok(())
+        other => {
+            println!("Received (ignored): {:?}", other);
+            Ok(false)
+        }
+    })
 }
 
 /// The `headers` message returns block headers in strictly
@@ -207,17 +202,20 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
         let payload = wire::build_getheaders_payload(&[current_locator]);
         session.send(Command::GetHeaders, &payload)?;
 
-        let headers = loop {
-            match session.recv()? {
-                Message::Headers(h) => break h,
-                Message::Ping(p) => {
-                    session.send(Command::Pong, &p)?;
-                }
-                other => {
-                    println!("Received: {:?}", other);
-                }
+        let mut received_headers = None;
+
+        recv_until(session, |msg| match msg {
+            Message::Headers(h) => {
+                received_headers = Some(h);
+                Ok(true)
             }
-        };
+            other => {
+                println!("Received: {:?}", other);
+                Ok(false)
+            }
+        })?;
+
+        let headers = received_headers.expect("headers expected");
 
         let count = headers.len();
         println!("[round {}] received {} headers", round, count);
@@ -257,43 +255,31 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
     Ok(())
 }
 
-fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn std::error::Error>> {
-    // Convert hex (big-endian) → little-endian wire format
+fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Error>> {
     let mut hash = hex::decode(hash_hex)?;
-    hash.reverse(); // convert to little-endian
+    hash.reverse();
 
-    let mut hash_arr = [0u8; 32];
-    hash_arr.copy_from_slice(&hash);
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&hash);
 
-    let payload = wire::build_getdata_block_payload(hash_arr);
-
+    let payload = wire::build_getdata_block_payload(arr);
     session.send(Command::GetData, &payload)?;
 
-    loop {
-        match session.recv()? {
-            // TODO: improve decoding of Block and implement decoding of txns
-            // the size is not match with blockchain https://www.blockchain.com/explorer/blocks/btc/00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde
+    recv_until(session, |msg| {
+        match msg {
             Message::Block(block) => {
+                // the size is not match with blockchain https://www.blockchain.com/explorer/blocks/btc/00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde why?
                 let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
-                println!(
-                    "Received block with header ({:?}), hash: ({:?}), tx_count: {}, block_serialized_size: {:.2} MB",
-                    block.header,
-                    hex::encode(block.header.hash()),
-                    block.tx_count,
-                    mb
-                );
-                break;
-            }
 
-            Message::Ping(p) => {
-                session.send(Command::Pong, &p)?;
+                println!("Block hash: {}", hex::encode(block.header.hash()));
+                println!("Tx count: {}", block.tx_count);
+                println!("Size: {:.2} MB", mb);
+                Ok(true)
             }
-
             other => {
-                println!("Received: {:?}", other);
+                println!("Received (ignored): {:?}", other);
+                Ok(false)
             }
         }
-    }
-
-    Ok(())
+    })
 }
