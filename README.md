@@ -61,12 +61,10 @@ Get Block info:
 
 Genesis block output (it must have only the coinbase tx):
 ```
-Connecting to seed.bitcoin.sipa.be:8333
-Received (ignored): SendCmpct([0, 2, 0, 0, 0, 0, 0, 0, 0])
-Received (ignored): FeeFilter([232, 3, 0, 0, 0, 0, 0, 0])
 Block hash: 6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000
 Tx count: 1
 Size: 0.00 MB
+tx.is_coinbase => true, tx: Transaction { version: 1, inputs: 1, outputs: 1, has_witness: false, size_bytes: 204, locktime: "block height 0" }
 ```
 
 ---
