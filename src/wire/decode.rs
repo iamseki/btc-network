@@ -1,3 +1,15 @@
+//! Decoders from raw Bitcoin P2P payload bytes into typed wire structs.
+//!
+//! This module implements `Decode` for selected messages currently used by the
+//! project (`version`, `addr`, `addrv2`, `headers`, `block`).
+//!
+//! References:
+//! - P2P messages: https://developer.bitcoin.org/reference/p2p_networking.html
+//! - Block serialization: https://developer.bitcoin.org/reference/block_chain.html#serialized-blocks
+//! - Transaction serialization + CompactSize:
+//!   https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+//! - BIP155 (`addrv2`): https://github.com/bitcoin/bips/blob/master/bip-0155.mediawiki
+
 use std::io::{self};
 
 use crate::wire::message::{
@@ -293,6 +305,13 @@ impl Decode for Block {
 }
 
 impl Transaction {
+    /// Decodes a single serialized transaction at `cursor`.
+    ///
+    /// Supports both legacy and SegWit transaction encodings (BIP141).
+    ///
+    /// Reference:
+    /// - https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
+    /// - https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
     pub fn decode_from(payload: &[u8], cursor: &mut usize) -> io::Result<Self> {
         let start = *cursor;
 
@@ -388,6 +407,12 @@ fn slice_n<'a>(p: &'a [u8], c: &mut usize, n: usize, ctx: &'static str) -> io::R
     Ok(slice)
 }
 
+/// Decodes legacy `net_addr` (`services + 16-byte IP + big-endian port`).
+///
+/// Used by `version` and legacy `addr` messages.
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/p2p_networking.html#network-addresses
 fn decode_net_addr(p: &[u8], c: &mut usize) -> io::Result<NetAddr> {
     let services = read_u64(p, c)?;
 
@@ -418,6 +443,10 @@ fn eof(context: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::UnexpectedEof, context)
 }
 
+/// Reads Bitcoin `CompactSize` (varint) from payload at cursor.
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/transactions.html#compactsize-unsigned-integers
 fn read_varint(p: &[u8], c: &mut usize) -> io::Result<u64> {
     let first = *p.get(*c).ok_or_else(|| eof("varint"))?;
     *c += 1;

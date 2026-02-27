@@ -116,6 +116,16 @@ pub fn build_getheaders_payload(locator: &[[u8; 32]]) -> Vec<u8> {
     payload
 }
 
+/// Builds a single-inventory `getdata` payload requesting one block.
+///
+/// Uses `MSG_WITNESS_BLOCK` so peers can return full SegWit-aware block
+/// serialization when supported.
+///
+/// References:
+/// - `getdata` / inventory vectors:
+///   https://developer.bitcoin.org/reference/p2p_networking.html#getdata
+/// - Witness inventory types (BIP144):
+///   https://github.com/bitcoin/bips/blob/master/bip-0144.mediawiki
 pub fn build_getdata_block_payload(hash: [u8; 32]) -> Vec<u8> {
     let mut payload = Vec::new();
 
@@ -144,6 +154,13 @@ pub fn build_getdata_block_payload(hash: [u8; 32]) -> Vec<u8> {
     payload
 }
 
+/// Writes Bitcoin `CompactSize` (varint) to output.
+///
+/// This matches wire encoding used by inventory counts, vector lengths,
+/// and many transaction/block fields.
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/transactions.html#compactsize-unsigned-integers
 fn write_varint(value: u64, out: &mut Vec<u8>) {
     match value {
         0..=0xFC => out.push(value as u8),

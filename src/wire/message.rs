@@ -123,6 +123,10 @@ impl TryFrom<RawMessage> for Message {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Bitcoin P2P command namespace (12-byte ASCII command field).
+///
+/// Reference:
+/// https://developer.bitcoin.org/reference/p2p_networking.html#message-headers
 pub enum Command {
     // Control
     Version,
