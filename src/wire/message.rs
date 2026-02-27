@@ -336,7 +336,7 @@ pub struct AddrV2Entry {
 /// transaction count (always zero). The transaction data is NOT included.
 /// See:
 /// https://developer.bitcoin.org/reference/p2p_networking.html#headers
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BlockHeader {
     pub version: i32,
     pub prev_blockhash: [u8; 32],
@@ -382,6 +382,31 @@ impl BlockHeader {
         let mut result = [0u8; 32];
         result.copy_from_slice(&hash);
         result
+    }
+}
+
+impl fmt::Debug for BlockHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn display_hash(mut h: [u8; 32]) -> String {
+            h.reverse();
+            hex::encode(h)
+        }
+
+        let time_utc = DateTime::<Utc>::from_timestamp(self.time as i64, 0)
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_else(|| format!("invalid({})", self.time));
+
+        f.debug_struct("BlockHeader")
+            .field(
+                "version",
+                &format_args!("{} (0x{:08x})", self.version, self.version as u32),
+            )
+            .field("prev_blockhash", &display_hash(self.prev_blockhash))
+            .field("merkle_root", &display_hash(self.merkle_root))
+            .field("time", &format_args!("{} ({})", self.time, time_utc))
+            .field("bits", &format_args!("0x{:08x}", self.bits))
+            .field("nonce", &self.nonce)
+            .finish()
     }
 }
 

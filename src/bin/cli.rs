@@ -269,7 +269,7 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
         Message::Block(block) => {
             let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
 
-            println!("Block hash: {}", hex::encode(block.header.hash()));
+            println!("Block header: {:?}", block.header);
             println!("Tx count: {}", block.tx_count);
             println!("Size: {:.2} MB", mb);
 
