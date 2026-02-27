@@ -131,7 +131,7 @@ pub fn send_message<W: Write>(writer: &mut W, command: Command, payload: &[u8]) 
 
     writer.write_u32::<LittleEndian>(payload.len() as u32)?;
 
-    let checksum = Sha256::digest(&Sha256::digest(payload));
+    let checksum = Sha256::digest(Sha256::digest(payload));
     writer.write_all(&checksum[..4])?;
 
     writer.write_all(payload)?;

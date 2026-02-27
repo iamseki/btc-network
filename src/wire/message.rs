@@ -379,7 +379,7 @@ impl BlockHeader {
         // Bitcoin uses double SHA256 to reduce structural weaknesses in
         // single-round SHA256 and to harden against length-extension attacks.
         // This construction is consensus-critical and cannot be changed.
-        let hash = Sha256::digest(&Sha256::digest(&bytes));
+        let hash = Sha256::digest(Sha256::digest(&bytes));
 
         let mut result = [0u8; 32];
         result.copy_from_slice(&hash);
