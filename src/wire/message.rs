@@ -383,6 +383,70 @@ impl BlockHeader {
         result.copy_from_slice(&hash);
         result
     }
+
+    /// Decodes compact `nBits` into the full 256-bit PoW target.
+    ///
+    /// Bitcoin stores difficulty target in "compact" form (`nBits`) inside
+    /// each block header. This method expands it into a fixed 32-byte
+    /// big-endian integer.
+    ///
+    /// Compact format:
+    /// - high byte: exponent (`E`)
+    /// - low 23 bits: mantissa (`M`)
+    /// - bit 24: sign bit (must be unset for valid PoW target)
+    ///
+    /// Expanded value:
+    /// - if `E <= 3`: `target = M >> (8 * (3 - E))`
+    /// - else:        `target = M << (8 * (E - 3))`
+    ///
+    /// References:
+    /// - https://developer.bitcoin.org/reference/block_chain.html#target-nbits
+    /// - Bitcoin Core `arith_uint256::SetCompact` (consensus behavior reference)
+    pub fn target_from_bits(&self) -> Option<[u8; 32]> {
+        compact_target_from_bits(self.bits)
+    }
+
+    /// Returns the decoded PoW target as a base-10 bigint string.
+    ///
+    /// This formatting is closer to explorer-style human display than raw
+    /// compact `nBits`.
+    pub fn target_decimal(&self) -> Option<String> {
+        self.target_from_bits().map(|t| be256_to_decimal_string(&t))
+    }
+
+    /// Returns block difficulty relative to Bitcoin mainnet max target.
+    ///
+    /// This uses the same compact-`bits` normalization approach used by
+    /// Bitcoin Core's `getdifficulty` RPC (floating-point approximation).
+    ///
+    /// Conceptually:
+    /// `difficulty = max_target / current_target`
+    ///
+    /// Where `max_target` is the genesis-era pow limit (`0x1d00ffff`).
+    ///
+    /// Reference:
+    /// - https://developer.bitcoin.org/reference/block_chain.html#target-nbits
+    pub fn difficulty(&self) -> Option<f64> {
+        let mantissa = self.bits & 0x00ff_ffff;
+        let sign = (self.bits & 0x0080_0000) != 0;
+        if mantissa == 0 || sign {
+            return None;
+        }
+
+        let mut shift = ((self.bits >> 24) & 0xff) as i32;
+        let mut diff = 0x0000ffff as f64 / mantissa as f64;
+
+        while shift < 29 {
+            diff *= 256.0;
+            shift += 1;
+        }
+        while shift > 29 {
+            diff /= 256.0;
+            shift -= 1;
+        }
+
+        Some(diff)
+    }
 }
 
 impl fmt::Debug for BlockHeader {
@@ -404,10 +468,88 @@ impl fmt::Debug for BlockHeader {
             .field("prev_blockhash", &display_hash(self.prev_blockhash))
             .field("merkle_root", &display_hash(self.merkle_root))
             .field("time", &format_args!("{} ({})", self.time, time_utc))
-            .field("bits", &format_args!("0x{:08x}", self.bits))
+            .field(
+                "bits",
+                &format_args!(
+                    "0x{:08x} (target={})",
+                    self.bits,
+                    self.target_decimal()
+                        .unwrap_or_else(|| "invalid-compact-target".to_string())
+                ),
+            )
+            .field(
+                "difficulty",
+                &self
+                    .difficulty()
+                    .map(|d| format!("{:.8}", d))
+                    .unwrap_or_else(|| "invalid".to_string()),
+            )
             .field("nonce", &self.nonce)
             .finish()
     }
+}
+
+fn compact_target_from_bits(bits: u32) -> Option<[u8; 32]> {
+    let exponent = (bits >> 24) as usize;
+    let mantissa = bits & 0x007f_ffff;
+    let negative = (bits & 0x0080_0000) != 0;
+
+    if negative {
+        return None;
+    }
+
+    if mantissa == 0 {
+        return Some([0u8; 32]);
+    }
+
+    if exponent > 32 {
+        return None;
+    }
+
+    let mut out = [0u8; 32];
+
+    if exponent <= 3 {
+        let value = mantissa >> (8 * (3 - exponent));
+        let be = value.to_be_bytes();
+        let len = exponent;
+        out[32 - len..].copy_from_slice(&be[4 - len..]);
+        return Some(out);
+    }
+
+    let start = 32 - exponent;
+    out[start] = ((mantissa >> 16) & 0xff) as u8;
+    out[start + 1] = ((mantissa >> 8) & 0xff) as u8;
+    out[start + 2] = (mantissa & 0xff) as u8;
+
+    Some(out)
+}
+
+fn be256_to_decimal_string(value: &[u8; 32]) -> String {
+    // Repeated base conversion: big-endian base-256 -> decimal digits.
+    let mut digits: Vec<u8> = vec![0]; // little-endian decimal digits
+
+    for &byte in value {
+        let mut carry = byte as u32;
+        for d in &mut digits {
+            let n = (*d as u32) * 256 + carry;
+            *d = (n % 10) as u8;
+            carry = n / 10;
+        }
+        while carry > 0 {
+            digits.push((carry % 10) as u8);
+            carry /= 10;
+        }
+    }
+
+    while digits.len() > 1 && *digits.last().unwrap_or(&0) == 0 {
+        digits.pop();
+    }
+
+    digits
+        .iter()
+        .rev()
+        .map(|d| (b'0' + *d) as char)
+        .collect::<String>()
 }
 
 /// Service flags as defined by the Bitcoin P2P protocol.
@@ -1086,5 +1228,88 @@ mod tests {
             entries[0].addr,
             AddrV2Addr::IPv4(a) if a == std::net::Ipv4Addr::new(127, 0, 0, 1)
         ));
+    }
+
+    #[test]
+    fn block_header_target_from_bits_genesis_pow_limit() {
+        let header = BlockHeader {
+            version: 1,
+            prev_blockhash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            time: 1231006505,
+            bits: 0x1d00ffff,
+            nonce: 2083236893,
+        };
+
+        let target = header.target_from_bits().expect("valid compact bits");
+        assert_eq!(
+            hex::encode(target),
+            "00000000ffff0000000000000000000000000000000000000000000000000000"
+        );
+
+        assert_eq!(
+            header.target_decimal().as_deref(),
+            Some("26959535291011309493156476344723991336010898738574164086137773096960")
+        );
+    }
+
+    #[test]
+    fn block_header_target_from_bits_rejects_negative_compact() {
+        let header = BlockHeader {
+            version: 1,
+            prev_blockhash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            time: 0,
+            bits: 0x1d80ffff, // sign bit set in compact format
+            nonce: 0,
+        };
+
+        assert!(header.target_from_bits().is_none());
+    }
+
+    #[test]
+    fn block_header_target_from_bits_rejects_overflow_exponent() {
+        let header = BlockHeader {
+            version: 1,
+            prev_blockhash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            time: 0,
+            bits: 0x2100ffff, // exponent 33 (> 32 bytes) for 256-bit target
+            nonce: 0,
+        };
+
+        assert!(header.target_from_bits().is_none());
+    }
+
+    #[test]
+    fn block_header_difficulty_genesis_is_one() {
+        let header = BlockHeader {
+            version: 1,
+            prev_blockhash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            time: 1231006505,
+            bits: 0x1d00ffff,
+            nonce: 2083236893,
+        };
+
+        let d = header.difficulty().expect("valid difficulty");
+        assert!((d - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn block_header_difficulty_known_bits_sample() {
+        // Historical compact target sample with commonly cited difficulty:
+        // bits = 0x1b0404cb -> difficulty ≈ 16307.420938523983
+        let header = BlockHeader {
+            version: 2,
+            prev_blockhash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            time: 0,
+            bits: 0x1b0404cb,
+            nonce: 0,
+        };
+
+        let d = header.difficulty().expect("valid difficulty");
+        assert!((d - 16307.420938523983).abs() < 1e-9);
     }
 }
