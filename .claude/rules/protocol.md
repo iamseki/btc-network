@@ -2,50 +2,58 @@
 
 Reference: https://developer.bitcoin.org/reference/p2p_networking.html
 
-### Handshake flow (main.rs)
+### Handshake flow (`session.rs`)
 
 ```
 → send version
 ← recv version
+→ send sendaddrv2      ← MUST be before verack for BIP 155 signaling
 → send verack
 ← recv verack          ← handshake complete
+```
+
+### Address discovery flow (CLI/crawler)
+
+After handshake:
+
+```
 → send getaddr
-← recv addr / addrv2
+← recv addrv2 or addr
 ```
 
-### addrv2 flow (BIP 155)
+If peer supports BIP 155 and `sendaddrv2` was signaled before `verack`, prefer `addrv2`.
+Otherwise peer may respond with legacy `addr`.
 
-To receive `addrv2` instead of the legacy `addr`, send `sendaddrv2` (empty payload)
-**before** your own `verack`:
+BIP 155: https://github.com/bitcoin/bips/blob/master/bip-0155.mediawiki
 
-```
-→ send version
-← recv version
-→ send sendaddrv2      ← BEFORE verack; signals BIP 155 support
-→ send verack
-← recv verack
-→ send getaddr
-← recv addrv2          ← if peer is Bitcoin Core 22.0+
-```
+### Headers sync flow (`cli last-block-header`)
 
-https://github.com/bitcoin/bips/blob/master/bip-0155.mediawiki
+- Client sends `getheaders(locator)` repeatedly.
+- Peer returns up to 2000 headers per response.
+- Client advances locator to last received header hash.
+- Sync stops when response count `< 2000` (reached peer tip).
+
+### Block fetch flow (`cli get-block`)
+
+- Parse user-provided hash hex (display endianness), reverse to internal wire order.
+- Send `getdata` with inventory type `MSG_BLOCK`.
+- Decode incoming `block` payload into typed `Block` (header, tx count, transactions, serialized size).
+- Display hash/size/tx info using decoded data.
 
 ### Message decode status
 
-| Message    | Status                    |
-|------------|---------------------------|
-| `version`  | ✅ decoded                |
-| `verack`   | ✅ decoded (empty)        |
-| `addr`     | ✅ decoded                |
-| `addrv2`   | ✅ decoded (all BIP 155 network IDs) |
-| all others | `Vec<u8>` raw — TODO      |
+| Message       | Status |
+|---------------|--------|
+| `version`     | decoded |
+| `verack`      | decoded (unit variant) |
+| `addr`        | decoded |
+| `addrv2`      | decoded |
+| `headers`     | decoded |
+| `block`       | decoded |
+| many others   | raw `Vec<u8>` variants (incrementally promotable to typed decode) |
 
 ### In-progress / known state
 
-- `src/main.rs` still contains `parse_version`, `parse_verack`, `parse_net_addr`, `read_varint`
-  — defined but not yet called. These are candidates to be removed once the `Message` dispatch
-  is wired into the main loop properly.
-- `src/mod.rs` is an orphaned file with no effect on compilation.
-- The IPv4 detection in `decode_net_addr` checks for 12 zero bytes, but the standard Bitcoin
-  P2P encoding uses the `::ffff:` prefix (10 zeros + `0xFF 0xFF`). Real nodes' IPv4 addresses
-  currently decode as IPv6. A test pins this known behaviour.
+- `Message` still includes multiple raw command payload variants (`Vec<u8>`) not yet typed.
+- `cli::recv_until` auto-responds to `Ping` with `Pong`; this behavior should be preserved.
+- Hash byte order must stay explicit at input/output boundaries (wire/internal vs display hex).

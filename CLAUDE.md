@@ -2,12 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Minimal Bitcoin P2P client in Rust — connects to a DNS seed, performs the version/verack handshake, and requests peer addresses.
+Rust Bitcoin P2P client with explicit separation of concerns:
+- `src/wire/*` for protocol framing/decoding and payload builders
+- `src/session.rs` for connection/session abstraction and handshake
+- `src/bin/*` for orchestration entry points (`cli`, `crawler`, `listener`)
 
 Detailed context lives in `.claude/rules/` (auto-loaded):
 - `commands.md` — build, test, lint
-- `architecture.md` — module structure, two-layer pipeline, how to add a message type
-- `protocol.md` — Bitcoin P2P flow, addrv2/BIP 155, in-progress items
+- `architecture.md` — module boundaries, message pipeline, extension workflow
+- `protocol.md` — handshake and message behavior (addrv2, getheaders, block paths)
 
 ## Token Efficiency Policy
 

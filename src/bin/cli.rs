@@ -276,7 +276,7 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
             if block.tx_count > 0 {
                 let tx = block
                     .transactions
-                    .first()
+                    .last()
                     .ok_or("block has no transactions")?;
 
                 println!("tx.is_coinbase => {}, tx: {:?}", tx.is_coinbase(), tx);
