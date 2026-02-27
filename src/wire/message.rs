@@ -4,6 +4,8 @@ use std::fmt;
 use std::fmt::{Debug, Formatter, Result};
 use std::io::{self};
 
+use crate::wire::constants::MAINNET_MAX_TARGET_BITS;
+
 /// A raw Bitcoin P2P message frame.
 ///
 /// This struct represents a message as transmitted on the wire
@@ -427,6 +429,9 @@ impl BlockHeader {
     /// Reference:
     /// - https://developer.bitcoin.org/reference/block_chain.html#target-nbits
     pub fn difficulty(&self) -> Option<f64> {
+        let max_mantissa = (MAINNET_MAX_TARGET_BITS & 0x00ff_ffff) as f64;
+        let max_shift = ((MAINNET_MAX_TARGET_BITS >> 24) & 0xff) as i32;
+
         let mantissa = self.bits & 0x00ff_ffff;
         let sign = (self.bits & 0x0080_0000) != 0;
         if mantissa == 0 || sign {
@@ -434,13 +439,13 @@ impl BlockHeader {
         }
 
         let mut shift = ((self.bits >> 24) & 0xff) as i32;
-        let mut diff = 0x0000ffff as f64 / mantissa as f64;
+        let mut diff = max_mantissa / mantissa as f64;
 
-        while shift < 29 {
+        while shift < max_shift {
             diff *= 256.0;
             shift += 1;
         }
-        while shift > 29 {
+        while shift > max_shift {
             diff /= 256.0;
             shift -= 1;
         }

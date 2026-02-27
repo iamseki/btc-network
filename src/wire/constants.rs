@@ -30,6 +30,28 @@ pub const MAIN_NET_MAGIC: u32 = 0xD9B4BEF9;
 /// You can find a list of notable versions here: https://developer.bitcoin.org/reference/p2p_networking.html#protocol-versions
 pub const PROTOCOL_VERSION: i32 = 70016;
 
+/// Bitcoin mainnet difficulty-1 target in compact `nBits` form.
+///
+/// This is also known as the mainnet PoW limit (`powLimit`) compact encoding.
+/// It is the `nBits` value of the genesis block and defines the baseline
+/// for difficulty calculation:
+///
+/// `difficulty = max_target / current_target`
+///
+/// where `max_target` is the expanded target represented by this constant.
+///
+/// Value:
+/// - hex: `0x1d00ffff`
+/// - exponent: `0x1d` (29)
+/// - mantissa: `0x00ffff`
+///
+/// References:
+/// - Bitcoin target/`nBits` format:
+///   https://developer.bitcoin.org/reference/block_chain.html#target-nbits
+/// - Bitcoin Core mainnet pow limit (chain params):
+///   https://github.com/bitcoin/bitcoin/blob/master/src/kernel/chainparams.cpp#L134
+pub const MAINNET_MAX_TARGET_BITS: u32 = 0x1d00ffff;
+
 /// The genesis block hash for Bitcoin mainnet. This is the hash of block height 0 (the first block in the chain).
 ///
 /// Source (Bitcoin Core):
