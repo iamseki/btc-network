@@ -1,6 +1,6 @@
-# btc-network
+# btc-network [![CI](https://github.com/iamseki/btc-network/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/iamseki/btc-network/actions/workflows/ci.yml)
 
-A minimal Bitcoin P2P client in Rust. Reference to the p: https://developer.bitcoin.org/devguide/p2p_network.html#connecting-to-peers
+A minimal Bitcoin P2P client in Rust. Reference to the protocol: https://developer.bitcoin.org/devguide/p2p_network.html#connecting-to-peers
 
 ## Current Status 
 
