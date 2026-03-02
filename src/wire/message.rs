@@ -949,10 +949,253 @@ pub struct TxIn {
     pub witness: Vec<Vec<u8>>,
 }
 
+/// Heuristic classification of a non-coinbase input `scriptSig`.
+///
+/// This is not full Script execution; it is a byte-pattern inspection useful
+/// for analytics and debugging.
+///
+/// References:
+/// - TxIn / scriptSig format:
+///   https://developer.bitcoin.org/reference/transactions.html#txin-a-transaction-input-non-coinbase
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptSigType {
+    Coinbase,
+    Empty,
+    P2PKH,
+    P2SHLike,
+    NonPushOnly,
+    Unknown,
+}
+
+/// Output-side public-key exposure status observable from a decoded `TxOut`.
+///
+/// This is fully derivable from `script_pubkey` bytes and does not require any
+/// chain-state indexing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputPubkeyExposure {
+    DirectlyExposed,
+    NotDirectlyExposed,
+}
+
+/// Input-side public-key exposure status observable from this decoded `TxIn`.
+///
+/// Important scope constraint:
+/// - This only reflects key material present in this input's unlock data
+///   (`script_sig`/`witness`) as seen on the wire.
+/// - It does not claim anything about global UTXO state (spent/unspent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputPubkeyExposure {
+    ExposedInScriptSig,
+    ExposedInWitness,
+    NotObserved,
+}
+
 impl TxIn {
     pub fn is_coinbase(&self) -> bool {
         self.previous_output.txid == [0u8; 32] && self.previous_output.vout == 0xffffffff
     }
+
+    /// Returns true when this input sequence is final (`0xffffffff`).
+    ///
+    /// A final sequence disables relative locktime and makes absolute
+    /// `nLockTime` non-enforcing for this input.
+    ///
+    /// This helper is mainly for transaction-policy/validation introspection.
+    /// It is not required to parse blocks or relay messages.
+    pub fn is_final(&self) -> bool {
+        self.sequence == 0xffff_ffff
+    }
+
+    /// Returns true if this input signals opt-in Replace-By-Fee (RBF).
+    ///
+    /// Per BIP125 signaling rule, any input with sequence `< 0xfffffffe`
+    /// opts the transaction in to replaceability.
+    ///
+    /// Reference:
+    /// https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki
+    ///
+    /// Why this exists:
+    /// - Useful when you want mempool/policy metadata from decoded txs.
+    /// - Not needed if your scope is only wire decoding.
+    pub fn signals_rbf(&self) -> bool {
+        self.sequence < 0xffff_fffe
+    }
+
+    /// Returns true when this input enables relative locktime semantics.
+    ///
+    /// BIP68 uses sequence bits for relative locktime unless the disable flag
+    /// bit (bit 31) is set.
+    ///
+    /// Reference:
+    /// https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki
+    ///
+    /// Why this exists:
+    /// - Useful for interpreting sequence semantics in explorers/analytics.
+    /// - Not required for basic P2P message parsing.
+    pub fn uses_relative_locktime(&self) -> bool {
+        (self.sequence & 0x8000_0000) == 0
+    }
+
+    /// Classifies `script_sig` into common input-side patterns.
+    ///
+    /// Notes:
+    /// - For SegWit v0 key/script path spends, `script_sig` is usually empty.
+    /// - This method is heuristic and intentionally non-consensus.
+    pub fn script_sig_type(&self) -> ScriptSigType {
+        if self.is_coinbase() {
+            return ScriptSigType::Coinbase;
+        }
+
+        if self.script_sig.is_empty() {
+            return ScriptSigType::Empty;
+        }
+
+        let pushes = match parse_push_only_script(&self.script_sig) {
+            Some(p) => p,
+            None => return ScriptSigType::NonPushOnly,
+        };
+
+        if pushes.len() == 2 && looks_der_signature_with_sighash(pushes[0]) && looks_pubkey(pushes[1]) {
+            return ScriptSigType::P2PKH;
+        }
+
+        // Many legacy P2SH spends are push-only with redeem script in final push.
+        if !pushes.is_empty() {
+            return ScriptSigType::P2SHLike;
+        }
+
+        ScriptSigType::Unknown
+    }
+
+    /// Returns a directly exposed pubkey from `script_sig` when detectable.
+    ///
+    /// Public key exposure in inputs is spend-path dependent, so it is NOT
+    /// always present in `TxIn`.
+    ///
+    /// Examples:
+    /// - Often exposed: legacy P2PKH spends (`scriptSig` pushes sig + pubkey)
+    /// - Usually not in `scriptSig`: SegWit v0/v1 spends (key is in witness or
+    ///   not directly revealed in key-path-independent constructions)
+    /// - May vary: P2SH and script-path spends depending on redeem/witness script
+    ///
+    /// Currently this helper extracts a key only for standard P2PKH scriptSig
+    /// layout.
+    pub fn exposed_pubkey_bytes(&self) -> Option<&[u8]> {
+        let pushes = parse_push_only_script(&self.script_sig)?;
+        if pushes.len() == 2 && looks_der_signature_with_sighash(pushes[0]) && looks_pubkey(pushes[1]) {
+            return Some(pushes[1]);
+        }
+        None
+    }
+
+    /// Returns a directly exposed pubkey from witness stack items, when present.
+    ///
+    /// This is a heuristic byte-shape scan and primarily catches common spends
+    /// such as P2WPKH where witness includes `[signature, pubkey]`.
+    pub fn exposed_pubkey_in_witness_bytes(&self) -> Option<&[u8]> {
+        self.witness.iter().find_map(|item| {
+            if looks_pubkey(item) {
+                Some(item.as_slice())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Returns input-side key exposure observed from available unlock data.
+    ///
+    /// Use this for local wire-level analytics. It intentionally avoids claims
+    /// about historical spend state outside the decoded transaction itself.
+    pub fn observed_pubkey_exposure(&self) -> InputPubkeyExposure {
+        if self.exposed_pubkey_bytes().is_some() {
+            return InputPubkeyExposure::ExposedInScriptSig;
+        }
+        if self.exposed_pubkey_in_witness_bytes().is_some() {
+            return InputPubkeyExposure::ExposedInWitness;
+        }
+        InputPubkeyExposure::NotObserved
+    }
+}
+
+fn parse_push_only_script(script: &[u8]) -> Option<Vec<&[u8]>> {
+    let mut i = 0usize;
+    let mut pushes: Vec<&[u8]> = Vec::new();
+
+    while i < script.len() {
+        let op = script[i];
+        i += 1;
+
+        let len = match op {
+            0x00 => {
+                pushes.push(&[] as &[u8]);
+                continue;
+            }
+            0x01..=0x4b => op as usize,
+            0x4c => {
+                let l = *script.get(i)? as usize;
+                i += 1;
+                l
+            }
+            0x4d => {
+                let l = u16::from_le_bytes([*script.get(i)?, *script.get(i + 1)?]) as usize;
+                i += 2;
+                l
+            }
+            0x4e => {
+                let l = u32::from_le_bytes([
+                    *script.get(i)?,
+                    *script.get(i + 1)?,
+                    *script.get(i + 2)?,
+                    *script.get(i + 3)?,
+                ]) as usize;
+                i += 4;
+                l
+            }
+            _ => return None,
+        };
+
+        let end = i.checked_add(len)?;
+        let data = script.get(i..end)?;
+        pushes.push(data);
+        i = end;
+    }
+
+    Some(pushes)
+}
+
+/// Heuristic pubkey shape check for script contexts.
+///
+/// Accepts compressed SEC pubkeys (33 bytes, prefix 0x02/0x03)
+/// and uncompressed SEC pubkeys (65 bytes, prefix 0x04).
+///
+/// Note: matching this shape does not prove consensus validity; it only
+/// identifies likely public-key byte blobs for analytics/debugging.
+fn looks_pubkey(bytes: &[u8]) -> bool {
+    matches!(bytes, [0x02 | 0x03, ..] if bytes.len() == 33)
+        || matches!(bytes, [0x04, ..] if bytes.len() == 65)
+}
+
+/// Heuristic check for a DER-encoded ECDSA signature plus 1-byte sighash flag.
+///
+/// DER = Distinguished Encoding Rules (ASN.1 binary encoding format).
+/// In Bitcoin legacy script contexts, signatures are serialized as:
+/// - DER-encoded ECDSA signature bytes
+/// - followed by one extra byte indicating the SIGHASH mode
+///   (`SIGHASH_ALL`, `SIGHASH_NONE`, etc.).
+///
+/// This is intentionally minimal and non-consensus; it is only used to
+/// classify common `scriptSig` layouts for diagnostics.
+fn looks_der_signature_with_sighash(bytes: &[u8]) -> bool {
+    // scriptSig signatures are DER plus 1-byte sighash flag.
+    if bytes.len() < 9 {
+        return false;
+    }
+    let der = &bytes[..bytes.len() - 1];
+    if der.len() < 8 || der[0] != 0x30 {
+        return false;
+    }
+    let declared = der[1] as usize;
+    declared + 2 == der.len()
 }
 
 /// A reference to a specific transaction output.
@@ -1136,6 +1379,15 @@ impl TxOut {
             ScriptType::P2PK => Some(&s[1..s.len() - 1]),
             ScriptType::P2TR => Some(&s[2..34]),
             _ => None,
+        }
+    }
+
+    /// Returns output-side key exposure observable at UTXO creation time.
+    pub fn pubkey_exposure(&self) -> OutputPubkeyExposure {
+        if self.script_type().exposes_pubkey_directly() {
+            OutputPubkeyExposure::DirectlyExposed
+        } else {
+            OutputPubkeyExposure::NotDirectlyExposed
         }
     }
 }
@@ -1531,5 +1783,169 @@ mod tests {
         assert_eq!(out.script_type(), ScriptType::Unknown);
         assert!(!out.script_type().exposes_pubkey_directly());
         assert!(out.exposed_pubkey_bytes().is_none());
+    }
+
+    #[test]
+    fn txin_sequence_semantics() {
+        let mut txin = TxIn {
+            previous_output: OutPoint {
+                txid: [1u8; 32],
+                vout: 0,
+            },
+            script_sig: vec![],
+            sequence: 0xffff_ffff,
+            witness: vec![],
+        };
+
+        assert!(txin.is_final());
+        assert!(!txin.signals_rbf());
+        assert!(!txin.uses_relative_locktime());
+
+        txin.sequence = 0x7fff_fffd;
+        assert!(txin.signals_rbf());
+        assert!(txin.uses_relative_locktime());
+    }
+
+    #[test]
+    fn txin_script_sig_type_coinbase() {
+        let txin = TxIn {
+            previous_output: OutPoint {
+                txid: [0u8; 32],
+                vout: 0xffff_ffff,
+            },
+            script_sig: vec![0x01, 0x2a],
+            sequence: 0xffff_ffff,
+            witness: vec![],
+        };
+
+        assert_eq!(txin.script_sig_type(), ScriptSigType::Coinbase);
+    }
+
+    #[test]
+    fn txin_script_sig_type_p2pkh_and_exposed_pubkey() {
+        // scriptSig = PUSH(sig_der+sighash) PUSH(compressed_pubkey)
+        let sig = vec![0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01, 0x01];
+        let mut pubkey = vec![0x02];
+        pubkey.extend([0x11; 32]);
+
+        let mut script_sig = vec![sig.len() as u8];
+        script_sig.extend(sig.clone());
+        script_sig.push(pubkey.len() as u8);
+        script_sig.extend(pubkey.clone());
+
+        let txin = TxIn {
+            previous_output: OutPoint {
+                txid: [2u8; 32],
+                vout: 1,
+            },
+            script_sig,
+            sequence: 0xffff_fffe,
+            witness: vec![],
+        };
+
+        assert_eq!(txin.script_sig_type(), ScriptSigType::P2PKH);
+        assert_eq!(txin.exposed_pubkey_bytes(), Some(pubkey.as_slice()));
+    }
+
+    #[test]
+    fn txin_script_sig_type_non_push_only() {
+        // OP_DUP is not a push opcode in scriptSig.
+        let txin = TxIn {
+            previous_output: OutPoint {
+                txid: [3u8; 32],
+                vout: 0,
+            },
+            script_sig: vec![0x76],
+            sequence: 0,
+            witness: vec![],
+        };
+
+        assert_eq!(txin.script_sig_type(), ScriptSigType::NonPushOnly);
+        assert!(txin.exposed_pubkey_bytes().is_none());
+    }
+
+    #[test]
+    fn txin_script_sig_type_p2sh_like_push_only() {
+        // PUSH(dummy_sig) PUSH(redeem_script)
+        let mut script_sig = vec![0x01, 0x01];
+        script_sig.push(0x16);
+        script_sig.extend([
+            0x00, 0x14, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+            0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa,
+        ]);
+
+        let txin = TxIn {
+            previous_output: OutPoint {
+                txid: [4u8; 32],
+                vout: 0,
+            },
+            script_sig,
+            sequence: 0,
+            witness: vec![],
+        };
+
+        assert_eq!(txin.script_sig_type(), ScriptSigType::P2SHLike);
+    }
+
+    #[test]
+    fn txin_observed_pubkey_exposure_in_witness() {
+        let mut pubkey = vec![0x03];
+        pubkey.extend([0x77; 32]);
+
+        let txin = TxIn {
+            previous_output: OutPoint {
+                txid: [5u8; 32],
+                vout: 0,
+            },
+            script_sig: vec![],
+            sequence: 0,
+            witness: vec![vec![0x30, 0x01, 0x00, 0x01], pubkey.clone()],
+        };
+
+        assert_eq!(
+            txin.observed_pubkey_exposure(),
+            InputPubkeyExposure::ExposedInWitness
+        );
+        assert_eq!(txin.exposed_pubkey_in_witness_bytes(), Some(pubkey.as_slice()));
+    }
+
+    #[test]
+    fn txin_observed_pubkey_exposure_not_observed() {
+        let txin = TxIn {
+            previous_output: OutPoint {
+                txid: [6u8; 32],
+                vout: 1,
+            },
+            script_sig: vec![],
+            sequence: 0,
+            witness: vec![vec![0xAA, 0xBB]],
+        };
+
+        assert_eq!(txin.observed_pubkey_exposure(), InputPubkeyExposure::NotObserved);
+    }
+
+    #[test]
+    fn txout_pubkey_exposure_model() {
+        let mut p2tr = vec![0x51, 0x20];
+        p2tr.extend([0x12; 32]);
+        let p2tr_out = TxOut {
+            value: 1,
+            script_pubkey: p2tr,
+        };
+        assert_eq!(
+            p2tr_out.pubkey_exposure(),
+            OutputPubkeyExposure::DirectlyExposed
+        );
+
+        let mut p2wpkh = vec![0x00, 0x14];
+        p2wpkh.extend([0x34; 20]);
+        let p2wpkh_out = TxOut {
+            value: 1,
+            script_pubkey: p2wpkh,
+        };
+        assert_eq!(
+            p2wpkh_out.pubkey_exposure(),
+            OutputPubkeyExposure::NotDirectlyExposed
+        );
     }
 }
