@@ -4,3 +4,6 @@
 # Claude Code — personal permission overrides and local settings.
 # settings.json (no .local.) is safe to commit for shared project config.
 .claude/settings.local.json
+
+
+*.dat

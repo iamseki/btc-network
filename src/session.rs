@@ -2,7 +2,9 @@ use std::error::Error;
 use std::net::TcpStream;
 use std::time::Duration;
 
-use crate::wire::{self, Command, Message, build_version_payload, read_message, send_message};
+use crate::wire::{
+    self, Command, Message, RawMessage, build_version_payload, read_message, send_message,
+};
 
 pub struct Session {
     stream: TcpStream,
@@ -60,5 +62,9 @@ impl Session {
     pub fn recv(&mut self) -> Result<Message, Box<dyn Error>> {
         let raw = read_message(&mut self.stream)?;
         Ok(Message::try_from(raw)?)
+    }
+
+    pub fn recv_raw(&mut self) -> Result<RawMessage, Box<dyn Error>> {
+        Ok(read_message(&mut self.stream)?)
     }
 }

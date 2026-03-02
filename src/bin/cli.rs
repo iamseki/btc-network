@@ -1,10 +1,13 @@
 use clap::{Parser, Subcommand};
 use std::error::Error;
+use std::fs::File;
+use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use btc_network::session::Session;
 use btc_network::wire::{self, Command, Message};
+use btc_network::wire::message::{Block, Decode};
 
 use std::time::Instant;
 
@@ -29,6 +32,12 @@ enum Commands {
     GetBlock {
         #[arg(long)]
         hash: String,
+    },
+    DownloadBlock {
+        #[arg(long)]
+        hash: String,
+        #[arg(long)]
+        out: Option<String>,
     },
 }
 
@@ -56,6 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::GetHeaders => get_headers(&mut session)?,
         Commands::LastBlockHeader => last_block_header(&mut session)?,
         Commands::GetBlock { hash } => get_block(&mut session, hash)?,
+        Commands::DownloadBlock { hash, out } => download_block(&mut session, hash, out)?,
     }
 
     Ok(())
@@ -256,13 +266,8 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
 }
 
 fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Error>> {
-    let mut hash = hex::decode(hash_hex)?;
-    hash.reverse();
-
-    let mut arr = [0u8; 32];
-    arr.copy_from_slice(&hash);
-
-    let payload = wire::build_getdata_block_payload(arr);
+    let hash = parse_requested_block_hash(&hash_hex)?;
+    let payload = wire::build_getdata_block_payload(hash);
     session.send(Command::GetData, &payload)?;
 
     recv_until(session, |msg| match msg {
@@ -289,4 +294,71 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
             Ok(false)
         }
     })
+}
+
+fn download_block(
+    session: &mut Session,
+    hash_hex: String,
+    out: Option<String>,
+) -> Result<(), Box<dyn Error>> {
+    let requested_hash = parse_requested_block_hash(&hash_hex)?;
+    let payload = wire::build_getdata_block_payload(requested_hash);
+    session.send(Command::GetData, &payload)?;
+
+    let out_path = out.unwrap_or_else(|| {
+        let first8 = &hash_hex[..8];
+        let last6 = &hash_hex[hash_hex.len() - 6..];
+        format!("blk-{}-{}.dat", first8, last6)
+    });
+
+    loop {
+        let raw = session.recv_raw()?;
+
+        match raw.command {
+            Command::Ping => {
+                session.send(Command::Pong, &raw.payload)?;
+            }
+            Command::Block => {
+                let block = Block::decode(&raw.payload)?;
+                let got_hash = block.header.hash();
+
+                if got_hash != requested_hash {
+                    let mut display = got_hash;
+                    display.reverse();
+                    println!("Received different block {}, ignoring...", hex::encode(display));
+                    continue;
+                }
+
+                write_blk_record(&out_path, &raw.payload)?;
+                println!(
+                    "Saved block to {} (raw block: {} bytes, blk record: {} bytes)",
+                    out_path,
+                    raw.payload.len(),
+                    raw.payload.len() + 8
+                );
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_requested_block_hash(hash_hex: &str) -> Result<[u8; 32], Box<dyn Error>> {
+    let mut hash = hex::decode(hash_hex)?;
+    if hash.len() != 32 {
+        return Err("block hash must be 32 bytes (64 hex chars)".into());
+    }
+    hash.reverse();
+
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&hash);
+    Ok(arr)
+}
+
+fn write_blk_record(path: &str, raw_block: &[u8]) -> Result<(), Box<dyn Error>> {
+    let mut file = File::create(path)?;
+    file.write_all(&wire::constants::MAIN_NET_MAGIC.to_le_bytes())?;
+    file.write_all(&(raw_block.len() as u32).to_le_bytes())?;
+    file.write_all(raw_block)?;
+    Ok(())
 }

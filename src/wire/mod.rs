@@ -22,5 +22,5 @@ pub mod payload;
 pub mod constants;
 
 pub use codec::{read_message, send_message};
-pub use message::{Command, Message};
+pub use message::{Command, Message, RawMessage};
 pub use payload::*;

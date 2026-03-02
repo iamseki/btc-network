@@ -13,7 +13,7 @@ A minimal Bitcoin P2P client in Rust. Reference to the protocol: https://develop
 | header decoding       | ✅      |
 | header hash (dSHA256) | ✅      |
 | iterative tip sync    | ✅      |
-| block download        | ⏳      |
+| block download        | ✅      |
 | inv/getdata           | ⏳      |
 
 
@@ -66,6 +66,11 @@ Tx count: 1
 Size: 0.00 MB
 tx.is_coinbase => true, tx: Transaction { version: 1, inputs: 1, outputs: 1, has_witness: false, size_bytes: 204, locktime: "block height 0" }
 ```
+
+Download block:
+
+- `make cli ARGS="--node seed.bitcoin.sipa.be:8333 download-block --hash 00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde"`
+- It downloads the block as raw serialized bytes from p2p protocol,  in a `blk-{first-8-bytes-hash}-{last-6-bytes-hash}.dat` file.
 
 ---
 
