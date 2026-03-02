@@ -1027,6 +1027,119 @@ pub struct TxOut {
     pub script_pubkey: Vec<u8>,
 }
 
+/// Standard `scriptPubKey` templates recognized from raw output bytes.
+///
+/// This classification is intentionally script-template based (pattern match
+/// on serialized bytes), not full Script interpreter validation.
+///
+/// References:
+/// - Script reference:
+///   https://developer.bitcoin.org/reference/transactions.html#txout-a-transaction-output
+/// - SegWit v0 outputs (P2WPKH/P2WSH): BIP141
+///   https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
+/// - Taproot output (P2TR): BIP341
+///   https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptType {
+    /// `PUSHDATA(33|65) <pubkey> OP_CHECKSIG`
+    ///
+    /// Legacy pay-to-pubkey. The public key appears directly in
+    /// `script_pubkey`.
+    P2PK,
+    /// `OP_DUP OP_HASH160 PUSH20 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG`
+    P2PKH,
+    /// `OP_HASH160 PUSH20 <scriptHash> OP_EQUAL`
+    P2SH,
+    /// `OP_0 PUSH20 <keyhash>`
+    P2WPKH,
+    /// `OP_0 PUSH32 <scripthash>`
+    P2WSH,
+    /// `OP_1 PUSH32 <xonly_output_key>`
+    ///
+    /// Taproot key-path output (v1 witness program). The output key appears
+    /// directly in `script_pubkey`.
+    P2TR,
+    Unknown,
+}
+
+impl ScriptType {
+    /// Returns true when the output script directly embeds a public key
+    /// (or Taproot output key) in `script_pubkey`.
+    ///
+    /// This is useful for chain analytics such as estimating how many UTXOs
+    /// are currently "key-revealed" at rest and therefore directly exposed to
+    /// future quantum attacks on signature schemes.
+    ///
+    /// In this model:
+    /// - `true`  => key material is visible in the locking script itself
+    /// - `false` => only hashes/commitments are visible until spend
+    pub fn exposes_pubkey_directly(&self) -> bool {
+        matches!(self, ScriptType::P2PK | ScriptType::P2TR)
+    }
+}
+
+impl TxOut {
+    /// Classifies output `script_pubkey` into common standard templates.
+    ///
+    /// Returns [`ScriptType::Unknown`] for non-standard or unsupported forms.
+    pub fn script_type(&self) -> ScriptType {
+        let s = self.script_pubkey.as_slice();
+
+        // P2PK compressed: OP_PUSHBYTES_33 <33-byte pubkey> OP_CHECKSIG
+        // P2PK uncompressed: OP_PUSHBYTES_65 <65-byte pubkey> OP_CHECKSIG
+        if matches!(s.len(), 35 | 67) && s[s.len() - 1] == 0xAC && matches!(s[0], 0x21 | 0x41) {
+            return ScriptType::P2PK;
+        }
+
+        // P2PKH
+        if s.len() == 25
+            && s[0] == 0x76
+            && s[1] == 0xA9
+            && s[2] == 0x14
+            && s[23] == 0x88
+            && s[24] == 0xAC
+        {
+            return ScriptType::P2PKH;
+        }
+
+        // P2SH
+        if s.len() == 23 && s[0] == 0xA9 && s[1] == 0x14 && s[22] == 0x87 {
+            return ScriptType::P2SH;
+        }
+
+        // P2WPKH (SegWit v0 keyhash)
+        if s.len() == 22 && s[0] == 0x00 && s[1] == 0x14 {
+            return ScriptType::P2WPKH;
+        }
+
+        // P2WSH (SegWit v0 scripthash)
+        if s.len() == 34 && s[0] == 0x00 && s[1] == 0x20 {
+            return ScriptType::P2WSH;
+        }
+
+        // P2TR (SegWit v1 / Taproot)
+        if s.len() == 34 && s[0] == 0x51 && s[1] == 0x20 {
+            return ScriptType::P2TR;
+        }
+
+        ScriptType::Unknown
+    }
+
+    /// Returns the key bytes embedded directly in `script_pubkey`, when
+    /// available by script template.
+    ///
+    /// - `P2PK`  -> full SEC pubkey bytes (33 or 65 bytes)
+    /// - `P2TR`  -> x-only output key (32 bytes)
+    pub fn exposed_pubkey_bytes(&self) -> Option<&[u8]> {
+        let s = self.script_pubkey.as_slice();
+        match self.script_type() {
+            ScriptType::P2PK => Some(&s[1..s.len() - 1]),
+            ScriptType::P2TR => Some(&s[2..34]),
+            _ => None,
+        }
+    }
+}
+
 /// Inventory object types used in `inv`, `getdata`, and `notfound` messages.
 ///
 /// Defined by the Bitcoin P2P protocol:
@@ -1316,5 +1429,107 @@ mod tests {
 
         let d = header.difficulty().expect("valid difficulty");
         assert!((d - 16307.420938523983).abs() < 1e-9);
+    }
+
+    #[test]
+    fn txout_script_type_p2pk() {
+        let mut script = vec![0x21];
+        script.extend([0x02; 33]);
+        script.push(0xAC);
+
+        let out = TxOut {
+            value: 1,
+            script_pubkey: script,
+        };
+
+        assert_eq!(out.script_type(), ScriptType::P2PK);
+        assert!(out.script_type().exposes_pubkey_directly());
+        assert_eq!(out.exposed_pubkey_bytes().map(|b| b.len()), Some(33));
+    }
+
+    #[test]
+    fn txout_script_type_p2pkh() {
+        let mut script = vec![0x76, 0xA9, 0x14];
+        script.extend([0x11; 20]);
+        script.extend([0x88, 0xAC]);
+
+        let out = TxOut {
+            value: 1,
+            script_pubkey: script,
+        };
+
+        assert_eq!(out.script_type(), ScriptType::P2PKH);
+        assert!(!out.script_type().exposes_pubkey_directly());
+        assert!(out.exposed_pubkey_bytes().is_none());
+    }
+
+    #[test]
+    fn txout_script_type_p2sh() {
+        let mut script = vec![0xA9, 0x14];
+        script.extend([0x22; 20]);
+        script.push(0x87);
+
+        let out = TxOut {
+            value: 1,
+            script_pubkey: script,
+        };
+
+        assert_eq!(out.script_type(), ScriptType::P2SH);
+        assert!(!out.script_type().exposes_pubkey_directly());
+    }
+
+    #[test]
+    fn txout_script_type_p2wpkh() {
+        let mut script = vec![0x00, 0x14];
+        script.extend([0x33; 20]);
+
+        let out = TxOut {
+            value: 1,
+            script_pubkey: script,
+        };
+
+        assert_eq!(out.script_type(), ScriptType::P2WPKH);
+        assert!(!out.script_type().exposes_pubkey_directly());
+    }
+
+    #[test]
+    fn txout_script_type_p2wsh() {
+        let mut script = vec![0x00, 0x20];
+        script.extend([0x44; 32]);
+
+        let out = TxOut {
+            value: 1,
+            script_pubkey: script,
+        };
+
+        assert_eq!(out.script_type(), ScriptType::P2WSH);
+        assert!(!out.script_type().exposes_pubkey_directly());
+    }
+
+    #[test]
+    fn txout_script_type_p2tr() {
+        let mut script = vec![0x51, 0x20];
+        script.extend([0x55; 32]);
+
+        let out = TxOut {
+            value: 1,
+            script_pubkey: script,
+        };
+
+        assert_eq!(out.script_type(), ScriptType::P2TR);
+        assert!(out.script_type().exposes_pubkey_directly());
+        assert_eq!(out.exposed_pubkey_bytes().map(|b| b.len()), Some(32));
+    }
+
+    #[test]
+    fn txout_script_type_unknown() {
+        let out = TxOut {
+            value: 1,
+            script_pubkey: vec![0x6A, 0x02, 0xAB, 0xCD], // OP_RETURN ...
+        };
+
+        assert_eq!(out.script_type(), ScriptType::Unknown);
+        assert!(!out.script_type().exposes_pubkey_directly());
+        assert!(out.exposed_pubkey_bytes().is_none());
     }
 }
