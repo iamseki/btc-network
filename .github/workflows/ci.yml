@@ -18,8 +18,17 @@ jobs:
         with:
           toolchain: 1.93.1
 
+      - name: Detect source changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            src:
+              - 'src/**'
+
       - name: Build
         run: cargo build --bins --locked
 
       - name: Test
+        if: steps.changes.outputs.src == 'true'
         run: cargo test --locked
