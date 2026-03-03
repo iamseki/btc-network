@@ -72,6 +72,51 @@ Download block:
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 download-block --hash 00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde"`
 - It downloads the block as raw serialized bytes from p2p protocol,  in a `blk-{first-8-bytes-hash}-{last-6-bytes-hash}.dat` file.
 
+## Crawler Usage
+
+The crawler starts from Bitcoin DNS seed nodes and keeps exploring peers by:
+1. Handshaking with a node
+2. Requesting peer addresses (`getaddr`, accepting `addrv2`/`addr`)
+3. Storing node state from the `version` response
+4. Diffing discovered peers against a shared `queued_nodes` set
+
+It deduplicates by `SocketAddr` (`ip:port`) using a set, so repeated addresses from different peers are not re-queued.
+
+Run with defaults:
+
+- `make crawler`
+- `cargo run --bin crawler`
+
+Run with custom limits/policies:
+
+- `cargo run --bin crawler -- --max-concurrency 1000 --max-runtime-minutes 60 --idle-timeout-minutes 5`
+- `cargo run --bin crawler -- --max-concurrency 500 --max-runtime-minutes 20 --idle-timeout-minutes 3 --verbose`
+
+Available flags:
+
+- `--max-concurrency`: max worker tasks (default: `1000`)
+- `--max-runtime-minutes`: hard stop by runtime (default: `60`)
+- `--idle-timeout-minutes`: stop when no new nodes are queued in this window (default: `5`)
+- `--connect-timeout-secs`: TCP connect timeout per node (default: `30`)
+- `--io-timeout-secs`: read/write timeout per node session (default: `10`)
+- `--verbose`: print per-node failures/details
+
+Crawler summary output includes:
+
+- scheduled tasks
+- successful handshakes
+- failed tasks
+- total queued nodes
+- unique discovered nodes
+- captured node states
+- elapsed runtime
+
+Graceful shutdown:
+
+- `Ctrl+C` / `SIGINT`: crawler stops scheduling new nodes and waits current workers to finish
+- `SIGTERM`: same graceful behavior
+- `SIGKILL`: cannot be trapped by user-space processes, so graceful shutdown is not possible
+
 ---
 
 ## AI Development Context

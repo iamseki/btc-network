@@ -1055,7 +1055,10 @@ impl TxIn {
             None => return ScriptSigType::NonPushOnly,
         };
 
-        if pushes.len() == 2 && looks_der_signature_with_sighash(pushes[0]) && looks_pubkey(pushes[1]) {
+        if pushes.len() == 2
+            && looks_der_signature_with_sighash(pushes[0])
+            && looks_pubkey(pushes[1])
+        {
             return ScriptSigType::P2PKH;
         }
 
@@ -1082,7 +1085,10 @@ impl TxIn {
     /// layout.
     pub fn exposed_pubkey_bytes(&self) -> Option<&[u8]> {
         let pushes = parse_push_only_script(&self.script_sig)?;
-        if pushes.len() == 2 && looks_der_signature_with_sighash(pushes[0]) && looks_pubkey(pushes[1]) {
+        if pushes.len() == 2
+            && looks_der_signature_with_sighash(pushes[0])
+            && looks_pubkey(pushes[1])
+        {
             return Some(pushes[1]);
         }
         None
@@ -1906,7 +1912,10 @@ mod tests {
             txin.observed_pubkey_exposure(),
             InputPubkeyExposure::ExposedInWitness
         );
-        assert_eq!(txin.exposed_pubkey_in_witness_bytes(), Some(pubkey.as_slice()));
+        assert_eq!(
+            txin.exposed_pubkey_in_witness_bytes(),
+            Some(pubkey.as_slice())
+        );
     }
 
     #[test]
@@ -1921,7 +1930,10 @@ mod tests {
             witness: vec![vec![0xAA, 0xBB]],
         };
 
-        assert_eq!(txin.observed_pubkey_exposure(), InputPubkeyExposure::NotObserved);
+        assert_eq!(
+            txin.observed_pubkey_exposure(),
+            InputPubkeyExposure::NotObserved
+        );
     }
 
     #[test]

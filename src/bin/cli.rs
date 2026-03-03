@@ -6,8 +6,8 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use btc_network::session::Session;
-use btc_network::wire::{self, Command, Message};
 use btc_network::wire::message::{Block, Decode};
+use btc_network::wire::{self, Command, Message};
 
 use std::time::Instant;
 
@@ -325,7 +325,10 @@ fn download_block(
                 if got_hash != requested_hash {
                     let mut display = got_hash;
                     display.reverse();
-                    println!("Received different block {}, ignoring...", hex::encode(display));
+                    println!(
+                        "Received different block {}, ignoring...",
+                        hex::encode(display)
+                    );
                     continue;
                 }
 

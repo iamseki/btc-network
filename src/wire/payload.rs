@@ -56,7 +56,7 @@ pub fn build_version_payload(protocol_version: i32, services: u64) -> io::Result
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| io::Error::other(e))?
+        .map_err(io::Error::other)?
         .as_secs();
 
     payload.write_i64::<LittleEndian>(now as i64)?;
