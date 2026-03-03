@@ -77,3 +77,153 @@ impl Session {
         Ok(read_message(&mut self.stream)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::ErrorKind;
+    use std::net::TcpListener;
+    use std::thread;
+
+    fn bind_listener_or_skip() -> Option<TcpListener> {
+        match TcpListener::bind("127.0.0.1:0") {
+            Ok(l) => Some(l),
+            Err(e) if e.kind() == ErrorKind::PermissionDenied => {
+                eprintln!("skipping session socket test: {e}");
+                None
+            }
+            Err(e) => panic!("bind listener failed: {e}"),
+        }
+    }
+
+    #[test]
+    fn handshake_returns_peer_version_and_enforces_order() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+            peer.set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set peer read timeout");
+
+            let first = read_message(&mut peer).expect("read first message");
+            assert_eq!(first.command, Command::Version);
+
+            let peer_version =
+                build_version_payload(wire::constants::PROTOCOL_VERSION, 0x08).expect("version");
+            send_message(&mut peer, Command::Version, &peer_version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read second message");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message(&mut peer).expect("read third message");
+            assert_eq!(third.command, Command::Verack);
+
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+        });
+
+        let stream = TcpStream::connect(addr).expect("connect");
+        let mut session = Session::new(stream);
+        let version = session.handshake().expect("handshake success");
+
+        assert_eq!(version.version, wire::constants::PROTOCOL_VERSION);
+        server.join().expect("join server");
+    }
+
+    #[test]
+    fn handshake_replies_pong_when_ping_received() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+            peer.set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set peer read timeout");
+
+            let first = read_message(&mut peer).expect("read first");
+            assert_eq!(first.command, Command::Version);
+
+            let peer_version =
+                build_version_payload(wire::constants::PROTOCOL_VERSION, 0).expect("version");
+            send_message(&mut peer, Command::Version, &peer_version).expect("send version");
+
+            let ping_nonce = 0x1122334455667788u64.to_le_bytes();
+            send_message(&mut peer, Command::Ping, &ping_nonce).expect("send ping");
+
+            let second = read_message(&mut peer).expect("read second");
+            assert_eq!(second.command, Command::SendAddrV2);
+
+            let third = read_message(&mut peer).expect("read third");
+            assert_eq!(third.command, Command::Verack);
+
+            let fourth = read_message(&mut peer).expect("read fourth");
+            assert_eq!(fourth.command, Command::Pong);
+            assert_eq!(fourth.payload, ping_nonce);
+
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+        });
+
+        let stream = TcpStream::connect(addr).expect("connect");
+        let mut session = Session::new(stream);
+        session.handshake().expect("handshake success");
+
+        server.join().expect("join server");
+    }
+
+    #[test]
+    fn send_and_recv_wrappers_work() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+            peer.set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set peer read timeout");
+
+            let sent = read_message(&mut peer).expect("read sent ping");
+            assert_eq!(sent.command, Command::Ping);
+            assert_eq!(sent.payload, 0xAABBCCDDEEFF0011u64.to_le_bytes());
+
+            let pong_nonce = 0xAABBCCDDEEFF0011u64.to_le_bytes();
+            send_message(&mut peer, Command::Pong, &pong_nonce).expect("send pong");
+        });
+
+        let stream = TcpStream::connect(addr).expect("connect");
+        let mut session = Session::new(stream);
+        let nonce = 0xAABBCCDDEEFF0011u64.to_le_bytes();
+        session.send(Command::Ping, &nonce).expect("send ping");
+
+        let msg = session.recv().expect("recv pong");
+        match msg {
+            Message::Pong(payload) => assert_eq!(payload, nonce),
+            other => panic!("expected pong, got {:?}", other),
+        }
+
+        server.join().expect("join server");
+    }
+
+    #[test]
+    fn recv_raw_returns_raw_message() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+        });
+
+        let stream = TcpStream::connect(addr).expect("connect");
+        let mut session = Session::new(stream);
+        let raw = session.recv_raw().expect("recv raw");
+        assert_eq!(raw.command, Command::Verack);
+        assert!(raw.payload.is_empty());
+
+        server.join().expect("join server");
+    }
+}
