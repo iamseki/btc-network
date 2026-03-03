@@ -117,6 +117,11 @@ Graceful shutdown:
 - `SIGTERM`: same graceful behavior
 - `SIGKILL`: cannot be trapped by user-space processes, so graceful shutdown is not possible
 
+Crawler TODOs:
+
+- Measure lock contention and `Mutex` impact with deterministic benchmarks/profiling before changing synchronization primitives.
+- Introduce a repository layer for crawler persistence/state storage (currently in-memory only).
+
 ---
 
 ## AI Development Context

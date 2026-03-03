@@ -24,6 +24,10 @@ use worker::{run_worker, seed_initial_nodes};
 /// - bounded-concurrency workers
 /// - janitor stop policies (max runtime + idle timeout)
 /// - aggregated crawl summary output
+///
+/// TODO:
+/// - benchmark lock contention (`Mutex` wait/hold times) under deterministic load
+/// - add repository layer abstraction for durable crawler state (currently in-memory)
 pub struct Crawler {
     config: CrawlerConfig,
 }
