@@ -117,6 +117,12 @@ Graceful shutdown:
 - `SIGTERM`: same graceful behavior
 - `SIGKILL`: cannot be trapped by user-space processes, so graceful shutdown is not possible
 
+Logging modes:
+
+- Log level/filter:
+  - `RUST_LOG=info` (default)
+  - examples: `RUST_LOG=debug`
+
 Crawler TODOs:
 
 - Measure lock contention and `Mutex` impact with deterministic benchmarks/profiling before changing synchronization primitives.

@@ -1,7 +1,9 @@
 use btc_network::crawler::{Crawler, CrawlerConfig};
+use btc_network::observability;
 use clap::Parser;
 use std::error::Error;
 use std::time::Duration;
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(name = "crawler")]
@@ -27,6 +29,7 @@ struct Cli {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
+    observability::init_tracing();
     let cli = Cli::parse();
     let config = CrawlerConfig {
         max_concurrency: cli.max_concurrency,
@@ -41,15 +44,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let crawler = Crawler::new(config);
     let summary = crawler.run().await?;
 
-    println!();
-    println!("Crawler finished.");
-    println!("scheduled tasks: {}", summary.scheduled_tasks);
-    println!("successful handshakes: {}", summary.successful_handshakes);
-    println!("failed tasks: {}", summary.failed_tasks);
-    println!("total queued nodes: {}", summary.queued_nodes_total);
-    println!("unique nodes discovered: {}", summary.unique_nodes);
-    println!("node states captured: {}", summary.discovered_node_states);
-    println!("elapsed: {:.2?}", summary.elapsed);
+    info!("Crawler finished.");
+    info!("scheduled tasks: {}", summary.scheduled_tasks);
+    info!("successful handshakes: {}", summary.successful_handshakes);
+    info!("failed tasks: {}", summary.failed_tasks);
+    info!("total queued nodes: {}", summary.queued_nodes_total);
+    info!("unique nodes discovered: {}", summary.unique_nodes);
+    info!("node states captured: {}", summary.discovered_node_states);
+    info!("elapsed: {:.2?}", summary.elapsed);
 
     Ok(())
 }

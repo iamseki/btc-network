@@ -2,6 +2,7 @@ use crate::session::Session;
 use crate::wire;
 use crate::wire::message::{AddrV2Addr, VersionMessage};
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
+use tracing::warn;
 
 use super::types::{CrawlerConfig, NodeState, NodeVisit};
 
@@ -129,7 +130,7 @@ pub(crate) fn resolve_seed_nodes() -> Vec<SocketAddr> {
     for seed in wire::constants::MAINNET_DNS_SEEDS {
         match seed.to_socket_addrs() {
             Ok(addrs) => out.extend(addrs),
-            Err(err) => println!("[crawler] failed to resolve seed {seed}: {err}"),
+            Err(err) => warn!("[crawler] failed to resolve seed {seed}: {err}"),
         }
     }
 

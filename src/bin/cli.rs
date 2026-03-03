@@ -5,9 +5,11 @@ use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use btc_network::observability;
 use btc_network::session::Session;
 use btc_network::wire::message::{Block, Decode};
 use btc_network::wire::{self, Command, Message};
+use tracing::{debug, info, warn};
 
 use std::time::Instant;
 
@@ -42,9 +44,10 @@ enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    observability::init_tracing();
     let cli = Cli::parse();
 
-    println!("Connecting to {}", cli.node);
+    info!("Connecting to {}", cli.node);
 
     let addr = cli
         .node
@@ -100,53 +103,53 @@ where
 fn ping(session: &mut Session) -> Result<(), Box<dyn Error>> {
     let nonce: u64 = rand::thread_rng().r#gen();
 
-    println!("Sending ping");
+    info!("Sending ping");
     session.send(Command::Ping, &nonce.to_le_bytes())?;
 
     recv_until(session, |msg| match msg {
         Message::Pong(payload) => {
             let returned = u64::from_le_bytes(payload[..8].try_into()?);
-            println!(
+            info!(
                 "Received matching pong. ping nounce: {}, pong nonce: {}",
                 nonce, returned
             );
             Ok(true)
         }
         other => {
-            println!("Received (ignored): {:?}", other);
+            debug!("Received (ignored): {:?}", other);
             Ok(false)
         }
     })
 }
 
 fn get_addresses(session: &mut Session) -> Result<(), Box<dyn Error>> {
-    println!("Requesting peer addresses...");
+    info!("Requesting peer addresses...");
     session.send(Command::GetAddr, &[])?;
 
     recv_until(session, |msg| match msg {
         Message::AddrV2(entries) => {
-            println!("Received {} peers (addrv2)", entries.len());
+            info!("Received {} peers (addrv2)", entries.len());
             for e in entries {
-                println!("  {:?}:{:?}", e.addr, e.port);
+                info!("  {:?}:{:?}", e.addr, e.port);
             }
             Ok(true)
         }
         Message::Addr(entries) => {
-            println!("Received {} peers (legacy addr)", entries.len());
+            info!("Received {} peers (legacy addr)", entries.len());
             for e in entries {
-                println!("  {}:{}", e.addr.ip, e.addr.port);
+                info!("  {}:{}", e.addr.ip, e.addr.port);
             }
             Ok(true)
         }
         other => {
-            println!("Received (ignored): {:?}", other);
+            debug!("Received (ignored): {:?}", other);
             Ok(false)
         }
     })
 }
 
 fn get_headers(session: &mut Session) -> Result<(), Box<dyn Error>> {
-    println!("Requesting headers from genesis...");
+    info!("Requesting headers from genesis...");
 
     let payload = wire::build_getheaders_payload(&[wire::constants::GENESIS_BLOCK_HASH_MAINNET]);
 
@@ -154,18 +157,18 @@ fn get_headers(session: &mut Session) -> Result<(), Box<dyn Error>> {
 
     recv_until(session, |msg| match msg {
         Message::Headers(headers) => {
-            println!("Received {} headers", headers.len());
+            info!("Received {} headers", headers.len());
 
             if let Some(last) = headers.last() {
                 let mut hash = last.hash();
                 hash.reverse();
-                println!("Last header hash: {}", hex::encode(hash));
+                info!("Last header hash: {}", hex::encode(hash));
             }
 
             Ok(true)
         }
         other => {
-            println!("Received (ignored): {:?}", other);
+            debug!("Received (ignored): {:?}", other);
             Ok(false)
         }
     })
@@ -194,7 +197,7 @@ fn get_headers(session: &mut Session) -> Result<(), Box<dyn Error>> {
 /// This forward ordering is relied upon by header-first sync
 /// and is required for deterministic chain construction.
 fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Starting header sync from genesis...");
+    info!("Starting header sync from genesis...");
 
     let start = Instant::now();
     let mut round = 0usize;
@@ -204,7 +207,7 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
     loop {
         round += 1;
 
-        println!(
+        info!(
             "[round {}] requesting headers (total so far: {})",
             round, total_headers
         );
@@ -220,7 +223,7 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
                 Ok(true)
             }
             other => {
-                println!("Received: {:?}", other);
+                debug!("Received: {:?}", other);
                 Ok(false)
             }
         })?;
@@ -228,10 +231,10 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
         let headers = received_headers.expect("headers expected");
 
         let count = headers.len();
-        println!("[round {}] received {} headers", round, count);
+        info!("[round {}] received {} headers", round, count);
 
         if count == 0 {
-            println!("No new headers returned. Already at tip?");
+            info!("No new headers returned. Already at tip?");
             break;
         }
 
@@ -242,7 +245,7 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
         let mut last_hash = last.hash();
         last_hash.reverse(); // big-endian for display
 
-        println!(
+        info!(
             "[round {}] last header hash: {}",
             round,
             hex::encode(last_hash)
@@ -250,12 +253,11 @@ fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Er
 
         // If less than 2000, we reached peer tip
         if count < 2000 {
-            println!();
-            println!("Reached peer tip.");
-            println!("Total headers fetched: {}", total_headers);
-            println!("Rounds: {}", round);
-            println!("Elapsed: {:.2?}", start.elapsed());
-            println!("Most recent block: {}", hex::encode(last_hash));
+            info!("Reached peer tip.");
+            info!("Total headers fetched: {}", total_headers);
+            info!("Rounds: {}", round);
+            info!("Elapsed: {:.2?}", start.elapsed());
+            info!("Most recent block: {}", hex::encode(last_hash));
             break;
         }
 
@@ -274,9 +276,9 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
         Message::Block(block) => {
             let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
 
-            println!("Block header: {:?}", block.header);
-            println!("Tx count: {}", block.tx_count);
-            println!("Size: {:.2} MB", mb);
+            info!("Block header: {:?}", block.header);
+            info!("Tx count: {}", block.tx_count);
+            info!("Size: {:.2} MB", mb);
 
             if block.tx_count > 0 {
                 let tx = block
@@ -284,13 +286,13 @@ fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Erro
                     .last()
                     .ok_or("block has no transactions")?;
 
-                println!("tx.is_coinbase => {}, tx: {:?}", tx.is_coinbase(), tx);
+                info!("tx.is_coinbase => {}, tx: {:?}", tx.is_coinbase(), tx);
             }
 
             Ok(true)
         }
         other => {
-            println!("Received (ignored): {:?}", other);
+            debug!("Received (ignored): {:?}", other);
             Ok(false)
         }
     })
@@ -323,17 +325,15 @@ fn download_block(
                 let got_hash = block.header.hash();
 
                 if got_hash != requested_hash {
-                    let mut display = got_hash;
-                    display.reverse();
-                    println!(
-                        "Received different block {}, ignoring...",
-                        hex::encode(display)
-                    );
+                    let mut display_hash = got_hash;
+                    display_hash.reverse();
+                    let display_hash_hex = hex::encode(display_hash);
+                    warn!("Received different block {}, ignoring...", display_hash_hex);
                     continue;
                 }
 
                 write_blk_record(&out_path, &raw.payload)?;
-                println!(
+                info!(
                     "Saved block to {} (raw block: {} bytes, blk record: {} bytes)",
                     out_path,
                     raw.payload.len(),

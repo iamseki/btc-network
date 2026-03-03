@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use tokio::sync::{Mutex, mpsc};
+use tracing::warn;
 
 use super::node::NodeProcessor;
 use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit};
@@ -67,13 +68,13 @@ pub(crate) async fn run_worker(
             Ok(Err(err)) => {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
                 if config.verbose {
-                    println!("[crawler] failed to process node {addr}: {err}");
+                    warn!("[crawler] failed to process node {addr}: {err}");
                 }
             }
             Err(err) => {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
                 if config.verbose {
-                    println!("[crawler] blocking task join error for {addr}: {err}");
+                    warn!("[crawler] blocking task join error for {addr}: {err}");
                 }
             }
         }

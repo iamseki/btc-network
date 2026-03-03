@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use tokio::sync::{Mutex, mpsc};
+use tracing::{info, warn};
 
 use janitor::run_janitor;
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
@@ -82,7 +83,7 @@ impl Crawler {
 
         for handle in workers {
             if let Err(err) = handle.await {
-                println!("[crawler] worker join error: {err}");
+                warn!("[crawler] worker join error: {err}");
             }
         }
 
@@ -115,17 +116,17 @@ async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
         let mut term = match signal(SignalKind::terminate()) {
             Ok(s) => s,
             Err(err) => {
-                println!("[crawler] failed to install SIGTERM handler: {err}");
+                warn!("[crawler] failed to install SIGTERM handler: {err}");
                 return;
             }
         };
 
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                println!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");
+                info!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");
             }
             _ = term.recv() => {
-                println!("[crawler] received SIGTERM, shutting down gracefully");
+                info!("[crawler] received SIGTERM, shutting down gracefully");
             }
         }
     }
@@ -133,7 +134,7 @@ async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
     #[cfg(not(unix))]
     {
         if tokio::signal::ctrl_c().await.is_ok() {
-            println!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");
+            info!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");
         }
     }
 

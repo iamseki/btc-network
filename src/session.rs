@@ -2,6 +2,7 @@ use std::error::Error;
 use std::io;
 use std::net::TcpStream;
 use std::time::Duration;
+use tracing::debug;
 
 use crate::wire::message::VersionMessage;
 use crate::wire::{
@@ -39,7 +40,7 @@ impl Session {
             match msg {
                 Message::Version(v) => {
                     if version_msg.is_none() {
-                        println!("[handshake] - got version msg: {:?}", v);
+                        debug!("[handshake] got version msg: {:?}", v);
                         // 2️⃣ Always signal BIP155 support
                         send_message(&mut self.stream, Command::SendAddrV2, &[])?;
 
@@ -80,6 +81,8 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
+    use tracing::error;
+
     use super::*;
     use std::io::ErrorKind;
     use std::net::TcpListener;
@@ -89,7 +92,7 @@ mod tests {
         match TcpListener::bind("127.0.0.1:0") {
             Ok(l) => Some(l),
             Err(e) if e.kind() == ErrorKind::PermissionDenied => {
-                eprintln!("skipping session socket test: {e}");
+                error!("skipping session socket test: {e}");
                 None
             }
             Err(e) => panic!("bind listener failed: {e}"),

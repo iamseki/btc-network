@@ -1,6 +1,8 @@
+use btc_network::observability;
 use btc_network::wire;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
+use tracing::{info, warn};
 
 fn handshake(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     // Send version
@@ -9,7 +11,7 @@ fn handshake(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
 
     // Receive peer version
     let msg = wire::Message::try_from(wire::read_message(stream)?)?;
-    println!("Received: {:?}", msg);
+    info!("Received: {:?}", msg);
 
     // Signal addrv2 support (must be before verack)
     wire::send_message(stream, wire::Command::SendAddrV2, &[])?;
@@ -19,7 +21,7 @@ fn handshake(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
 
     // Receive verack
     let msg = wire::Message::try_from(wire::read_message(stream)?)?;
-    println!("Received: {:?}", msg);
+    info!("Received: {:?}", msg);
 
     Ok(())
 }
@@ -28,7 +30,7 @@ fn listen(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         match wire::read_message(stream) {
             Ok(raw) => {
-                println!(
+                info!(
                     "Received Command: {:?}, payload_len: {}",
                     raw.command,
                     raw.payload.len()
@@ -37,17 +39,17 @@ fn listen(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
                 // Respond to ping to keep connection alive
                 if raw.command == wire::Command::Ping {
                     wire::send_message(stream, wire::Command::Pong, &raw.payload)?;
-                    println!("→ Sent Pong");
+                    info!("Sent Pong");
                 }
             }
 
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                println!("Peer closed connection.");
+                info!("Peer closed connection.");
                 break;
             }
 
             Err(e) => {
-                println!("Read error: {e}");
+                warn!("Read error: {e}");
                 break;
             }
         }
@@ -57,8 +59,9 @@ fn listen(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    observability::init_tracing();
     let node = "seed.bitcoin.sipa.be:8333";
-    println!("Connecting to: {node}");
+    info!("Connecting to: {node}");
 
     let addr = node.to_socket_addrs()?.next().expect("to get socket addrs");
 

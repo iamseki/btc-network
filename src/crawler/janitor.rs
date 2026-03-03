@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
+use tracing::info;
 
 use super::types::CrawlState;
 
@@ -24,7 +25,7 @@ pub(crate) async fn run_janitor(
         }
 
         if started_at.elapsed() >= max_runtime {
-            println!("[janitor] max runtime reached ({max_runtime:?}), stopping");
+            info!("[janitor] max runtime reached ({max_runtime:?}), stopping");
             stop.store(true, Ordering::Relaxed);
             return;
         }
@@ -35,7 +36,7 @@ pub(crate) async fn run_janitor(
         };
 
         if idle_for >= idle_timeout {
-            println!("[janitor] idle timeout reached ({idle_for:?}), stopping");
+            info!("[janitor] idle timeout reached ({idle_for:?}), stopping");
             stop.store(true, Ordering::Relaxed);
             return;
         }
