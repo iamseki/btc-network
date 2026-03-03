@@ -159,6 +159,18 @@ mod tests {
         }
     }
 
+    struct StopDuringProcessProcessor {
+        stop: Arc<AtomicBool>,
+        visit: NodeVisit,
+    }
+
+    impl NodeProcessor for StopDuringProcessProcessor {
+        fn process(&self, _addr: SocketAddr, _config: CrawlerConfig) -> Result<NodeVisit, String> {
+            self.stop.store(true, Ordering::Relaxed);
+            Ok(self.visit.clone())
+        }
+    }
+
     fn test_config() -> CrawlerConfig {
         CrawlerConfig {
             max_concurrency: 1,
@@ -208,6 +220,41 @@ mod tests {
         assert!(state.last_new_node_at >= before);
     }
 
+    #[test]
+    fn apply_visit_with_empty_discoveries_does_not_touch_last_new_node_time() {
+        let node = test_node(2);
+        let mut state = CrawlState::new();
+        let before = state.last_new_node_at;
+
+        let inserted = apply_visit_to_state(&mut state, visit_for(node, vec![]));
+
+        assert!(inserted.is_empty());
+        assert_eq!(state.last_new_node_at, before);
+    }
+
+    #[test]
+    fn apply_visit_overwrites_existing_node_state() {
+        let node = test_node(2);
+        let mut state = CrawlState::new();
+        state.node_states.insert(
+            node,
+            NodeState {
+                version: 1,
+                services: 0,
+                user_agent: "old".to_string(),
+                start_height: 1,
+                relay: Some(false),
+                timestamp: 1,
+            },
+        );
+
+        apply_visit_to_state(&mut state, visit_for(node, vec![]));
+
+        let saved = state.node_states.get(&node).expect("node state");
+        assert_eq!(saved.version, 70016);
+        assert_eq!(saved.user_agent, "/Satoshi:27.0.0/");
+    }
+
     #[tokio::test]
     async fn worker_exits_when_stop_is_true() {
         let config = test_config();
@@ -232,6 +279,33 @@ mod tests {
         .await;
 
         assert_eq!(stats.scheduled.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn worker_exits_when_queue_is_closed_and_empty() {
+        let config = test_config();
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (in_tx, in_rx) = mpsc::unbounded_channel::<SocketAddr>();
+        let (out_tx, _out_rx) = mpsc::unbounded_channel();
+        drop(in_tx);
+
+        let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(HashMap::new()));
+        run_worker(
+            config,
+            state,
+            Arc::clone(&stats),
+            stop,
+            Arc::new(Mutex::new(in_rx)),
+            out_tx,
+            Arc::clone(&processor),
+        )
+        .await;
+
+        assert_eq!(stats.scheduled.load(Ordering::Relaxed), 0);
+        assert_eq!(stats.success.load(Ordering::Relaxed), 0);
+        assert_eq!(stats.failed.load(Ordering::Relaxed), 0);
     }
 
     #[tokio::test]
@@ -346,5 +420,65 @@ mod tests {
         assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
         assert_eq!(out_rx.try_recv().ok(), Some(shared_discovered));
         assert!(out_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn worker_stops_before_enqueuing_discovered_nodes_when_stop_flips() {
+        let config = test_config();
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (in_tx, in_rx) = mpsc::unbounded_channel();
+        let (out_tx, mut out_rx) = mpsc::unbounded_channel();
+
+        let node = test_node(2);
+        let discovered = vec![test_node(3), test_node(4), test_node(5)];
+        let _ = in_tx.send(node);
+        drop(in_tx);
+
+        let processor: Arc<dyn NodeProcessor> = Arc::new(StopDuringProcessProcessor {
+            stop: Arc::clone(&stop),
+            visit: visit_for(node, discovered),
+        });
+
+        run_worker(
+            config,
+            Arc::clone(&state),
+            Arc::clone(&stats),
+            Arc::clone(&stop),
+            Arc::new(Mutex::new(in_rx)),
+            out_tx,
+            Arc::clone(&processor),
+        )
+        .await;
+
+        assert_eq!(stats.scheduled.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.success.load(Ordering::Relaxed), 1);
+        assert!(out_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn seed_initial_nodes_deduplicates_and_does_not_touch_node_states() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
+
+        let a = test_node(2);
+        let b = test_node(3);
+        let seeds = vec![a, b, a];
+
+        seed_initial_nodes(&state, &stats, &queue_tx, seeds).await;
+
+        assert_eq!(stats.queued_total.load(Ordering::Relaxed), 2);
+        let first = queue_rx.try_recv().expect("first queued");
+        let second = queue_rx.try_recv().expect("second queued");
+        assert!(queue_rx.try_recv().is_err());
+        assert_ne!(first, second);
+
+        let guard = state.lock().await;
+        assert_eq!(guard.queued_nodes.len(), 2);
+        assert!(guard.queued_nodes.contains(&a));
+        assert!(guard.queued_nodes.contains(&b));
+        assert!(guard.node_states.is_empty());
     }
 }

@@ -84,4 +84,23 @@ mod tests {
 
         assert!(stop.load(Ordering::Relaxed));
     }
+
+    #[tokio::test]
+    async fn janitor_exits_immediately_when_already_stopped() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stop = Arc::new(AtomicBool::new(true));
+        let before = Instant::now();
+
+        run_janitor(
+            Arc::clone(&state),
+            Arc::clone(&stop),
+            Duration::from_secs(10),
+            Duration::from_secs(10),
+            Duration::from_millis(5),
+        )
+        .await;
+
+        assert!(before.elapsed() < Duration::from_millis(100));
+        assert!(stop.load(Ordering::Relaxed));
+    }
 }

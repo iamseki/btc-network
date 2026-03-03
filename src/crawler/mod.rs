@@ -64,7 +64,7 @@ impl Crawler {
         ));
         let signal_handle = tokio::spawn(run_signal_shutdown(Arc::clone(&stop)));
 
-        let worker_count = self.config.max_concurrency.max(1);
+        let worker_count = effective_worker_count(self.config.max_concurrency);
         let mut workers = Vec::with_capacity(worker_count);
 
         let processor: Arc<dyn NodeProcessor> = Arc::new(DefaultNodeProcessor);
@@ -103,6 +103,10 @@ impl Crawler {
     }
 }
 
+fn effective_worker_count(max_concurrency: usize) -> usize {
+    max_concurrency.max(1)
+}
+
 async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
     #[cfg(unix)]
     {
@@ -134,4 +138,16 @@ async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
     }
 
     stop.store(true, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effective_worker_count;
+
+    #[test]
+    fn worker_count_is_at_least_one() {
+        assert_eq!(effective_worker_count(0), 1);
+        assert_eq!(effective_worker_count(1), 1);
+        assert_eq!(effective_worker_count(8), 8);
+    }
 }
