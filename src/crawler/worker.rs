@@ -177,7 +177,7 @@ mod tests {
             max_concurrency: 1,
             max_runtime: Duration::from_secs(1),
             idle_timeout: Duration::from_secs(1),
-            janitor_tick: Duration::from_millis(5),
+            lifecycle_tick: Duration::from_millis(5),
             connect_timeout: Duration::from_millis(50),
             io_timeout: Duration::from_millis(50),
             verbose: false,

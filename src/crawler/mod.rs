@@ -1,4 +1,4 @@
-mod janitor;
+mod lifecycle;
 mod node;
 mod types;
 mod worker;
@@ -12,7 +12,7 @@ use std::time::Instant;
 use tokio::sync::{Mutex, mpsc};
 use tracing::{info, warn};
 
-use janitor::run_janitor;
+use lifecycle::run_lifecycle;
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 use types::{CrawlState, CrawlerStats};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};
@@ -23,7 +23,7 @@ use worker::{run_worker, seed_initial_nodes};
 /// This component coordinates:
 /// - seed bootstrap
 /// - bounded-concurrency workers
-/// - janitor stop policies (max runtime + idle timeout)
+/// - lifecycle stop policies (max runtime + idle timeout)
 /// - aggregated crawl summary output
 ///
 /// TODO:
@@ -56,12 +56,12 @@ impl Crawler {
 
         seed_initial_nodes(&state, &stats, &queue_tx, seeds).await;
 
-        let janitor_handle = tokio::spawn(run_janitor(
+        let lifecycle_handle = tokio::spawn(run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
             self.config.max_runtime,
             self.config.idle_timeout,
-            self.config.janitor_tick,
+            self.config.lifecycle_tick,
         ));
         let signal_handle = tokio::spawn(run_signal_shutdown(Arc::clone(&stop)));
 
@@ -88,7 +88,7 @@ impl Crawler {
         }
 
         stop.store(true, Ordering::Relaxed);
-        let _ = janitor_handle.await;
+        let _ = lifecycle_handle.await;
         signal_handle.abort();
 
         let state_guard = state.lock().await;

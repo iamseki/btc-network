@@ -12,8 +12,8 @@ pub struct CrawlerConfig {
     pub max_runtime: Duration,
     /// Stop when no new nodes were queued during this window.
     pub idle_timeout: Duration,
-    /// Janitor polling interval used to evaluate stop policies.
-    pub janitor_tick: Duration,
+    /// Lifecycle polling interval used to evaluate stop policies.
+    pub lifecycle_tick: Duration,
     /// TCP connect timeout used per node.
     pub connect_timeout: Duration,
     /// Per-connection read/write timeout used by session I/O.
@@ -28,7 +28,7 @@ impl Default for CrawlerConfig {
             max_concurrency: 1000,
             max_runtime: Duration::from_secs(60 * 60),
             idle_timeout: Duration::from_secs(5 * 60),
-            janitor_tick: Duration::from_secs(1),
+            lifecycle_tick: Duration::from_secs(1),
             connect_timeout: Duration::from_secs(30),
             io_timeout: Duration::from_secs(10),
             verbose: false,

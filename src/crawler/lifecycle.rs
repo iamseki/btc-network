@@ -7,7 +7,7 @@ use tracing::info;
 
 use super::types::CrawlState;
 
-pub(crate) async fn run_janitor(
+pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
     stop: Arc<AtomicBool>,
     max_runtime: Duration,
@@ -25,7 +25,7 @@ pub(crate) async fn run_janitor(
         }
 
         if started_at.elapsed() >= max_runtime {
-            info!("[janitor] max runtime reached ({max_runtime:?}), stopping");
+            info!("[lifecycle] max runtime reached ({max_runtime:?}), stopping");
             stop.store(true, Ordering::Relaxed);
             return;
         }
@@ -36,7 +36,7 @@ pub(crate) async fn run_janitor(
         };
 
         if idle_for >= idle_timeout {
-            info!("[janitor] idle timeout reached ({idle_for:?}), stopping");
+            info!("[lifecycle] idle timeout reached ({idle_for:?}), stopping");
             stop.store(true, Ordering::Relaxed);
             return;
         }
@@ -49,11 +49,11 @@ mod tests {
     use crate::crawler::types::CrawlState;
 
     #[tokio::test]
-    async fn janitor_stops_on_max_runtime() {
+    async fn lifecycle_stops_on_max_runtime() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stop = Arc::new(AtomicBool::new(false));
 
-        run_janitor(
+        run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
             Duration::from_millis(20),
@@ -66,7 +66,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn janitor_stops_on_idle_timeout() {
+    async fn lifecycle_stops_on_idle_timeout() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         {
             let mut guard = state.lock().await;
@@ -74,7 +74,7 @@ mod tests {
         }
 
         let stop = Arc::new(AtomicBool::new(false));
-        run_janitor(
+        run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
             Duration::from_secs(10),
@@ -87,12 +87,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn janitor_exits_immediately_when_already_stopped() {
+    async fn lifecycle_exits_immediately_when_already_stopped() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stop = Arc::new(AtomicBool::new(true));
         let before = Instant::now();
 
-        run_janitor(
+        run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
             Duration::from_secs(10),
