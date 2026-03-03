@@ -3,14 +3,22 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Rust Bitcoin P2P client with explicit separation of concerns:
-- `src/wire/*` for protocol framing/decoding and payload builders
+- `src/wire/*` for protocol framing/decoding, script/tx modeling, and payload builders
 - `src/session.rs` for connection/session abstraction and handshake
 - `src/bin/*` for orchestration entry points (`cli`, `crawler`, `listener`)
 
 Detailed context lives in `.claude/rules/` (auto-loaded):
 - `commands.md` — build, test, lint
 - `architecture.md` — module boundaries, message pipeline, extension workflow
-- `protocol.md` — handshake and message behavior (addrv2, getheaders, block paths)
+- `protocol.md` — handshake and message behavior (addrv2, getheaders, getdata/block paths)
+
+Recent protocol/project capabilities to preserve:
+- CLI commands include: `ping`, `get-addr`, `get-headers`, `last-block-header`, `get-block`, `download-block`
+- Block requests use witness inventory type (`MSG_WITNESS_BLOCK`) for SegWit-aware block payloads
+- `download-block` writes raw P2P blocks to `blk-<first8>-<last6>.dat` in blk record format
+- `TxOut::script_type()` and `ScriptType::exposes_pubkey_directly()` classify output locking scripts
+- `TxIn::script_sig_type()` and `TxIn::exposed_pubkey()` classify/extract input-side scriptSig patterns (heuristic)
+- First crawler design artifact is at `docs/crawler-first-design.png`
 
 ## Token Efficiency Policy
 

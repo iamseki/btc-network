@@ -92,6 +92,7 @@ Binaries must not:
 - src/bin/cli.rs — interactive CLI
 - src/bin/crawler.rs — DNS seed crawler
 - src/bin/listener.rs — long-running listener
+- docs/crawler-first-design.png — first crawler architecture draft
 
 ## Protocol Rules To Preserve
 
@@ -120,6 +121,15 @@ Ordering matters.
 - Reversal must be explicit and localized
 - Never silently reverse inside core types
 
+### Block Retrieval / Serialization
+
+- `getdata` block requests must use witness-aware inventory (`MSG_WITNESS_BLOCK`)
+- `download-block` writes raw block payload in Bitcoin `blk*.dat` record format:
+  - 4 bytes network magic (little-endian)
+  - 4 bytes raw block size (little-endian)
+  - raw serialized block bytes
+- When a different block hash is returned, ignore it explicitly and continue waiting
+
 ## Design Constraints
 - No hidden retries
 - No silent error swallowing
@@ -143,6 +153,7 @@ make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-addr"
 make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-headers"
 make cli ARGS="--node seed.bitcoin.sipa.be:8333 last-block-header"
 make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-block --hash <block-hash>"
+make cli ARGS="--node seed.bitcoin.sipa.be:8333 download-block --hash <block-hash>"
 ```
 
 Equivalent cargo commands are also valid (`cargo test`, `cargo run --bin cli -- ...`, etc.).
@@ -159,6 +170,14 @@ When adding new protocol support:
 
 Never add parsing logic inside CLI.
 
+When extending transaction/script modeling:
+
+1. Keep wire bytes as source of truth (`script_sig`, `script_pubkey`, witness)
+2. Add classification helpers as typed methods in `wire/message.rs`
+3. Keep heuristics explicit (no hidden script execution assumptions)
+4. Document limitations in rustdoc near the helper
+5. Add focused tests for both standard and non-standard patterns
+
 ## Testing Expectations
 
 - Run `cargo test` after behavior changes.
@@ -167,6 +186,8 @@ Tests must verify:
   - Full payload consumption
   - SegWit detection correctness
   - Transaction boundary correctness
+  - Script classification correctness (`ScriptType`, `ScriptSigType`)
+  - Exposed pubkey detection behavior
 
 ## Notes for Agents
 
