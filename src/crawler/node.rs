@@ -2,7 +2,8 @@ use crate::session::Session;
 use crate::wire;
 use crate::wire::message::{AddrV2Addr, VersionMessage};
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
-use tracing::warn;
+use std::time::Instant;
+use tracing::{info, warn};
 
 use super::types::{CrawlerConfig, NodeState, NodeVisit};
 
@@ -19,8 +20,11 @@ impl NodeProcessor for DefaultNodeProcessor {
 }
 
 pub(crate) fn process_node(addr: SocketAddr, config: CrawlerConfig) -> Result<NodeVisit, String> {
+    let total_started = Instant::now();
+    let connect_started = Instant::now();
     let stream = TcpStream::connect_timeout(&addr, config.connect_timeout)
         .map_err(|e| format!("connect {addr}: {e}"))?;
+    let connect_elapsed = connect_started.elapsed();
     stream
         .set_read_timeout(Some(config.io_timeout))
         .map_err(|e| format!("set read timeout: {e}"))?;
@@ -33,7 +37,40 @@ pub(crate) fn process_node(addr: SocketAddr, config: CrawlerConfig) -> Result<No
         session: &mut session,
     };
 
-    process_node_with_client(addr, &mut client)
+    let handshake_started = Instant::now();
+    let version = client.handshake()?;
+    let handshake_elapsed = handshake_started.elapsed();
+
+    let get_addr_started = Instant::now();
+    let discovered = client.get_addresses()?;
+    let get_addr_elapsed = get_addr_started.elapsed();
+
+    let visit = NodeVisit {
+        node: addr,
+        state: NodeState {
+            version: version.version,
+            services: version.services.bits(),
+            user_agent: version.user_agent,
+            start_height: version.start_height,
+            relay: version.relay,
+            timestamp: version.timestamp,
+        },
+        discovered,
+    };
+
+    if config.verbose {
+        info!(
+            node = %addr,
+            connect_ms = connect_elapsed.as_millis(),
+            handshake_ms = handshake_elapsed.as_millis(),
+            get_addr_ms = get_addr_elapsed.as_millis(),
+            discovered_nodes = visit.discovered.len(),
+            process_node_total_ms = total_started.elapsed().as_millis(),
+            "[crawler] node timing"
+        );
+    }
+
+    Ok(visit)
 }
 
 pub(crate) trait NodeClient {
@@ -55,6 +92,7 @@ impl NodeClient for SessionNodeClient<'_> {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn process_node_with_client<C: NodeClient>(
     addr: SocketAddr,
     client: &mut C,

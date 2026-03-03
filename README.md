@@ -123,6 +123,45 @@ Logging modes:
   - `RUST_LOG=info` (default)
   - examples: `RUST_LOG=debug`
 
+### Crawler Timing Debug Workflow
+
+For repeatable timing analysis (worker lock timing + node I/O timing), use:
+
+- `scripts/crawler_timing.sh`
+
+Default run:
+
+- `scripts/crawler_timing.sh`
+
+Run for a fixed observation window (5 minutes):
+
+- `scripts/crawler_timing.sh artifacts/crawler-timing-run-1 --timeout-minutes 5`
+
+Run with custom crawler flags:
+
+- `scripts/crawler_timing.sh artifacts/crawler-timing-run-2 --timeout-minutes 5 -- --max-concurrency 300 --idle-timeout-minutes 3`
+
+What this script does:
+
+1. Runs crawler with `--verbose`
+2. If `--timeout-minutes N` is set, maps it to crawler policy `--max-runtime-minutes N`
+3. Saves full structured logs to `crawler.log`
+4. Extracts only timing events (`[crawler] worker timing`, `[crawler] node timing`) to `timing.ndjson`
+5. Computes aggregate metrics (`n`, `avg`, `p95`, `max`) into `timing-summary.json`
+
+Output files (inside chosen output dir):
+
+- `crawler.log`: all crawler logs (JSON lines)
+- `timing.ndjson`: only timing events, one JSON object per line
+- `timing-summary.json`: aggregated metrics for quick comparison between runs
+
+#### Why `ndjson` and not a single JSON file?
+
+- `ndjson` (newline-delimited JSON) stores one event per line, which matches streaming logs.
+- It is append-friendly and memory-efficient for large runs.
+- Tools like `jq`, `grep`, and `awk` can process it incrementally without loading the full dataset.
+- A single JSON array is better for small static payloads, but less practical for long-running log capture.
+
 Crawler TODOs:
 
 - Measure lock contention and `Mutex` impact with deterministic benchmarks/profiling before changing synchronization primitives.

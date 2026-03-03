@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use tokio::sync::{Mutex, mpsc};
-use tracing::warn;
+use tracing::{info, warn};
 
 use super::node::NodeProcessor;
 use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit};
@@ -23,13 +23,20 @@ pub(crate) async fn run_worker(
             return;
         }
 
+        let node_cycle_started = Instant::now();
         let next = tokio::time::timeout(Duration::from_millis(250), async {
+            let queue_lock_wait_started = Instant::now();
             let mut guard = queue_rx.lock().await;
-            guard.recv().await
+            let queue_lock_wait = queue_lock_wait_started.elapsed();
+            let recv_wait_started = Instant::now();
+            let item = guard.recv().await;
+            let recv_wait = recv_wait_started.elapsed();
+            let queue_lock_hold = queue_lock_wait_started.elapsed();
+            (item, queue_lock_wait, recv_wait, queue_lock_hold)
         })
         .await;
 
-        let maybe_addr = match next {
+        let (maybe_addr, queue_lock_wait, queue_recv_wait, queue_lock_hold) = match next {
             Ok(v) => v,
             Err(_) => continue,
         };
@@ -41,22 +48,28 @@ pub(crate) async fn run_worker(
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
 
         let processor = Arc::clone(&processor);
+        let process_started = Instant::now();
         let visit_result =
             tokio::task::spawn_blocking(move || processor.process(addr, config)).await;
+        let process_elapsed = process_started.elapsed();
 
         match visit_result {
             Ok(Ok(visit)) => {
                 stats.success.fetch_add(1, Ordering::Relaxed);
 
-                let discovered = {
-                    let mut guard = state.lock().await;
-                    apply_visit_to_state(&mut guard, visit)
-                };
+                let state_lock_wait_started = Instant::now();
+                let mut guard = state.lock().await;
+                let state_lock_wait = state_lock_wait_started.elapsed();
+                let state_lock_hold_started = Instant::now();
+                let discovered = apply_visit_to_state(&mut guard, visit);
+                let state_lock_hold = state_lock_hold_started.elapsed();
+                drop(guard);
+                let discovered_count = discovered.len();
 
                 if !discovered.is_empty() {
                     stats
                         .queued_total
-                        .fetch_add(discovered.len(), Ordering::Relaxed);
+                        .fetch_add(discovered_count, Ordering::Relaxed);
                     for candidate in discovered {
                         if stop.load(Ordering::Relaxed) {
                             break;
@@ -64,16 +77,49 @@ pub(crate) async fn run_worker(
                         let _ = queue_tx.send(candidate);
                     }
                 }
+
+                if config.verbose {
+                    info!(
+                        node = %addr,
+                        queue_lock_wait_ms = queue_lock_wait.as_millis(),
+                        queue_recv_wait_ms = queue_recv_wait.as_millis(),
+                        queue_lock_hold_ms = queue_lock_hold.as_millis(),
+                        process_ms = process_elapsed.as_millis(),
+                        state_lock_wait_ms = state_lock_wait.as_millis(),
+                        state_lock_hold_ms = state_lock_hold.as_millis(),
+                        discovered_nodes = discovered_count,
+                        node_total_ms = node_cycle_started.elapsed().as_millis(),
+                        "[crawler] worker timing"
+                    );
+                }
             }
             Ok(Err(err)) => {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
                 if config.verbose {
+                    info!(
+                        node = %addr,
+                        queue_lock_wait_ms = queue_lock_wait.as_millis(),
+                        queue_recv_wait_ms = queue_recv_wait.as_millis(),
+                        queue_lock_hold_ms = queue_lock_hold.as_millis(),
+                        process_ms = process_elapsed.as_millis(),
+                        node_total_ms = node_cycle_started.elapsed().as_millis(),
+                        "[crawler] worker timing"
+                    );
                     warn!("[crawler] failed to process node {addr}: {err}");
                 }
             }
             Err(err) => {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
                 if config.verbose {
+                    info!(
+                        node = %addr,
+                        queue_lock_wait_ms = queue_lock_wait.as_millis(),
+                        queue_recv_wait_ms = queue_recv_wait.as_millis(),
+                        queue_lock_hold_ms = queue_lock_hold.as_millis(),
+                        process_ms = process_elapsed.as_millis(),
+                        node_total_ms = node_cycle_started.elapsed().as_millis(),
+                        "[crawler] worker timing"
+                    );
                     warn!("[crawler] blocking task join error for {addr}: {err}");
                 }
             }
