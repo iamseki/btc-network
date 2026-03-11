@@ -120,8 +120,10 @@ When extending the UI:
 
 - Prefer clean, restrained layouts over dashboard-heavy compositions
 - Use a black / carbon base with Bitcoin-gold accents
+- Favor a retro instrument-panel / terminal-console feel over polished SaaS styling
 - Keep contrast high and hierarchy obvious
 - Avoid decorative UI that does not help protocol exploration
+- Use retro cues sparingly: mono labels, squarer frames, subtle glow, and panel texture are good; gimmicky effects are not
 - Favor a small reusable component set over page-local styling
 - Preserve web portability even when adding desktop-specific features
 

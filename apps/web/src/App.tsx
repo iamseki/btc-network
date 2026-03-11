@@ -88,38 +88,40 @@ export function App() {
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto grid min-h-screen w-full max-w-[1600px] gap-6 px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6 lg:py-6">
         <Card className="overflow-hidden">
-          <CardHeader className="gap-8 border-b border-border/80 bg-gradient-to-b from-primary/8 via-card to-card">
+          <CardHeader className="gap-8 border-b border-primary/20 bg-[linear-gradient(180deg,rgba(245,179,1,0.07),rgba(0,0,0,0)_20%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]">
             <div className="space-y-3">
               <Badge>btc-network</Badge>
               <div className="space-y-2">
                 <CardTitle className="text-4xl">Protocol Workbench</CardTitle>
                 <CardDescription>
-                  Clean desktop-oriented UI for exploring the Rust Bitcoin P2P client without
+                  Retro instrument panel for exploring the Rust Bitcoin P2P client without
                   dragging protocol rules into the frontend.
                 </CardDescription>
               </div>
             </div>
 
             <div className="grid gap-3">
-              <div className="rounded-[24px] border border-primary/20 bg-background/70 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-                  Visual Direction
+              <div className="rounded-[6px] border border-primary/20 bg-background/80 p-4">
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                  Aesthetic
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Black, carbon, and restrained Bitcoin gold. No extra dashboard noise.
+                  Black phosphor, amber signals, and a cleaner terminal-era feel.
                 </p>
               </div>
-              <div className="rounded-[24px] border border-border/80 bg-muted/40 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+              <div className="rounded-[6px] border border-border/80 bg-muted/40 p-4">
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
                   Adapter
                 </p>
                 <div className="mt-3 flex items-center gap-3">
-                  <div className="rounded-full bg-primary/14 p-2 text-primary">
+                  <div className="rounded-[4px] border border-primary/20 bg-primary/10 p-2 text-primary">
                     <Activity className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">Web Placeholder</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="font-mono text-sm font-semibold uppercase tracking-[0.14em] text-foreground">
+                      Web Placeholder
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
                       {client.constructor.name || "web-client"}
                     </p>
                   </div>
@@ -138,17 +140,19 @@ export function App() {
                     type="button"
                     className={
                       entry.id === selectedPage
-                        ? "group rounded-[24px] border border-primary/35 bg-primary/10 px-4 py-4 text-left transition-colors"
-                        : "group rounded-[24px] border border-transparent bg-transparent px-4 py-4 text-left transition-colors hover:border-border hover:bg-muted/40"
+                        ? "group rounded-[6px] border border-primary/35 bg-primary/10 px-4 py-4 text-left transition-colors"
+                        : "group rounded-[6px] border border-transparent bg-transparent px-4 py-4 text-left transition-colors hover:border-border hover:bg-muted/40"
                     }
                     onClick={() => setSelectedPage(entry.id)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="rounded-full border border-border/80 bg-background/80 p-2 text-primary">
+                      <div className="rounded-[4px] border border-border/80 bg-background/80 p-2 text-primary">
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="space-y-1">
-                        <p className="font-semibold text-foreground">{entry.title}</p>
+                        <p className="font-mono text-sm font-semibold uppercase tracking-[0.14em] text-foreground">
+                          {entry.title}
+                        </p>
                         <p className="text-sm text-muted-foreground">{entry.description}</p>
                       </div>
                     </div>
@@ -163,11 +167,11 @@ export function App() {
           <Card className="overflow-hidden">
             <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">
                   Current page
                 </p>
                 <div>
-                  <h2 className="font-serif text-3xl tracking-tight text-foreground">
+                  <h2 className="font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
                     {page.title}
                   </h2>
                   <p className="text-sm text-muted-foreground">{page.description}</p>
@@ -176,7 +180,7 @@ export function App() {
 
               <div className="flex flex-wrap items-center gap-3">
                 <Badge variant="muted">Primary peer</Badge>
-                <div className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+                <div className="rounded-[6px] border border-primary/50 bg-primary px-4 py-2 font-mono text-sm font-semibold text-primary-foreground shadow-[0_0_20px_rgba(245,179,1,0.15)]">
                   {defaultNode}
                 </div>
               </div>

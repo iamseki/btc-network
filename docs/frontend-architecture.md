@@ -9,6 +9,19 @@ This repository adopts a web-first frontend architecture with a thin Tauri deskt
 - Prevent the frontend from depending directly on Tauri runtime APIs
 - Mirror the current CLI workflows before introducing new product surface
 
+## Visual Direction
+
+The frontend visual language is intentionally retro while staying clean and readable.
+
+Guidelines:
+
+- Keep the black / carbon base with restrained Bitcoin-gold highlights
+- Prefer a retro instrument-panel or terminal-console feel over a generic SaaS dashboard
+- Use mono-forward typography, compact labels, and strong information hierarchy
+- Favor squarer frames, panel borders, subtle glow, and scanline/grid texture only when they support the mood
+- Avoid novelty effects that reduce readability or feel theatrical
+- Preserve the same visual discipline on desktop and web builds
+
 ## High-Level Shape
 
 ```text

@@ -24,12 +24,14 @@ export function SectionHeading({
     >
       <div className="space-y-2">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-primary">
             {eyebrow}
           </p>
         ) : null}
         <div className="space-y-1">
-          <h1 className="font-serif text-3xl tracking-tight text-foreground">{title}</h1>
+          <h1 className="font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
+            {title}
+          </h1>
           {description ? (
             <p className="max-w-3xl text-sm text-muted-foreground">{description}</p>
           ) : null}

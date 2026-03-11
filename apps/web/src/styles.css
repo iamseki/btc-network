@@ -6,8 +6,8 @@
     "Segoe UI",
     sans-serif;
   --font-serif:
-    "Bricolage Grotesque",
-    "IBM Plex Sans",
+    "IBM Plex Mono",
+    "Courier New",
     sans-serif;
   --font-mono:
     "IBM Plex Mono",
@@ -16,7 +16,7 @@
 
   --color-background: #080808;
   --color-foreground: #f5efe2;
-  --color-card: #111111;
+  --color-card: #0d0d0d;
   --color-card-foreground: #f5efe2;
   --color-popover: #111111;
   --color-popover-foreground: #f5efe2;
@@ -45,13 +45,25 @@
   body {
     @apply min-h-screen bg-background font-sans text-foreground antialiased;
     background-image:
-      radial-gradient(circle at top left, rgba(245, 179, 1, 0.15), transparent 24%),
-      radial-gradient(circle at bottom right, rgba(245, 179, 1, 0.08), transparent 18%),
-      linear-gradient(145deg, #050505 0%, #090909 52%, #0e0d0a 100%);
+      linear-gradient(rgba(245, 179, 1, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245, 179, 1, 0.025) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(245, 179, 1, 0.14), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(245, 179, 1, 0.06), transparent 18%),
+      linear-gradient(145deg, #040404 0%, #090909 52%, #100d07 100%);
+    background-size:
+      100% 4px,
+      4px 100%,
+      auto,
+      auto,
+      auto;
   }
 
   button,
   input {
     font: inherit;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
   }
 }

@@ -63,7 +63,9 @@ Design direction:
 
 - Clean, minimal interface
 - Black / carbon base with restrained Bitcoin gold accents
+- Retro instrument-panel / terminal-console feel
 - Avoid unnecessary dashboard chrome or decorative noise
+- Keep effects subtle enough that protocol data stays primary
 
 See also:
 
