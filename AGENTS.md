@@ -114,6 +114,17 @@ Preferred structure:
 - `apps/desktop/` — Tauri application reusing the frontend with native bindings
 - `crates/` — optional shared Rust crates for app-facing contracts or adapters if needed later
 
+### Frontend Design Direction
+
+When extending the UI:
+
+- Prefer clean, restrained layouts over dashboard-heavy compositions
+- Use a black / carbon base with Bitcoin-gold accents
+- Keep contrast high and hierarchy obvious
+- Avoid decorative UI that does not help protocol exploration
+- Favor a small reusable component set over page-local styling
+- Preserve web portability even when adding desktop-specific features
+
 ### Frontend Boundary Rules
 
 - React components must not import Tauri APIs directly
@@ -142,6 +153,18 @@ Initial frontend pages should mirror the current CLI capabilities before adding 
 - Headers (`get-headers`, `last-block-header`)
 - Block explorer (`get-block`, `download-block`)
 - Crawler UI later, after the single-peer workflows are stable
+
+### Frontend Working Set
+
+For most frontend tasks, start with this minimal context:
+
+- `docs/frontend-architecture.md`
+- `apps/web/src/App.tsx`
+- `apps/web/src/lib/api/client.ts`
+- `apps/web/src/lib/api/types.ts`
+- the specific page or component being changed
+
+Do not read unrelated crawler, wire, or CLI files unless the task requires protocol or backend integration changes.
 
 ## Protocol Rules To Preserve
 
@@ -246,3 +269,6 @@ Tests must verify:
 - If documentation and code diverge, update both together
 - Do not simplify abstractions that were intentionally separated
 - This repository prioritizes understanding and correctness over rapid feature expansion.
+- Keep context small: load only the files needed for the current task
+- For frontend tasks, prefer updating shared primitives and page contracts over duplicating page-local patterns
+- For documentation updates, reflect decisions succinctly so future turns do not spend tokens rediscovering established architecture

@@ -31,6 +31,45 @@ session (handshake + state machine)
 orchestration (cli, crawler, etc)
 ```
 
+## Frontend Status
+
+The repository now includes a web-first frontend scaffold under `apps/web`.
+
+Current frontend stack:
+
+- React
+- Vite
+- TypeScript
+- Tailwind CSS
+- shadcn/ui-style component structure
+
+Frontend architecture rules:
+
+- The UI is web-first and should remain deployable as a normal SPA
+- Tauri is planned as a thin desktop shell, not as the frontend architecture
+- React components must not import Tauri APIs directly
+- The frontend must talk to an application-facing client boundary (`client.ts`)
+- Desktop-specific behavior must stay isolated behind the Tauri adapter
+- The frontend must not call the CLI binary as an integration mechanism
+
+Current frontend scope mirrors the CLI:
+
+- Connection / handshake
+- Peer tools (`ping`, `get-addr`)
+- Headers (`get-headers`, `last-block-header`)
+- Block explorer (`get-block`, `download-block`)
+
+Design direction:
+
+- Clean, minimal interface
+- Black / carbon base with restrained Bitcoin gold accents
+- Avoid unnecessary dashboard chrome or decorative noise
+
+See also:
+
+- `docs/frontend-architecture.md`
+- `apps/web/README.md`
+
 ## btc-cli Usage
 
 Minimal Bitcoin P2P CLI for interacting with a single peer.
@@ -71,6 +110,30 @@ Download block:
 
 - `make cli ARGS="--node seed.bitcoin.sipa.be:8333 download-block --hash 00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde"`
 - It downloads the block as raw serialized bytes from p2p protocol,  in a `blk-{first-8-bytes-hash}-{last-6-bytes-hash}.dat` file.
+
+## Frontend Usage
+
+Install frontend dependencies:
+
+- `make web-install`
+
+Run the web UI in development mode:
+
+- `make web-dev`
+
+Run frontend tests:
+
+- `make web-test`
+
+Build the frontend for production:
+
+- `make web-build`
+
+Notes:
+
+- The current UI uses placeholder/mock adapter data while the Rust desktop bridge is being wired
+- The next integration step is to expose shared Rust application workflows to the Tauri adapter
+- Browser deployment remains a design goal, so UI code must stay portable
 
 ## Crawler Usage
 
@@ -198,3 +261,13 @@ CLAUDE.md                  # entry point — loaded automatically by Claude Code
 
 > You can also use `@path/to/file` inside any rules file to import additional context.
 > Paths are relative to the file containing the import; imports chain up to 5 levels deep.
+
+### Token / Context Hygiene
+
+To reduce wasted context and repeated reasoning during AI-assisted work:
+
+- Read only the files directly relevant to the task
+- Prefer `AGENTS.md` and `docs/frontend-architecture.md` before scanning implementation files for frontend tasks
+- For frontend work, start with `apps/web/src/App.tsx`, `apps/web/src/lib/api/`, and the relevant page/component files
+- Avoid re-reading crawler or wire internals unless the task actually changes protocol behavior
+- Update documentation when architecture decisions change so future turns do not need to rediscover them

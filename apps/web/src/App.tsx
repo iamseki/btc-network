@@ -1,6 +1,9 @@
+import { Activity, Blocks, Network, Radio, Waypoints } from "lucide-react";
 import { useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
+import { Badge } from "./components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { BlocksPage } from "./pages/blocks-page";
 import { ConnectionPage } from "./pages/connection-page";
 import { HeadersPage } from "./pages/headers-page";
@@ -14,6 +17,12 @@ const sampleBlockHash =
 export function App() {
   const [selectedPage, setSelectedPage] = useState<AppPageId>("connection");
   const client = getAppClient();
+  const pageIcons = {
+    connection: Radio,
+    "peer-tools": Network,
+    headers: Waypoints,
+    blocks: Blocks,
+  } satisfies Record<AppPageId, typeof Radio>;
 
   const [events] = useState(() => [
     {
@@ -76,84 +85,140 @@ export function App() {
   const page = appPages.find((entry) => entry.id === selectedPage)!;
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <p className="eyebrow">btc-network</p>
-          <h1>Protocol Workbench</h1>
-          <p className="muted">
-            Web-first UI scaffold for the Rust Bitcoin P2P client.
-          </p>
-        </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto grid min-h-screen w-full max-w-[1600px] gap-6 px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6 lg:py-6">
+        <Card className="overflow-hidden">
+          <CardHeader className="gap-8 border-b border-border/80 bg-gradient-to-b from-primary/8 via-card to-card">
+            <div className="space-y-3">
+              <Badge>btc-network</Badge>
+              <div className="space-y-2">
+                <CardTitle className="text-4xl">Protocol Workbench</CardTitle>
+                <CardDescription>
+                  Clean desktop-oriented UI for exploring the Rust Bitcoin P2P client without
+                  dragging protocol rules into the frontend.
+                </CardDescription>
+              </div>
+            </div>
 
-        <nav className="nav">
-          {appPages.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={entry.id === selectedPage ? "nav-item active" : "nav-item"}
-              onClick={() => setSelectedPage(entry.id)}
-            >
-              <span>{entry.title}</span>
-              <small>{entry.description}</small>
-            </button>
-          ))}
-        </nav>
+            <div className="grid gap-3">
+              <div className="rounded-[24px] border border-primary/20 bg-background/70 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                  Visual Direction
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Black, carbon, and restrained Bitcoin gold. No extra dashboard noise.
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-border/80 bg-muted/40 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                  Adapter
+                </p>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="rounded-full bg-primary/14 p-2 text-primary">
+                    <Activity className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Web Placeholder</p>
+                    <p className="text-xs text-muted-foreground">
+                      {client.constructor.name || "web-client"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
 
-        <section className="status-card">
-          <p className="eyebrow">Adapter</p>
-          <h2>Web Placeholder</h2>
-          <p className="muted">
-            Current client is mock-backed so the interface can evolve before the Tauri bridge lands.
-          </p>
-          <code>{client.constructor.name || "web-client"}</code>
-        </section>
-      </aside>
+          <CardContent className="p-4">
+            <nav className="grid gap-2">
+              {appPages.map((entry) => {
+                const Icon = pageIcons[entry.id];
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className={
+                      entry.id === selectedPage
+                        ? "group rounded-[24px] border border-primary/35 bg-primary/10 px-4 py-4 text-left transition-colors"
+                        : "group rounded-[24px] border border-transparent bg-transparent px-4 py-4 text-left transition-colors hover:border-border hover:bg-muted/40"
+                    }
+                    onClick={() => setSelectedPage(entry.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full border border-border/80 bg-background/80 p-2 text-primary">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground">{entry.title}</p>
+                        <p className="text-sm text-muted-foreground">{entry.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </nav>
+          </CardContent>
+        </Card>
 
-      <main className="main">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Current page</p>
-            <h2>{page.title}</h2>
+        <main className="flex min-w-0 flex-col gap-6">
+          <Card className="overflow-hidden">
+            <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">
+                  Current page
+                </p>
+                <div>
+                  <h2 className="font-serif text-3xl tracking-tight text-foreground">
+                    {page.title}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">{page.description}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant="muted">Primary peer</Badge>
+                <div className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+                  {defaultNode}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-6">
+            {selectedPage === "connection" ? (
+              <ConnectionPage
+                defaultNode={defaultNode}
+                lastHandshake={lastHandshake}
+                events={events}
+              />
+            ) : null}
+
+            {selectedPage === "peer-tools" ? (
+              <PeerToolsPage
+                node={defaultNode}
+                lastPing={lastPing}
+                lastAddrResult={lastAddrResult}
+              />
+            ) : null}
+
+            {selectedPage === "headers" ? (
+              <HeadersPage
+                node={defaultNode}
+                headersResult={headersResult}
+                syncResult={syncResult}
+              />
+            ) : null}
+
+            {selectedPage === "blocks" ? (
+              <BlocksPage
+                node={defaultNode}
+                blockHash={sampleBlockHash}
+                blockSummary={blockSummary}
+                downloadResult={downloadResult}
+              />
+            ) : null}
           </div>
-          <div className="node-chip">{defaultNode}</div>
-        </header>
-
-        <section className="canvas">
-          {selectedPage === "connection" ? (
-            <ConnectionPage
-              defaultNode={defaultNode}
-              lastHandshake={lastHandshake}
-              events={events}
-            />
-          ) : null}
-
-          {selectedPage === "peer-tools" ? (
-            <PeerToolsPage
-              node={defaultNode}
-              lastPing={lastPing}
-              lastAddrResult={lastAddrResult}
-            />
-          ) : null}
-
-          {selectedPage === "headers" ? (
-            <HeadersPage
-              node={defaultNode}
-              headersResult={headersResult}
-              syncResult={syncResult}
-            />
-          ) : null}
-
-          {selectedPage === "blocks" ? (
-            <BlocksPage
-              node={defaultNode}
-              blockHash={sampleBlockHash}
-              blockSummary={blockSummary}
-              downloadResult={downloadResult}
-            />
-          ) : null}
-        </section>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

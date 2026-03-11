@@ -1,3 +1,9 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataList } from "@/components/ui/data-list";
+import { SectionHeading } from "@/components/ui/section-heading";
+
 import type { HeaderFetchResult, HeaderSyncResult } from "../lib/api/types";
 
 export type HeadersPageProps = {
@@ -12,60 +18,64 @@ export function HeadersPage({
   syncResult,
 }: HeadersPageProps) {
   return (
-    <section>
-      <header>
-        <h1>Headers</h1>
-        <p>Inspect the one-shot header response or run the iterative sync-to-tip workflow.</p>
-      </header>
+    <Card>
+      <CardContent className="space-y-8 p-6">
+        <SectionHeading
+          eyebrow="Chain"
+          title="Headers"
+          description="Visualize both the one-shot `getheaders` response and the iterative sync-to-tip workflow already present in the CLI."
+          actions={
+            <>
+              <Button type="button">GetHeaders {node}</Button>
+              <Button type="button" variant="secondary">
+                Sync To Tip {node}
+              </Button>
+            </>
+          }
+        />
 
-      <div>
-        <button type="button">GetHeaders {node}</button>
-        <button type="button">Sync To Tip {node}</button>
-      </div>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                Latest Batch
+              </p>
+              <Badge variant="muted">GetHeaders</Badge>
+            </div>
+            {headersResult ? (
+              <DataList
+                items={[
+                  { label: "Count", value: headersResult.count },
+                  { label: "Last header hash", value: headersResult.lastHeaderHash ?? "n/a" },
+                ]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No header batch fetched yet.</p>
+            )}
+          </div>
 
-      <section>
-        <h2>Latest GetHeaders Result</h2>
-        {headersResult ? (
-          <dl>
-            <div>
-              <dt>Count</dt>
-              <dd>{headersResult.count}</dd>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                Sync Summary
+              </p>
+              <Badge>Tip Sync</Badge>
             </div>
-            <div>
-              <dt>Last header hash</dt>
-              <dd>{headersResult.lastHeaderHash ?? "n/a"}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p>No header batch fetched yet.</p>
-        )}
-      </section>
-
-      <section>
-        <h2>Sync Summary</h2>
-        {syncResult ? (
-          <dl>
-            <div>
-              <dt>Total headers</dt>
-              <dd>{syncResult.totalHeaders}</dd>
-            </div>
-            <div>
-              <dt>Rounds</dt>
-              <dd>{syncResult.rounds}</dd>
-            </div>
-            <div>
-              <dt>Elapsed (ms)</dt>
-              <dd>{syncResult.elapsedMs}</dd>
-            </div>
-            <div>
-              <dt>Most recent block</dt>
-              <dd>{syncResult.mostRecentBlock ?? "n/a"}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p>No tip sync has been run yet.</p>
-        )}
-      </section>
-    </section>
+            {syncResult ? (
+              <DataList
+                items={[
+                  { label: "Total headers", value: syncResult.totalHeaders },
+                  { label: "Rounds", value: syncResult.rounds },
+                  { label: "Elapsed (ms)", value: syncResult.elapsedMs },
+                  { label: "Most recent block", value: syncResult.mostRecentBlock ?? "n/a" },
+                ]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No tip sync has been run yet.</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,3 +1,10 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataList } from "@/components/ui/data-list";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { TextInput } from "@/components/ui/text-input";
+
 import type { BlockDownloadResult, BlockSummary } from "../lib/api/types";
 
 export type BlocksPageProps = {
@@ -14,62 +21,68 @@ export function BlocksPage({
   downloadResult,
 }: BlocksPageProps) {
   return (
-    <section>
-      <header>
-        <h1>Block Explorer</h1>
-        <p>Request a block by hash or write a raw `blk*.dat` record from the network payload.</p>
-      </header>
+    <Card>
+      <CardContent className="space-y-8 p-6">
+        <SectionHeading
+          eyebrow="Block Data"
+          title="Block Explorer"
+          description="Request block details or write the raw Bitcoin `blk*.dat` record format without burying the file semantics."
+          actions={<Badge>Witness-aware getdata</Badge>}
+        />
 
-      <form>
-        <label htmlFor="block-hash">Block hash</label>
-        <input id="block-hash" name="block-hash" defaultValue={blockHash} />
-        <button type="submit">GetBlock {node}</button>
-        <button type="button">DownloadBlock {node}</button>
-      </form>
+        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <TextInput id="block-hash" name="block-hash" defaultValue={blockHash} />
+          <Button type="submit">GetBlock {node}</Button>
+          <Button type="button" variant="secondary">
+            DownloadBlock {node}
+          </Button>
+        </form>
 
-      <section>
-        <h2>Block Summary</h2>
-        {blockSummary ? (
-          <dl>
-            <div>
-              <dt>Hash</dt>
-              <dd>{blockSummary.hash}</dd>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                Block Summary
+              </p>
+              <Badge variant="muted">Decoded</Badge>
             </div>
-            <div>
-              <dt>Transactions</dt>
-              <dd>{blockSummary.txCount}</dd>
-            </div>
-            <div>
-              <dt>Serialized size</dt>
-              <dd>{blockSummary.serializedSize}</dd>
-            </div>
-            <div>
-              <dt>Coinbase detected</dt>
-              <dd>{blockSummary.coinbaseTxDetected ? "yes" : "no"}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p>No block loaded yet.</p>
-        )}
-      </section>
+            {blockSummary ? (
+              <DataList
+                items={[
+                  { label: "Hash", value: blockSummary.hash },
+                  { label: "Transactions", value: blockSummary.txCount },
+                  { label: "Serialized size", value: blockSummary.serializedSize },
+                  {
+                    label: "Coinbase detected",
+                    value: blockSummary.coinbaseTxDetected ? "yes" : "no",
+                  },
+                ]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No block loaded yet.</p>
+            )}
+          </div>
 
-      <section>
-        <h2>Download Result</h2>
-        {downloadResult ? (
-          <dl>
-            <div>
-              <dt>Output path</dt>
-              <dd>{downloadResult.outputPath}</dd>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                Download Result
+              </p>
+              <Badge>blk record</Badge>
             </div>
-            <div>
-              <dt>Raw bytes</dt>
-              <dd>{downloadResult.rawBytes}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p>No block downloaded yet.</p>
-        )}
-      </section>
-    </section>
+            {downloadResult ? (
+              <DataList
+                items={[
+                  { label: "Output path", value: downloadResult.outputPath },
+                  { label: "Raw bytes", value: downloadResult.rawBytes },
+                ]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No block downloaded yet.</p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,3 +1,10 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataList } from "@/components/ui/data-list";
+import { SectionHeading } from "@/components/ui/section-heading";
+import { TextInput } from "@/components/ui/text-input";
+
 import type { HandshakeResult, UiLogEvent } from "../lib/api/types";
 
 export type ConnectionPageProps = {
@@ -12,58 +19,65 @@ export function ConnectionPage({
   events,
 }: ConnectionPageProps) {
   return (
-    <section>
-      <header>
-        <h1>Connection</h1>
-        <p>Start each session by connecting to a peer and completing the Bitcoin handshake.</p>
-      </header>
+    <Card>
+      <CardContent className="space-y-8 p-6">
+        <SectionHeading
+          eyebrow="Session"
+          title="Connection"
+          description="Start each session by connecting to a peer and completing the Bitcoin handshake in the same order enforced by the Rust session layer."
+          actions={<Badge>Handshake first</Badge>}
+        />
 
-      <form>
-        <label htmlFor="node">Peer node</label>
-        <input id="node" name="node" defaultValue={defaultNode} />
-        <button type="submit">Handshake</button>
-      </form>
+        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <TextInput id="node" name="node" defaultValue={defaultNode} />
+          <Button type="submit">Run Handshake</Button>
+        </form>
 
-      <section>
-        <h2>Peer Summary</h2>
-        {lastHandshake ? (
-          <dl>
-            <div>
-              <dt>Node</dt>
-              <dd>{lastHandshake.node}</dd>
-            </div>
-            <div>
-              <dt>Protocol version</dt>
-              <dd>{lastHandshake.protocolVersion}</dd>
-            </div>
-            <div>
-              <dt>Services</dt>
-              <dd>{lastHandshake.services}</dd>
-            </div>
-            <div>
-              <dt>User agent</dt>
-              <dd>{lastHandshake.userAgent}</dd>
-            </div>
-            <div>
-              <dt>Start height</dt>
-              <dd>{lastHandshake.startHeight}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p>No handshake result yet.</p>
-        )}
-      </section>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="space-y-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+              Peer Summary
+            </p>
+            {lastHandshake ? (
+              <DataList
+                items={[
+                  { label: "Node", value: lastHandshake.node },
+                  { label: "Protocol version", value: lastHandshake.protocolVersion },
+                  { label: "Services", value: lastHandshake.services },
+                  { label: "User agent", value: lastHandshake.userAgent },
+                  { label: "Start height", value: lastHandshake.startHeight },
+                ]}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">No handshake result yet.</p>
+            )}
+          </div>
 
-      <section>
-        <h2>Session Log</h2>
-        <ul>
-          {events.map((event) => (
-            <li key={`${event.at}-${event.message}`}>
-              <strong>{event.level}</strong> {event.at} {event.message}
-            </li>
-          ))}
-        </ul>
-      </section>
-    </section>
+          <div className="space-y-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+              Session Log
+            </p>
+            <div className="rounded-[24px] border border-border/80 bg-background/80 p-4">
+              <ul className="grid gap-3">
+                {events.map((event) => (
+                  <li
+                    key={`${event.at}-${event.message}`}
+                    className="rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm"
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <Badge variant={event.level === "info" ? "default" : "muted"}>
+                        {event.level}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{event.at}</span>
+                    </div>
+                    <p className="text-foreground">{event.message}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -4,6 +4,7 @@ node_modules
 dist
 .turbo
 .vite
+*.tsbuildinfo
 apps/*/node_modules
 apps/*/dist
 apps/desktop/src-tauri/target
