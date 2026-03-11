@@ -1,0 +1,98 @@
+import type { BtcAppClient } from "./client";
+import type {
+  AddrResult,
+  BlockDownloadResult,
+  BlockSummary,
+  ConnectionRequest,
+  HandshakeResult,
+  HeaderFetchResult,
+  HeaderSyncResult,
+  PingResult,
+  UiLogEvent,
+} from "./types";
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function delay<T>(value: T): Promise<T> {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(value), 120);
+  });
+}
+
+const events: UiLogEvent[] = [
+  {
+    at: nowIso(),
+    level: "info",
+    message: "Web client is running in placeholder mode until the desktop and HTTP adapters are wired.",
+  },
+];
+
+export const webClient: BtcAppClient = {
+  handshake(request: ConnectionRequest): Promise<HandshakeResult> {
+    return delay({
+      node: request.node,
+      protocolVersion: 70016,
+      services: "0x0000000000000000",
+      userAgent: "/btc-network:ui-placeholder/",
+      startHeight: 0,
+      relay: null,
+    });
+  },
+
+  ping(node: string): Promise<PingResult> {
+    return delay({
+      node,
+      nonce: "0xfeedfacecafebeef",
+      echoedNonce: "0xfeedfacecafebeef",
+    });
+  },
+
+  getAddr(node: string): Promise<AddrResult> {
+    return delay({
+      node,
+      addresses: [
+        { address: "127.0.0.1", port: 8333, network: "ipv4" },
+        { address: "::1", port: 8333, network: "ipv6" },
+      ],
+    });
+  },
+
+  getHeaders(): Promise<HeaderFetchResult> {
+    return delay({
+      count: 2000,
+      lastHeaderHash: "0000000000000000000000000000000000000000000000000000000000000000",
+    });
+  },
+
+  syncHeadersToTip(): Promise<HeaderSyncResult> {
+    return delay({
+      totalHeaders: 0,
+      rounds: 0,
+      elapsedMs: 0,
+      mostRecentBlock: null,
+    });
+  },
+
+  getBlock(_node: string, hash: string): Promise<BlockSummary> {
+    return delay({
+      hash,
+      txCount: 1,
+      serializedSize: 285,
+      coinbaseTxDetected: true,
+    });
+  },
+
+  downloadBlock(_node: string, hash: string): Promise<BlockDownloadResult> {
+    return delay({
+      hash,
+      outputPath: `blk-${hash.slice(0, 8)}-${hash.slice(-6)}.dat`,
+      rawBytes: 285,
+    });
+  },
+
+  getRecentEvents(): Promise<UiLogEvent[]> {
+    return delay(events);
+  },
+};

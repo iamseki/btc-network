@@ -1,5 +1,12 @@
 # Rust build output
 /target
+node_modules
+dist
+.turbo
+.vite
+apps/*/node_modules
+apps/*/dist
+apps/desktop/src-tauri/target
 
 # Claude Code — personal permission overrides and local settings.
 # settings.json (no .local.) is safe to commit for shared project config.

@@ -21,6 +21,22 @@ cli:
 build:
 	@cargo build --bins
 
+## Install frontend dependencies
+web-install:
+	@npm install --prefix apps/web
+
+## Run the web frontend in dev mode
+web-dev:
+	@npm run dev --prefix apps/web
+
+## Run frontend tests
+web-test:
+	@npm run test --prefix apps/web
+
+## Build the web frontend
+web-build:
+	@npm run build --prefix apps/web
+
 ## Run tests
 test:
 	@cargo test
@@ -40,5 +56,9 @@ help:
 	@echo "  make cli ARGS=\"--node host:port ping\""
 	@echo "  make build"
 	@echo "  make test"
+	@echo "  make web-install"
+	@echo "  make web-dev"
+	@echo "  make web-test"
+	@echo "  make web-build"
 	@echo "  make clean"
 	@echo ""
