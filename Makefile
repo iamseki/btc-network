@@ -1,6 +1,9 @@
 # Default target
 .DEFAULT_GOAL := help
 
+LOCAL_CARGO_HOME := $(CURDIR)/.cargo-home
+LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
+
 ## Run the crawler binary
 crawler:
 	@cargo run --bin crawler
@@ -21,6 +24,11 @@ cli:
 build:
 	@cargo build --bins
 
+## Install local Rust security tooling
+security-tools-install:
+	@mkdir -p "$(LOCAL_CARGO_HOME)"
+	@CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo install --locked cargo-audit cargo-deny
+
 ## Install frontend dependencies
 web-install:
 	@npm install --prefix apps/web
@@ -36,6 +44,41 @@ web-test:
 ## Build the web frontend
 web-build:
 	@npm run build --prefix apps/web
+
+## Audit Rust dependencies against RustSec
+security-rust-audit:
+	@mkdir -p "$(LOCAL_CARGO_HOME)"
+	@CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo audit
+
+## Enforce Rust dependency policy (advisories, bans, sources)
+security-rust-deny:
+	@mkdir -p "$(LOCAL_CARGO_HOME)"
+	@CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources
+
+## Run Rust dependency security checks
+security-rust:
+	@$(MAKE) security-rust-audit
+	@$(MAKE) security-rust-deny
+
+## Run npm vulnerability audit
+security-web-audit:
+	@mkdir -p "$(LOCAL_NPM_CACHE)"
+	@npm_config_cache="$(LOCAL_NPM_CACHE)" npm audit --prefix apps/web --audit-level=high
+
+## Verify npm package signatures
+security-web-signatures:
+	@mkdir -p "$(LOCAL_NPM_CACHE)"
+	@npm_config_cache="$(LOCAL_NPM_CACHE)" npm audit signatures --prefix apps/web
+
+## Run frontend dependency security checks
+security-web:
+	@$(MAKE) security-web-audit
+	@$(MAKE) security-web-signatures
+
+## Run all dependency security checks
+security:
+	@$(MAKE) security-rust
+	@$(MAKE) security-web
 
 ## Run tests
 test:
@@ -56,6 +99,10 @@ help:
 	@echo "  make cli ARGS=\"--node host:port ping\""
 	@echo "  make build"
 	@echo "  make test"
+	@echo "  make security-tools-install"
+	@echo "  make security-rust"
+	@echo "  make security-web"
+	@echo "  make security"
 	@echo "  make web-install"
 	@echo "  make web-dev"
 	@echo "  make web-test"

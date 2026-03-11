@@ -5,6 +5,8 @@ dist
 .turbo
 .vite
 *.tsbuildinfo
+.cargo-home
+.npm-cache
 apps/*/node_modules
 apps/*/dist
 apps/desktop/src-tauri/target

@@ -135,6 +135,35 @@ Notes:
 - The next integration step is to expose shared Rust application workflows to the Tauri adapter
 - Browser deployment remains a design goal, so UI code must stay portable
 
+## Security Checks
+
+The repository now includes dependency security checks for both Rust and npm.
+
+Local commands:
+
+- `make security-tools-install`
+- `make security-rust`
+- `make security-web`
+- `make security`
+
+What they run:
+
+- `cargo audit` against RustSec advisories
+- `cargo deny check advisories bans sources`
+- `npm audit --prefix apps/web --audit-level=high`
+- `npm audit signatures --prefix apps/web`
+
+Policy/config files:
+
+- `deny.toml`
+- `audit.toml`
+
+Scope note:
+
+- These checks cover dependency and supply-chain risk
+- They do not replace protocol correctness tests or implementation review
+- Keep `cargo test` and the existing wire/session tests as separate required checks
+
 ## Crawler Usage
 
 The crawler starts from Bitcoin DNS seed nodes and keeps exploring peers by:
@@ -271,3 +300,4 @@ To reduce wasted context and repeated reasoning during AI-assisted work:
 - For frontend work, start with `apps/web/src/App.tsx`, `apps/web/src/lib/api/`, and the relevant page/component files
 - Avoid re-reading crawler or wire internals unless the task actually changes protocol behavior
 - Update documentation when architecture decisions change so future turns do not need to rediscover them
+- For dependency security tasks, start with `Makefile`, `.github/workflows/ci.yml`, `deny.toml`, and `audit.toml`

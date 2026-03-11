@@ -226,9 +226,18 @@ make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-headers"
 make cli ARGS="--node seed.bitcoin.sipa.be:8333 last-block-header"
 make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-block --hash <block-hash>"
 make cli ARGS="--node seed.bitcoin.sipa.be:8333 download-block --hash <block-hash>"
+make security-tools-install
+make security-rust
+make security-web
+make security
 ```
 
 Equivalent cargo commands are also valid (`cargo test`, `cargo run --bin cli -- ...`, etc.).
+
+Security config files:
+
+- `deny.toml` — cargo-deny policy for advisories, bans, and sources
+- `audit.toml` — cargo-audit configuration
 
 ## Editing Guidelines
 
@@ -261,6 +270,12 @@ Tests must verify:
   - Script classification correctness (`ScriptType`, `ScriptSigType`)
   - Exposed pubkey detection behavior
 
+When changing dependency/security tooling:
+
+- Run the relevant local security target when the required tools are available
+- Prefer verifying both Rust and frontend dependency checks before updating CI
+- Keep security tooling focused on supply-chain/dependency risk, not as a substitute for protocol tests
+
 ## Notes for Agents
 
 - Favor minimal, precise changes
@@ -272,3 +287,4 @@ Tests must verify:
 - Keep context small: load only the files needed for the current task
 - For frontend tasks, prefer updating shared primitives and page contracts over duplicating page-local patterns
 - For documentation updates, reflect decisions succinctly so future turns do not spend tokens rediscovering established architecture
+- For security tooling tasks, avoid expanding scope into SAST/DAST unless explicitly requested; dependency auditing is the current baseline
