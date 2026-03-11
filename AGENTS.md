@@ -94,6 +94,55 @@ Binaries must not:
 - src/bin/listener.rs — long-running listener
 - docs/crawler-first-design.png — first crawler architecture draft
 
+## Frontend Architecture Decision
+
+The frontend strategy for this repository is web-first UI reuse with a thin Tauri desktop adapter.
+
+This means:
+
+- Build the frontend as a normal SPA using React + Vite + TypeScript
+- Use shadcn/ui on top of Tailwind for the component layer
+- Treat Tauri as a desktop shell and native bridge, not as the frontend architecture itself
+- Keep the Rust crate as the protocol/core implementation
+- Reuse the same UI concepts and components across desktop and future web deployment paths
+
+Preferred structure:
+
+- `src/` — core Rust protocol/session/domain code
+- `src/bin/` — CLI and other binary orchestration
+- `apps/web/` — primary React frontend
+- `apps/desktop/` — Tauri application reusing the frontend with native bindings
+- `crates/` — optional shared Rust crates for app-facing contracts or adapters if needed later
+
+### Frontend Boundary Rules
+
+- React components must not import Tauri APIs directly
+- Tauri-specific calls must be isolated behind a frontend adapter/client layer
+- The UI must depend on an application-facing interface, not on CLI code paths
+- Do not invoke the CLI binary from the frontend as an integration mechanism
+- Shared Rust application logic should be extracted into reusable library modules that both CLI and Tauri can call
+
+### Web Compatibility Requirement
+
+Future web deployment is a design goal.
+
+Because of that:
+
+- Favor a frontend API abstraction such as `client.ts`, `tauri-client.ts`, and `web-client.ts`
+- Keep desktop-only behavior localized behind the Tauri adapter
+- Avoid coupling page components to native filesystem, sockets, or Tauri runtime details
+- Assume browser deployment will require a separate backend/API for operations that cannot run in the browser
+
+### Frontend Scope Priority
+
+Initial frontend pages should mirror the current CLI capabilities before adding new product surface:
+
+- Connection / handshake
+- Peer tools (`ping`, `get-addr`)
+- Headers (`get-headers`, `last-block-header`)
+- Block explorer (`get-block`, `download-block`)
+- Crawler UI later, after the single-peer workflows are stable
+
 ## Protocol Rules To Preserve
 
 These rules reflect real Bitcoin behavior and must not be violated.
