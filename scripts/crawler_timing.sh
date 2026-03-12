@@ -48,7 +48,7 @@ echo "writing raw log to: ${RAW_LOG}"
 echo "writing timing events to: ${TIMING_NDJSON}"
 echo "writing summary to: ${SUMMARY_JSON}"
 
-cargo run --bin crawler -- --verbose "${CRAWLER_ARGS[@]}" 2>&1 | tee "${RAW_LOG}" >/dev/null
+cargo run -p btc-network-crawler -- --verbose "${CRAWLER_ARGS[@]}" 2>&1 | tee "${RAW_LOG}" >/dev/null
 
 jq -Rrc '
   fromjson?

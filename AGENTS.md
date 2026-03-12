@@ -5,7 +5,7 @@ Guidance for Codex and other coding agents working in this repository.
 ## Project Summary
 
 Language: Rust (edition 2024)
-Crate: btc-network
+Core crate: btc-network
 
 ## Goal
 
@@ -29,7 +29,7 @@ This is not a wallet, miner, or full node clone. It is a protocol engineering pr
 
 2. Wire Layer
 
-Located under `src/wire/`.
+Located under `crates/btc-network/src/wire/`.
 
 Responsibilities:
 
@@ -48,7 +48,7 @@ Wire code must not:
 
 3. Session Layer
 
-Located in src/session.rs.
+Located in `crates/btc-network/src/session.rs`.
 
 Responsibilities:
 
@@ -65,7 +65,7 @@ Session must not:
 
 4. Binary Orchestration
 
-Located under `src/bin/`.
+Located under `apps/`.
 
 Responsibilities:
 
@@ -82,16 +82,16 @@ Binaries must not:
 
 ## Repository Layout
 
-- src/lib.rs — crate entry
-- src/session.rs — stateful peer interaction
-- src/wire/codec.rs — framing (read/write envelope)
-- src/wire/decode.rs — byte-level decode helpers (varint, slices, cursor)
-- src/wire/message.rs — typed Message enum + dispatch
-- src/wire/payload.rs — outbound message builders
-- src/wire/constants.rs — protocol constants (magic, seeds, genesis, versions)
-- src/bin/cli.rs — interactive CLI
-- src/bin/crawler.rs — DNS seed crawler
-- src/bin/listener.rs — long-running listener
+- crates/btc-network/src/lib.rs — crate entry
+- crates/btc-network/src/session.rs — stateful peer interaction
+- crates/btc-network/src/wire/codec.rs — framing (read/write envelope)
+- crates/btc-network/src/wire/decode.rs — byte-level decode helpers (varint, slices, cursor)
+- crates/btc-network/src/wire/message.rs — typed Message enum + dispatch
+- crates/btc-network/src/wire/payload.rs — outbound message builders
+- crates/btc-network/src/wire/constants.rs — protocol constants (magic, seeds, genesis, versions)
+- apps/cli/src/main.rs — interactive CLI
+- apps/crawler/src/main.rs — DNS seed crawler
+- apps/listener/src/main.rs — long-running listener
 - docs/crawler-first-design.png — first crawler architecture draft
 
 ## Frontend Architecture Decision
@@ -108,17 +108,19 @@ This means:
 
 Preferred structure:
 
-- `src/` — core Rust protocol/session/domain code
-- `src/app/` — shared Rust application workflows reused by CLI and desktop
-- `src/bin/` — CLI and other binary orchestration
+- `crates/btc-network/` — core Rust protocol/session/domain code
+- `crates/btc-network/src/app/` — shared Rust application workflows reused by CLI and desktop
+- `apps/cli/` — interactive CLI
+- `apps/crawler/` — crawler binary
+- `apps/listener/` — listener binary
 - `apps/web/` — primary React frontend
 - `apps/desktop/` — Tauri application reusing the frontend with native bindings
-- `crates/` — optional shared Rust crates for app-facing contracts or adapters if needed later
+- `crates/` — shared Rust crates
 
 Workspace/editor note:
 
-- The root `Cargo.toml` must keep `apps/desktop/src-tauri` as a workspace member so `rust-analyzer` can index both Rust crates from the repo root
-- The workspace `default-members` must include both the root crate and `apps/desktop/src-tauri` so root-level `cargo test` covers the desktop Rust code too
+- The root `Cargo.toml` is a virtual workspace manifest and must keep `apps/desktop/src-tauri`, `crates/btc-network`, and the Rust app crates as workspace members
+- The workspace `default-members` must include the shared crate, Rust app crates, and `apps/desktop/src-tauri` so root-level `cargo test` covers the full Rust workspace
 - `make test` is the project-level verification command and must continue to run both Rust workspace tests and frontend tests
 - If editor discovery regresses, update `.vscode/settings.json` `rust-analyzer.linkedProjects` rather than adding ad-hoc editor instructions elsewhere
 - The workspace root `Cargo.lock` is authoritative for both Rust crates; do not keep a second desktop-specific lockfile in sync
@@ -143,7 +145,7 @@ When extending the UI:
 - The UI must depend on an application-facing interface, not on CLI code paths
 - Do not invoke the CLI binary from the frontend as an integration mechanism
 - Shared Rust application logic should be extracted into reusable library modules that both CLI and Tauri can call
-- The current shared Rust application layer starts in `src/app/peer.rs`
+- The current shared Rust application layer starts in `crates/btc-network/src/app/peer.rs`
 
 ### Web Compatibility Requirement
 
@@ -252,7 +254,7 @@ make desktop-dev
 make desktop-test
 ```
 
-Equivalent cargo commands are also valid (`cargo test`, `cargo run --bin cli -- ...`, etc.).
+Equivalent cargo commands are also valid (`cargo test`, `cargo run -p btc-network-cli -- ...`, etc.).
 
 Security config files:
 
@@ -303,7 +305,7 @@ When changing dependency/security tooling:
 
 When changing desktop-backed flows:
 
-- Add or update shared Rust tests in `src/app/`
+- Add or update shared Rust tests in `crates/btc-network/src/app/`
 - Add or update desktop command tests in `apps/desktop/src-tauri/src/commands.rs`
 - Keep the web runtime path working through `web-client`
 - Keep the desktop runtime path isolated in `tauri-client`

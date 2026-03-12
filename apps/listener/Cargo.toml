@@ -1,0 +1,8 @@
+[package]
+name = "btc-network-listener"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+btc-network = { path = "../../crates/btc-network" }
+tracing = "0.1"

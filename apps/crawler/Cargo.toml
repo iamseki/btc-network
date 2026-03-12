@@ -1,0 +1,10 @@
+[package]
+name = "btc-network-crawler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+btc-network = { path = "../../crates/btc-network" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"

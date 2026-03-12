@@ -25,8 +25,10 @@ Guidelines:
 ## High-Level Shape
 
 ```text
-src/                    Rust protocol/session core
-src/bin/                CLI, crawler, listener orchestration
+crates/btc-network/     Rust protocol/session core
+apps/cli/               CLI orchestration
+apps/crawler/           Crawler orchestration
+apps/listener/          Listener orchestration
 
 apps/web/               Primary React frontend
   src/app/              App shell and page registry
@@ -56,11 +58,11 @@ Current real desktop-backed commands:
 - `handshake`
 - `ping`
 
-These commands are implemented in the desktop shell and mapped from the shared Rust application layer in `src/app/peer.rs`.
+These commands are implemented in the desktop shell and mapped from the shared Rust application layer in `crates/btc-network/src/app/peer.rs`.
 
 ## Initial Pages
 
-These pages map directly to the current CLI commands in `src/bin/cli.rs`.
+These pages map directly to the current CLI commands in `apps/cli/src/main.rs`.
 
 ### Connection
 
@@ -92,7 +94,7 @@ These pages map directly to the current CLI commands in `src/bin/cli.rs`.
 ## Implementation Sequence
 
 1. Build page skeletons and frontend contracts in `apps/web`
-2. Extract shared Rust application workflows from `src/bin/cli.rs`
+2. Extract shared Rust application workflows from `apps/cli/src/main.rs`
 3. Expose those workflows through Tauri commands in `apps/desktop`
 4. Keep a separate web adapter for future browser deployment
 

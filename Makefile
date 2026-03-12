@@ -1,16 +1,17 @@
 # Default target
 .DEFAULT_GOAL := help
+MAKEFLAGS += --no-print-directory
 
 LOCAL_CARGO_HOME := $(CURDIR)/.cargo-home
 LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 
 ## Run the crawler binary
 crawler:
-	@cargo run --bin crawler
+	@cargo run -p btc-network-crawler
 
 ## Run the listener binary
 listener:
-	@cargo run --bin listener
+	@cargo run -p btc-network-listener
 
 ## Run crawler timing debug workflow (captures raw logs + timing summary)
 crawler-debug:
@@ -18,7 +19,7 @@ crawler-debug:
 
 ## Run btc-cli (pass args via ARGS="")
 cli:
-	@cargo run --bin cli -- $(ARGS)
+	@cargo run -p btc-network-cli -- $(ARGS)
 
 ## Build all binaries
 build:
@@ -99,7 +100,9 @@ security:
 
 ## Run tests
 test:
+	@printf "\n== Rust tests ==\n"
 	@$(MAKE) rust-test
+	@printf "\n== Web tests ==\n"
 	@$(MAKE) web-test
 
 ## Clean build artifacts

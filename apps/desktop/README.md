@@ -23,7 +23,7 @@ The first real desktop-backed flow is implemented:
 - `handshake`
 - `ping`
 
-These commands are exposed from `src-tauri/src/commands.rs` and call the shared Rust application layer in `src/app/peer.rs`.
+These commands are exposed from `src-tauri/src/commands.rs` and call the shared Rust application layer in `crates/btc-network/src/app/peer.rs`.
 
 The desktop icon set is generated from:
 

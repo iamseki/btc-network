@@ -2,6 +2,16 @@
 
 A minimal Bitcoin P2P client in Rust. Reference to the protocol: https://developer.bitcoin.org/devguide/p2p_network.html#connecting-to-peers
 
+## Workspace Layout
+
+This repository is organized as a small monorepo:
+
+- `crates/btc-network` contains the shared Rust protocol/session/application library
+- `apps/cli`, `apps/crawler`, and `apps/listener` contain the Rust executable crates
+- `apps/desktop` contains the Tauri desktop shell
+- `apps/web` contains the web frontend
+- the root `Cargo.toml` is a virtual workspace manifest
+
 ## Current Status 
 
 | Feature               | Status |
@@ -178,10 +188,10 @@ Desktop architecture notes:
 
 - The desktop shell lives in `apps/desktop/src-tauri`
 - `handshake` and `ping` are exposed as Tauri commands
-- Those commands call the shared Rust application layer in `src/app/peer.rs`
+- Those commands call the shared Rust application layer in `crates/btc-network/src/app/peer.rs`
 - The frontend still selects between `web-client` and `tauri-client` at runtime
-- The root Cargo manifest includes `apps/desktop/src-tauri` as a workspace member so `rust-analyzer` can index the desktop crate
-- The workspace default members include both Rust crates, so root `cargo test` covers the core crate and the Tauri desktop crate
+- The root Cargo manifest is a virtual workspace that includes `crates/btc-network`, `apps/cli`, `apps/crawler`, `apps/listener`, and `apps/desktop/src-tauri`
+- The workspace default members include the shared crate, the Rust app crates, and the Tauri desktop crate, so root `cargo test` covers the full Rust workspace
 - `make test` is the broader project entrypoint: it runs the Rust workspace tests and the frontend test suite
 - The root `Cargo.lock` is the workspace lockfile for both Rust crates; keep the desktop crate on the shared lockfile instead of maintaining a second one
 
@@ -227,12 +237,12 @@ It deduplicates by `SocketAddr` (`ip:port`) using a set, so repeated addresses f
 Run with defaults:
 
 - `make crawler`
-- `cargo run --bin crawler`
+- `cargo run -p btc-network-crawler`
 
 Run with custom limits/policies:
 
-- `cargo run --bin crawler -- --max-concurrency 1000 --max-runtime-minutes 60 --idle-timeout-minutes 5`
-- `cargo run --bin crawler -- --max-concurrency 500 --max-runtime-minutes 20 --idle-timeout-minutes 3 --verbose`
+- `cargo run -p btc-network-crawler -- --max-concurrency 1000 --max-runtime-minutes 60 --idle-timeout-minutes 5`
+- `cargo run -p btc-network-crawler -- --max-concurrency 500 --max-runtime-minutes 20 --idle-timeout-minutes 3 --verbose`
 
 Available flags:
 

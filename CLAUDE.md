@@ -3,9 +3,9 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Rust Bitcoin P2P client with explicit separation of concerns:
-- `src/wire/*` for protocol framing/decoding, script/tx modeling, and payload builders
-- `src/session.rs` for connection/session abstraction and handshake
-- `src/bin/*` for orchestration entry points (`cli`, `crawler`, `listener`)
+- `crates/btc-network/src/wire/*` for protocol framing/decoding, script/tx modeling, and payload builders
+- `crates/btc-network/src/session.rs` for connection/session abstraction and handshake
+- `apps/*` for orchestration entry points (`cli`, `crawler`, `listener`, `desktop`, `web`)
 
 Detailed context lives in `.claude/rules/` (auto-loaded):
 - `commands.md` — build, test, lint
