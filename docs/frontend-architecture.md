@@ -58,7 +58,7 @@ Current real desktop-backed commands:
 - `handshake`
 - `ping`
 
-These commands are implemented in the desktop shell and mapped from the shared Rust application layer in `crates/btc-network/src/app/peer.rs`.
+These commands are implemented in the desktop shell and mapped from the shared Rust client workflow layer in `crates/btc-network/src/client/peer.rs`.
 
 ## Initial Pages
 

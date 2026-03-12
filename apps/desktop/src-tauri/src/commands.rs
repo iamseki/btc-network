@@ -1,4 +1,4 @@
-use btc_network::app::peer;
+use btc_network::client::peer;
 use serde::{Deserialize, Serialize};
 
 /// Minimal desktop request for single-peer actions.

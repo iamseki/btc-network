@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use crate::session::Session;
 use crate::wire::message::VersionMessage;
-use crate::wire::{Command, Message};
 
 /// App-facing summary of the peer metadata collected during the Bitcoin handshake.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +51,12 @@ pub fn handshake_session(
 /// Reuses an existing session to perform a ping roundtrip.
 pub fn ping_session(node: &str, session: &mut Session) -> Result<PingSummary, Box<dyn Error>> {
     let nonce: u64 = rand::thread_rng().r#gen();
-    ping_session_with_nonce(node, session, nonce)
+    let echoed_nonce = session.ping(nonce)?;
+    Ok(PingSummary {
+        node: node.to_owned(),
+        nonce,
+        echoed_nonce,
+    })
 }
 
 fn connect(node: &str, timeout: Duration) -> Result<Session, Box<dyn Error>> {
@@ -76,53 +80,10 @@ fn map_handshake(node: &str, version: VersionMessage) -> HandshakeSummary {
     }
 }
 
-fn ping_session_with_nonce(
-    node: &str,
-    session: &mut Session,
-    nonce: u64,
-) -> Result<PingSummary, Box<dyn Error>> {
-    session.send(Command::Ping, &nonce.to_le_bytes())?;
-
-    // Keep consuming messages until the matching pong arrives. Any inbound ping must
-    // still be answered to preserve session liveness while we wait.
-    recv_until(session, |msg| match msg {
-        Message::Pong(payload) => {
-            let returned = u64::from_le_bytes(payload[..8].try_into()?);
-            Ok(Some(PingSummary {
-                node: node.to_owned(),
-                nonce,
-                echoed_nonce: returned,
-            }))
-        }
-        _ => Ok(None),
-    })
-}
-
-fn recv_until<F>(
-    session: &mut Session,
-    mut handler: F,
-) -> Result<PingSummary, Box<dyn std::error::Error>>
-where
-    F: FnMut(Message) -> Result<Option<PingSummary>, Box<dyn std::error::Error>>,
-{
-    loop {
-        let msg = session.recv()?;
-
-        if let Message::Ping(payload) = &msg {
-            session.send(Command::Pong, payload)?;
-            continue;
-        }
-
-        if let Some(result) = handler(msg)? {
-            return Ok(result);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wire::{build_version_payload, read_message, send_message};
+    use crate::wire::{build_version_payload, read_message, send_message, Command};
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::thread;
@@ -132,7 +93,7 @@ mod tests {
         match TcpListener::bind("127.0.0.1:0") {
             Ok(listener) => Some(listener),
             Err(err) if err.kind() == ErrorKind::PermissionDenied => {
-                error!("skipping peer app socket test: {err}");
+                error!("skipping peer client socket test: {err}");
                 None
             }
             Err(err) => panic!("bind listener failed: {err}"),
@@ -210,9 +171,12 @@ mod tests {
 
         let mut session = Session::new(TcpStream::connect(addr).expect("connect"));
         let _ = handshake_session(&addr.to_string(), &mut session).expect("handshake");
-        let summary =
-            ping_session_with_nonce(&addr.to_string(), &mut session, 0xAABBCCDDEEFF0011)
-                .expect("ping");
+        let echoed_nonce = session.ping(0xAABBCCDDEEFF0011).expect("session ping");
+        let summary = PingSummary {
+            node: addr.to_string(),
+            nonce: 0xAABBCCDDEEFF0011,
+            echoed_nonce,
+        };
 
         assert_eq!(summary.node, addr.to_string());
         assert_eq!(summary.nonce, 0xAABBCCDDEEFF0011);

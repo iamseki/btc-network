@@ -188,7 +188,7 @@ Desktop architecture notes:
 
 - The desktop shell lives in `apps/desktop/src-tauri`
 - `handshake` and `ping` are exposed as Tauri commands
-- Those commands call the shared Rust application layer in `crates/btc-network/src/app/peer.rs`
+- Those commands call the shared Rust client workflow layer in `crates/btc-network/src/client/peer.rs`
 - The frontend still selects between `web-client` and `tauri-client` at runtime
 - The root Cargo manifest is a virtual workspace that includes `crates/btc-network`, `apps/cli`, `apps/crawler`, `apps/listener`, and `apps/desktop/src-tauri`
 - The workspace default members include the shared crate, the Rust app crates, and the Tauri desktop crate, so root `cargo test` covers the full Rust workspace

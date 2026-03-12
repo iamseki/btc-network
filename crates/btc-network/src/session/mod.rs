@@ -1,3 +1,19 @@
+//! Stateful peer interaction over an established transport connection.
+//!
+//! The session layer owns Bitcoin P2P sequencing once a `TcpStream` already exists.
+//! It sits above the wire layer and below application-facing clients.
+//!
+//! Responsibilities:
+//! - Enforce handshake ordering
+//! - Preserve ping/pong liveness while other operations are in flight
+//! - Expose typed send/receive helpers over a connected peer session
+//! - Coordinate request/response message flow without embedding CLI or UI concerns
+//!
+//! Non-responsibilities:
+//! - DNS resolution or TCP connection establishment
+//! - Byte-level parsing or envelope framing
+//! - Mapping protocol data into app-specific DTOs
+
 use std::error::Error;
 use std::io;
 use std::net::TcpStream;
@@ -64,6 +80,23 @@ impl Session {
         })
     }
 
+    /// Sends a ping and waits for the matching pong while keeping the session alive.
+    pub fn ping(&mut self, nonce: u64) -> Result<u64, Box<dyn Error>> {
+        self.send(Command::Ping, &nonce.to_le_bytes())?;
+
+        self.recv_until(|msg, session| match msg {
+            Message::Pong(payload) => {
+                let returned = u64::from_le_bytes(payload[..8].try_into()?);
+                Ok(Some(returned))
+            }
+            Message::Ping(payload) => {
+                session.send(Command::Pong, &payload)?;
+                Ok(None)
+            }
+            _ => Ok(None),
+        })
+    }
+
     pub fn send(&mut self, command: Command, payload: &[u8]) -> Result<(), Box<dyn Error>> {
         send_message(&mut self.stream, command, payload)?;
         Ok(())
@@ -76,6 +109,18 @@ impl Session {
 
     pub fn recv_raw(&mut self) -> Result<RawMessage, Box<dyn Error>> {
         Ok(read_message(&mut self.stream)?)
+    }
+
+    pub fn recv_until<T, F>(&mut self, mut handler: F) -> Result<T, Box<dyn Error>>
+    where
+        F: FnMut(Message, &mut Session) -> Result<Option<T>, Box<dyn Error>>,
+    {
+        loop {
+            let msg = self.recv()?;
+            if let Some(result) = handler(msg, self)? {
+                return Ok(result);
+            }
+        }
     }
 }
 
@@ -206,6 +251,40 @@ mod tests {
             other => panic!("expected pong, got {:?}", other),
         }
 
+        server.join().expect("join server");
+    }
+
+    #[test]
+    fn ping_returns_matching_nonce_and_replies_to_inbound_ping() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+            peer.set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set peer read timeout");
+
+            let ping = read_message(&mut peer).expect("read ping");
+            assert_eq!(ping.command, Command::Ping);
+            assert_eq!(ping.payload, 0xAABBCCDDEEFF0011u64.to_le_bytes());
+
+            let inbound_ping_nonce = 0x1122334455667788u64.to_le_bytes();
+            send_message(&mut peer, Command::Ping, &inbound_ping_nonce).expect("send ping");
+
+            let pong = read_message(&mut peer).expect("read pong");
+            assert_eq!(pong.command, Command::Pong);
+            assert_eq!(pong.payload, inbound_ping_nonce);
+
+            send_message(&mut peer, Command::Pong, &ping.payload).expect("send pong");
+        });
+
+        let stream = TcpStream::connect(addr).expect("connect");
+        let mut session = Session::new(stream);
+        let echoed = session.ping(0xAABBCCDDEEFF0011).expect("ping success");
+
+        assert_eq!(echoed, 0xAABBCCDDEEFF0011);
         server.join().expect("join server");
     }
 

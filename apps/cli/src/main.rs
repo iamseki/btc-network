@@ -5,7 +5,7 @@ use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-use btc_network::app::peer as peer_app;
+use btc_network::client::peer as peer_client;
 use btc_network::observability;
 use btc_network::session::Session;
 use btc_network::wire::message::{Block, Decode};
@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
     if matches!(&cli.command, Commands::Ping) {
-        let result = peer_app::ping_node(&cli.node)?;
+        let result = peer_client::ping_node(&cli.node)?;
         info!(
             "Received matching pong. ping nonce: {}, pong nonce: {}",
             result.nonce, result.echoed_nonce

@@ -48,7 +48,7 @@ Wire code must not:
 
 3. Session Layer
 
-Located in `crates/btc-network/src/session.rs`.
+Located in `crates/btc-network/src/session/`.
 
 Responsibilities:
 
@@ -83,7 +83,9 @@ Binaries must not:
 ## Repository Layout
 
 - crates/btc-network/src/lib.rs — crate entry
-- crates/btc-network/src/session.rs — stateful peer interaction
+- crates/btc-network/src/session/mod.rs — stateful peer interaction
+- crates/btc-network/src/client/mod.rs — client-facing workflow entrypoints
+- crates/btc-network/src/client/peer.rs — shared single-peer workflows reused by CLI and desktop
 - crates/btc-network/src/wire/codec.rs — framing (read/write envelope)
 - crates/btc-network/src/wire/decode.rs — byte-level decode helpers (varint, slices, cursor)
 - crates/btc-network/src/wire/message.rs — typed Message enum + dispatch
@@ -109,7 +111,7 @@ This means:
 Preferred structure:
 
 - `crates/btc-network/` — core Rust protocol/session/domain code
-- `crates/btc-network/src/app/` — shared Rust application workflows reused by CLI and desktop
+- `crates/btc-network/src/client/` — client-facing Rust workflows reused by CLI and desktop
 - `apps/cli/` — interactive CLI
 - `apps/crawler/` — crawler binary
 - `apps/listener/` — listener binary
@@ -145,7 +147,7 @@ When extending the UI:
 - The UI must depend on an application-facing interface, not on CLI code paths
 - Do not invoke the CLI binary from the frontend as an integration mechanism
 - Shared Rust application logic should be extracted into reusable library modules that both CLI and Tauri can call
-- The current shared Rust application layer starts in `crates/btc-network/src/app/peer.rs`
+- The current client-facing Rust workflow layer starts in `crates/btc-network/src/client/peer.rs`
 
 ### Web Compatibility Requirement
 
@@ -305,10 +307,17 @@ When changing dependency/security tooling:
 
 When changing desktop-backed flows:
 
-- Add or update shared Rust tests in `crates/btc-network/src/app/`
+- Add or update shared Rust tests in `crates/btc-network/src/client/`
 - Add or update desktop command tests in `apps/desktop/src-tauri/src/commands.rs`
 - Keep the web runtime path working through `web-client`
 - Keep the desktop runtime path isolated in `tauri-client`
+
+When changing shared peer operations:
+
+- Put connection setup and app-facing summaries in `crates/btc-network/src/client/`
+- Put stateful peer protocol sequencing in `crates/btc-network/src/session/`
+- Do not move TCP resolution/connection logic into `session/`
+- Do not map protocol objects into UI/CLI DTOs inside `session/`
 
 ## Notes for Agents
 
