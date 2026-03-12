@@ -80,7 +80,7 @@ export function ConnectionPage({
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
               Session Log
             </p>
-            <div className="rounded-[24px] border border-border/80 bg-background/80 p-4">
+            <div className="panel-scrollbar max-h-[30rem] overflow-y-auto rounded-[24px] border border-border/80 bg-background/80 p-4">
               <ul className="grid gap-3">
                 {events.map((event) => (
                   <li

@@ -10,6 +10,7 @@ import { HeadersPage } from "./pages/headers-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { getAppClient } from "./lib/api";
 import type { HandshakeResult, PingResult, UiLogEvent } from "./lib/api/types";
+import { prependLogEvent } from "./app/log-events";
 
 const defaultNode = "seed.bitcoin.sipa.be:8333";
 const sampleBlockHash =
@@ -78,14 +79,13 @@ export function App() {
   const page = appPages.find((entry) => entry.id === selectedPage)!;
 
   function pushEvent(level: "info" | "warn" | "error", message: string) {
-    setEvents((current) => [
-      {
+    setEvents((current) =>
+      prependLogEvent(current, {
         at: new Date().toISOString(),
         level,
         message,
-      },
-      ...current,
-    ]);
+      }),
+    );
   }
 
   async function handleHandshake() {
@@ -176,8 +176,8 @@ export function App() {
                     type="button"
                     className={
                       entry.id === selectedPage
-                        ? "group rounded-[6px] border border-primary/35 bg-primary/10 px-4 py-4 text-left transition-colors"
-                        : "group rounded-[6px] border border-transparent bg-transparent px-4 py-4 text-left transition-colors hover:border-border hover:bg-muted/40"
+                        ? "group cursor-pointer rounded-[6px] border border-primary/35 bg-primary/10 px-4 py-4 text-left transition-colors"
+                        : "group cursor-pointer rounded-[6px] border border-transparent bg-transparent px-4 py-4 text-left transition-colors hover:border-border hover:bg-muted/40"
                     }
                     onClick={() => setSelectedPage(entry.id)}
                   >

@@ -134,6 +134,10 @@ Run frontend tests:
 
 - `make web-test`
 
+Run the full project test suite:
+
+- `make test`
+
 Build the frontend for production:
 
 - `make web-build`
@@ -177,6 +181,8 @@ Desktop architecture notes:
 - Those commands call the shared Rust application layer in `src/app/peer.rs`
 - The frontend still selects between `web-client` and `tauri-client` at runtime
 - The root Cargo manifest includes `apps/desktop/src-tauri` as a workspace member so `rust-analyzer` can index the desktop crate
+- The workspace default members include both Rust crates, so root `cargo test` covers the core crate and the Tauri desktop crate
+- `make test` is the broader project entrypoint: it runs the Rust workspace tests and the frontend test suite
 - The root `Cargo.lock` is the workspace lockfile for both Rust crates; keep the desktop crate on the shared lockfile instead of maintaining a second one
 
 ## Security Checks

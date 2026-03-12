@@ -59,4 +59,12 @@ The repository root `Cargo.toml` includes `apps/desktop/src-tauri` as a workspac
 
 The workspace also includes a VS Code fallback in `.vscode/settings.json` via `rust-analyzer.linkedProjects` for cases where the editor does not automatically pick up the nested manifest.
 
+The workspace default members include the desktop crate, so running `cargo test` at the repository root also exercises the Tauri Rust code.
+
+Project-wide verification lives at the repo root: `make test` runs those Rust workspace tests plus the frontend test suite.
+
 The workspace root `Cargo.lock` is the single lockfile that should be kept in version control for Rust dependencies. The desktop crate should not maintain an independent lockfile once it is part of the root workspace.
+
+## Dev Permissions
+
+During `tauri dev`, the frontend is loaded from the Vite dev server (`http://localhost:5173`). The default capability therefore allows the local dev origins explicitly, so desktop commands like `handshake` and `ping` work in development as well as in the bundled local app context.

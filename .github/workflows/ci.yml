@@ -18,20 +18,35 @@ jobs:
         with:
           toolchain: 1.93.1
 
-      - name: Detect source changes
-        id: changes
-        uses: dorny/paths-filter@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          filters: |
-            src:
-              - 'src/**'
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install web dependencies
+        run: npm ci --prefix apps/web
 
       - name: Build
-        run: cargo build --bins --locked
+        run: cargo build --workspace --bins --locked
 
       - name: Test
-        if: steps.changes.outputs.src == 'true'
-        run: cargo test --locked
+        run: make test
 
   dependency-security:
     runs-on: ubuntu-latest

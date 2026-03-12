@@ -5,6 +5,7 @@ edition = "2024"
 
 [workspace]
 members = ["apps/desktop/src-tauri"]
+default-members = [".", "apps/desktop/src-tauri"]
 resolver = "3"
 
 [dependencies]

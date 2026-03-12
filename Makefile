@@ -22,7 +22,7 @@ cli:
 
 ## Build all binaries
 build:
-	@cargo build --bins
+	@cargo build --workspace --bins
 
 ## Install local Rust security tooling
 security-tools-install:
@@ -54,9 +54,13 @@ web-test:
 web-build:
 	@npm run build --prefix apps/web
 
+## Run Rust workspace tests
+rust-test:
+	@cargo test --workspace --locked
+
 ## Run desktop Rust tests
 desktop-test:
-	@cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+	@cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
 ## Audit Rust dependencies against RustSec
 security-rust-audit:
@@ -95,7 +99,8 @@ security:
 
 ## Run tests
 test:
-	@cargo test
+	@$(MAKE) rust-test
+	@$(MAKE) web-test
 
 ## Clean build artifacts
 clean:
@@ -120,6 +125,7 @@ help:
 	@echo "  make web-dev"
 	@echo "  make web-test"
 	@echo "  make web-build"
+	@echo "  make rust-test"
 	@echo "  make desktop-install"
 	@echo "  make desktop-dev"
 	@echo "  make desktop-test"

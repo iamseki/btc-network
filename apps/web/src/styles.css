@@ -66,4 +66,32 @@
   ::selection {
     @apply bg-primary text-primary-foreground;
   }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(245, 179, 1, 0.35);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 179, 1, 0.55);
+    background-clip: padding-box;
+  }
+}
+
+@layer utilities {
+  .panel-scrollbar {
+    scrollbar-color: rgba(245, 179, 1, 0.45) rgba(255, 255, 255, 0.04);
+    scrollbar-width: thin;
+  }
 }
