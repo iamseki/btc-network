@@ -5,7 +5,30 @@ all-features = true
 [advisories]
 version = 2
 yanked = "warn"
-ignore = []
+ignore = [
+  # Current desktop shell transitively depends on the Linux GTK3/WebKit stack through
+  # Tauri/WRY on Linux. These crates are flagged as unmaintained upstream with no safe
+  # replacement available within the current Tauri 2 dependency graph.
+  "RUSTSEC-2024-0411",
+  "RUSTSEC-2024-0412",
+  "RUSTSEC-2024-0413",
+  "RUSTSEC-2024-0414",
+  "RUSTSEC-2024-0415",
+  "RUSTSEC-2024-0416",
+  "RUSTSEC-2024-0417",
+  "RUSTSEC-2024-0418",
+  "RUSTSEC-2024-0419",
+  "RUSTSEC-2024-0420",
+  "RUSTSEC-2024-0370",
+  # Current Tauri transitive dependencies also pull in archived utility crates through
+  # tauri-utils. Keep these explicit until upstream replaces them.
+  "RUSTSEC-2025-0057",
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+]
 
 [bans]
 multiple-versions = "warn"

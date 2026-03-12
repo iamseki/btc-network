@@ -30,10 +30,11 @@ pub struct PingResponse {
 
 #[tauri::command]
 pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String> {
-    let summary =
-        tauri::async_runtime::spawn_blocking(move || peer::handshake_node(&request.node).map_err(|err| err.to_string()))
-        .await
-        .map_err(|err| err.to_string())??;
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        peer::handshake_node(&request.node).map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())??;
 
     Ok(HandshakeResponse {
         node: summary.node,
@@ -48,10 +49,11 @@ pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, 
 /// Runs the shared Rust ping workflow through the desktop command boundary.
 #[tauri::command]
 pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
-    let summary =
-        tauri::async_runtime::spawn_blocking(move || peer::ping_node(&request.node).map_err(|err| err.to_string()))
-        .await
-        .map_err(|err| err.to_string())??;
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        peer::ping_node(&request.node).map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())??;
 
     Ok(PingResponse {
         node: summary.node,
@@ -63,7 +65,7 @@ pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use btc_network::wire::{build_version_payload, read_message, send_message, Command};
+    use btc_network::wire::{Command, build_version_payload, read_message, send_message};
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::thread;
@@ -131,9 +133,8 @@ mod tests {
             let first = read_message(&mut peer).expect("read version");
             assert_eq!(first.command, Command::Version);
 
-            let version =
-                build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
-                    .expect("version");
+            let version = build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("version");
             send_message(&mut peer, Command::Version, &version).expect("send version");
 
             let second = read_message(&mut peer).expect("read sendaddrv2");

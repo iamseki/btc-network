@@ -223,6 +223,7 @@ Scope note:
 - These checks cover dependency and supply-chain risk
 - They do not replace protocol correctness tests or implementation review
 - Keep `cargo test` and the existing wire/session tests as separate required checks
+- The Rust security config currently ignores a documented set of desktop-only Tauri transitives with no safe upstream upgrade path yet; see `audit.toml` and `deny.toml`
 
 ## Crawler Usage
 

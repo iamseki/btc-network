@@ -83,7 +83,7 @@ fn map_handshake(node: &str, version: VersionMessage) -> HandshakeSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wire::{build_version_payload, read_message, send_message, Command};
+    use crate::wire::{Command, build_version_payload, read_message, send_message};
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::thread;
@@ -132,7 +132,10 @@ mod tests {
             handshake_session(&addr.to_string(), &mut session).expect("handshake session");
 
         assert_eq!(summary.node, addr.to_string());
-        assert_eq!(summary.protocol_version, crate::wire::constants::PROTOCOL_VERSION);
+        assert_eq!(
+            summary.protocol_version,
+            crate::wire::constants::PROTOCOL_VERSION
+        );
         assert_eq!(summary.services, "0x0000000000000008");
 
         server.join().expect("join");
@@ -151,9 +154,8 @@ mod tests {
             let first = read_message(&mut peer).expect("read version");
             assert_eq!(first.command, Command::Version);
 
-            let peer_version =
-                build_version_payload(crate::wire::constants::PROTOCOL_VERSION, 0)
-                    .expect("build version");
+            let peer_version = build_version_payload(crate::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("build version");
             send_message(&mut peer, Command::Version, &peer_version).expect("send version");
 
             let second = read_message(&mut peer).expect("read sendaddrv2");

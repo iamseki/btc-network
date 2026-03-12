@@ -3,6 +3,7 @@
 MAKEFLAGS += --no-print-directory
 
 LOCAL_CARGO_HOME := $(CURDIR)/.cargo-home
+LOCAL_ADVISORY_DB := $(LOCAL_CARGO_HOME)/advisory-db
 LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 
 ## Run the crawler binary
@@ -66,12 +67,20 @@ desktop-test:
 ## Audit Rust dependencies against RustSec
 security-rust-audit:
 	@mkdir -p "$(LOCAL_CARGO_HOME)"
-	@CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo audit
+	@if test -d "$(LOCAL_ADVISORY_DB)/.git"; then \
+		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo audit --db "$(LOCAL_ADVISORY_DB)" --no-fetch --stale; \
+	else \
+		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo audit; \
+	fi
 
 ## Enforce Rust dependency policy (advisories, bans, sources)
 security-rust-deny:
 	@mkdir -p "$(LOCAL_CARGO_HOME)"
-	@CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources
+	@if test -d "$(LOCAL_ADVISORY_DB)/.git"; then \
+		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources --disable-fetch; \
+	else \
+		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources; \
+	fi
 
 ## Run Rust dependency security checks
 security-rust:
@@ -90,8 +99,12 @@ security-web-signatures:
 
 ## Run frontend dependency security checks
 security-web:
-	@$(MAKE) security-web-audit
-	@$(MAKE) security-web-signatures
+	@if getent ahosts registry.npmjs.org >/dev/null 2>&1; then \
+		$(MAKE) security-web-audit; \
+		$(MAKE) security-web-signatures; \
+	else \
+		echo "Skipping web security checks: npm registry is unreachable"; \
+	fi
 
 ## Run all dependency security checks
 security:
