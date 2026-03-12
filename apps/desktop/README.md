@@ -68,3 +68,9 @@ The workspace root `Cargo.lock` is the single lockfile that should be kept in ve
 ## Dev Permissions
 
 During `tauri dev`, the frontend is loaded from the Vite dev server (`http://localhost:5173`). The default capability therefore allows the local dev origins explicitly, so desktop commands like `handshake` and `ping` work in development as well as in the bundled local app context.
+
+Application command permissions follow the Tauri v2 explicit pattern:
+
+- `build.rs` registers the app commands in the Tauri app manifest
+- Tauri autogenerates `allow-handshake` and `allow-ping`
+- the desktop capability grants those exact permission identifiers

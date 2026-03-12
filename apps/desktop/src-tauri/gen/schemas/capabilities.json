@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default desktop capability set for btc-network","remote":{"urls":["http://localhost:5173","http://127.0.0.1:5173"]},"local":true,"windows":["main"],"permissions":["core:default","default"]}}
+{"default":{"identifier":"default","description":"Default desktop capability set for btc-network","remote":{"urls":["http://localhost:*","http://127.0.0.1:*"]},"local":true,"windows":["*"],"permissions":["core:default","allow-handshake","allow-ping"]}}

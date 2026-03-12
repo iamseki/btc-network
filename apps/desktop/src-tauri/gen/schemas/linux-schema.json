@@ -177,10 +177,28 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default permissions for btc-network desktop commands",
+          "description": "Enables the handshake command without any pre-configured scope.",
           "type": "string",
-          "const": "default",
-          "markdownDescription": "Default permissions for btc-network desktop commands"
+          "const": "allow-handshake",
+          "markdownDescription": "Enables the handshake command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ping command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ping",
+          "markdownDescription": "Enables the ping command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the handshake command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-handshake",
+          "markdownDescription": "Denies the handshake command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ping command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ping",
+          "markdownDescription": "Denies the ping command without any pre-configured scope."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
