@@ -109,6 +109,7 @@ This means:
 Preferred structure:
 
 - `src/` — core Rust protocol/session/domain code
+- `src/app/` — shared Rust application workflows reused by CLI and desktop
 - `src/bin/` — CLI and other binary orchestration
 - `apps/web/` — primary React frontend
 - `apps/desktop/` — Tauri application reusing the frontend with native bindings
@@ -134,6 +135,7 @@ When extending the UI:
 - The UI must depend on an application-facing interface, not on CLI code paths
 - Do not invoke the CLI binary from the frontend as an integration mechanism
 - Shared Rust application logic should be extracted into reusable library modules that both CLI and Tauri can call
+- The current shared Rust application layer starts in `src/app/peer.rs`
 
 ### Web Compatibility Requirement
 
@@ -155,6 +157,11 @@ Initial frontend pages should mirror the current CLI capabilities before adding 
 - Headers (`get-headers`, `last-block-header`)
 - Block explorer (`get-block`, `download-block`)
 - Crawler UI later, after the single-peer workflows are stable
+
+Current real desktop-backed flows:
+
+- Handshake
+- Ping
 
 ### Frontend Working Set
 
@@ -232,6 +239,9 @@ make security-tools-install
 make security-rust
 make security-web
 make security
+make desktop-install
+make desktop-dev
+make desktop-test
 ```
 
 Equivalent cargo commands are also valid (`cargo test`, `cargo run --bin cli -- ...`, etc.).
@@ -240,6 +250,11 @@ Security config files:
 
 - `deny.toml` — cargo-deny policy for advisories, bans, and sources
 - `audit.toml` — cargo-audit configuration
+
+Desktop/native prerequisites:
+
+- The Tauri desktop shell depends on Linux system packages when built on Ubuntu/Debian
+- The current package set is documented in `README.md` and `apps/desktop/README.md`
 
 ## Editing Guidelines
 
@@ -277,6 +292,13 @@ When changing dependency/security tooling:
 - Run the relevant local security target when the required tools are available
 - Prefer verifying both Rust and frontend dependency checks before updating CI
 - Keep security tooling focused on supply-chain/dependency risk, not as a substitute for protocol tests
+
+When changing desktop-backed flows:
+
+- Add or update shared Rust tests in `src/app/`
+- Add or update desktop command tests in `apps/desktop/src-tauri/src/commands.rs`
+- Keep the web runtime path working through `web-client`
+- Keep the desktop runtime path isolated in `tauri-client`
 
 ## Notes for Agents
 

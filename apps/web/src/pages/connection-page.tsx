@@ -1,3 +1,5 @@
+import type { FormEvent } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,16 +10,27 @@ import { TextInput } from "@/components/ui/text-input";
 import type { HandshakeResult, UiLogEvent } from "../lib/api/types";
 
 export type ConnectionPageProps = {
-  defaultNode: string;
+  node: string;
   lastHandshake: HandshakeResult | null;
   events: UiLogEvent[];
+  isRunning: boolean;
+  onNodeChange: (value: string) => void;
+  onHandshake: () => void | Promise<void>;
 };
 
 export function ConnectionPage({
-  defaultNode,
+  node,
   lastHandshake,
   events,
+  isRunning,
+  onNodeChange,
+  onHandshake,
 }: ConnectionPageProps) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void onHandshake();
+  }
+
   return (
     <Card>
       <CardContent className="space-y-8 p-6">
@@ -28,9 +41,19 @@ export function ConnectionPage({
           actions={<Badge>Handshake first</Badge>}
         />
 
-        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <TextInput id="node" name="node" defaultValue={defaultNode} />
-          <Button type="submit">Run Handshake</Button>
+        <form
+          className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+          onSubmit={handleSubmit}
+        >
+          <TextInput
+            id="node"
+            name="node"
+            value={node}
+            onChange={(event) => onNodeChange(event.target.value)}
+          />
+          <Button type="submit" disabled={isRunning}>
+            {isRunning ? "Contacting Peer" : "Run Handshake"}
+          </Button>
         </form>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">

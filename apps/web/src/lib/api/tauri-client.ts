@@ -1,32 +1,42 @@
 import type { BtcAppClient } from "./client";
+import type {
+  ConnectionRequest,
+  HandshakeResult,
+  PingResult,
+  UiLogEvent,
+} from "./types";
 
-function unimplemented(name: string): never {
-  throw new Error(`Tauri adapter not implemented yet: ${name}`);
+async function invoke<T>(
+  command: string,
+  payload: Record<string, unknown>,
+): Promise<T> {
+  const mod = await import("@tauri-apps/api/core");
+  return mod.invoke<T>(command, payload);
 }
 
 export const tauriClient: BtcAppClient = {
-  handshake() {
-    return Promise.reject(unimplemented("handshake"));
+  handshake(request: ConnectionRequest): Promise<HandshakeResult> {
+    return invoke<HandshakeResult>("handshake", { request });
   },
-  ping() {
-    return Promise.reject(unimplemented("ping"));
+  ping(node: string): Promise<PingResult> {
+    return invoke<PingResult>("ping", { request: { node } });
   },
   getAddr() {
-    return Promise.reject(unimplemented("getAddr"));
+    return Promise.reject(new Error("Tauri adapter not implemented yet: getAddr"));
   },
   getHeaders() {
-    return Promise.reject(unimplemented("getHeaders"));
+    return Promise.reject(new Error("Tauri adapter not implemented yet: getHeaders"));
   },
   syncHeadersToTip() {
-    return Promise.reject(unimplemented("syncHeadersToTip"));
+    return Promise.reject(new Error("Tauri adapter not implemented yet: syncHeadersToTip"));
   },
   getBlock() {
-    return Promise.reject(unimplemented("getBlock"));
+    return Promise.reject(new Error("Tauri adapter not implemented yet: getBlock"));
   },
   downloadBlock() {
-    return Promise.reject(unimplemented("downloadBlock"));
+    return Promise.reject(new Error("Tauri adapter not implemented yet: downloadBlock"));
   },
-  getRecentEvents() {
-    return Promise.reject(unimplemented("getRecentEvents"));
+  getRecentEvents(): Promise<UiLogEvent[]> {
+    return Promise.resolve([]);
   },
 };

@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "default"
+description = "Default permissions for btc-network desktop commands"
+commands.allow = ["handshake", "ping"]

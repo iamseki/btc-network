@@ -5,6 +5,7 @@ use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use btc_network::app::peer as peer_app;
 use btc_network::observability;
 use btc_network::session::Session;
 use btc_network::wire::message::{Block, Decode};
@@ -12,8 +13,6 @@ use btc_network::wire::{self, Command, Message};
 use tracing::{debug, info, warn};
 
 use std::time::Instant;
-
-use rand::Rng;
 
 #[derive(Parser)]
 #[command(name = "btc-cli")]
@@ -47,6 +46,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     observability::init_tracing();
     let cli = Cli::parse();
 
+    if matches!(&cli.command, Commands::Ping) {
+        let result = peer_app::ping_node(&cli.node)?;
+        info!(
+            "Received matching pong. ping nonce: {}, pong nonce: {}",
+            result.nonce, result.echoed_nonce
+        );
+        return Ok(());
+    }
+
     info!("Connecting to {}", cli.node);
 
     let addr = cli
@@ -63,12 +71,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     session.handshake()?;
 
     match cli.command {
-        Commands::Ping => ping(&mut session)?,
         Commands::GetAddr => get_addresses(&mut session)?,
         Commands::GetHeaders => get_headers(&mut session)?,
         Commands::LastBlockHeader => last_block_header(&mut session)?,
         Commands::GetBlock { hash } => get_block(&mut session, hash)?,
         Commands::DownloadBlock { hash, out } => download_block(&mut session, hash, out)?,
+        Commands::Ping => unreachable!("ping handled before session setup"),
     }
 
     Ok(())
@@ -98,28 +106,6 @@ where
     }
 
     Ok(())
-}
-
-fn ping(session: &mut Session) -> Result<(), Box<dyn Error>> {
-    let nonce: u64 = rand::thread_rng().r#gen();
-
-    info!("Sending ping");
-    session.send(Command::Ping, &nonce.to_le_bytes())?;
-
-    recv_until(session, |msg| match msg {
-        Message::Pong(payload) => {
-            let returned = u64::from_le_bytes(payload[..8].try_into()?);
-            info!(
-                "Received matching pong. ping nounce: {}, pong nonce: {}",
-                nonce, returned
-            );
-            Ok(true)
-        }
-        other => {
-            debug!("Received (ignored): {:?}", other);
-            Ok(false)
-        }
-    })
 }
 
 fn get_addresses(session: &mut Session) -> Result<(), Box<dyn Error>> {

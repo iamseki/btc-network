@@ -10,12 +10,16 @@ export type PeerToolsPageProps = {
   node: string;
   lastPing: PingResult | null;
   lastAddrResult: AddrResult | null;
+  isPinging: boolean;
+  onPing: () => void | Promise<void>;
 };
 
 export function PeerToolsPage({
   node,
   lastPing,
   lastAddrResult,
+  isPinging,
+  onPing,
 }: PeerToolsPageProps) {
   return (
     <Card>
@@ -26,7 +30,9 @@ export function PeerToolsPage({
           description="Use the current single-peer actions without burying the protocol under generic dashboard chrome."
           actions={
             <>
-              <Button type="button">Ping {node}</Button>
+              <Button type="button" onClick={() => void onPing()} disabled={isPinging}>
+                {isPinging ? "Pinging Peer" : `Ping ${node}`}
+              </Button>
               <Button type="button" variant="secondary">
                 GetAddr {node}
               </Button>

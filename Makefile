@@ -33,9 +33,18 @@ security-tools-install:
 web-install:
 	@npm install --prefix apps/web
 
+## Install desktop shell dependencies
+desktop-install:
+	@npm install --prefix apps/desktop
+
 ## Run the web frontend in dev mode
 web-dev:
 	@npm run dev --prefix apps/web
+
+## Run the Tauri desktop app in dev mode
+desktop-dev:
+	@test -x apps/desktop/node_modules/.bin/tauri || (echo "desktop dependencies are missing. Run: make desktop-install" && exit 1)
+	@npm run dev --prefix apps/desktop
 
 ## Run frontend tests
 web-test:
@@ -44,6 +53,10 @@ web-test:
 ## Build the web frontend
 web-build:
 	@npm run build --prefix apps/web
+
+## Run desktop Rust tests
+desktop-test:
+	@cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
 ## Audit Rust dependencies against RustSec
 security-rust-audit:
@@ -107,5 +120,8 @@ help:
 	@echo "  make web-dev"
 	@echo "  make web-test"
 	@echo "  make web-build"
+	@echo "  make desktop-install"
+	@echo "  make desktop-dev"
+	@echo "  make desktop-test"
 	@echo "  make clean"
 	@echo ""

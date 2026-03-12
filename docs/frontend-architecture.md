@@ -51,6 +51,13 @@ Examples:
 - Desktop: `tauri-client.ts` calls native commands exposed by Tauri
 - Web: `web-client.ts` can call a future HTTP API or provide local mocks during early UI work
 
+Current real desktop-backed commands:
+
+- `handshake`
+- `ping`
+
+These commands are implemented in the desktop shell and mapped from the shared Rust application layer in `src/app/peer.rs`.
+
 ## Initial Pages
 
 These pages map directly to the current CLI commands in `src/bin/cli.rs`.
@@ -88,6 +95,13 @@ These pages map directly to the current CLI commands in `src/bin/cli.rs`.
 2. Extract shared Rust application workflows from `src/bin/cli.rs`
 3. Expose those workflows through Tauri commands in `apps/desktop`
 4. Keep a separate web adapter for future browser deployment
+
+Current implementation status:
+
+- shared Rust handshake flow extracted
+- shared Rust ping flow extracted
+- Tauri desktop commands wired for handshake and ping
+- frontend runtime selection between `web-client` and `tauri-client` in place
 
 ## Rust Extraction Direction
 

@@ -59,6 +59,13 @@ Current frontend scope mirrors the CLI:
 - Headers (`get-headers`, `last-block-header`)
 - Block explorer (`get-block`, `download-block`)
 
+Current real desktop-backed flows:
+
+- Handshake
+- Ping
+
+These now run through a shared Rust application layer and a minimal Tauri command bridge instead of placeholder-only frontend behavior.
+
 Design direction:
 
 - Clean, minimal interface
@@ -133,9 +140,42 @@ Build the frontend for production:
 
 Notes:
 
-- The current UI uses placeholder/mock adapter data while the Rust desktop bridge is being wired
-- The next integration step is to expose shared Rust application workflows to the Tauri adapter
+- In desktop mode, `handshake` and `ping` now call real Rust/Tauri commands
+- The remaining flows still use placeholder/mock adapter behavior until they are wired
 - Browser deployment remains a design goal, so UI code must stay portable
+
+## Desktop Usage
+
+Install desktop dependencies:
+
+- `make desktop-install`
+
+Run the Tauri desktop shell:
+
+- `make desktop-dev`
+
+Run the desktop Rust tests:
+
+- `make desktop-test`
+
+Linux prerequisites for desktop builds on Ubuntu/Debian:
+
+- `libwebkit2gtk-4.1-dev`
+- `build-essential`
+- `curl`
+- `wget`
+- `file`
+- `libxdo-dev`
+- `libssl-dev`
+- `libayatana-appindicator3-dev`
+- `librsvg2-dev`
+
+Desktop architecture notes:
+
+- The desktop shell lives in `apps/desktop/src-tauri`
+- `handshake` and `ping` are exposed as Tauri commands
+- Those commands call the shared Rust application layer in `src/app/peer.rs`
+- The frontend still selects between `web-client` and `tauri-client` at runtime
 
 ## Security Checks
 

@@ -9,6 +9,7 @@ import { ConnectionPage } from "./pages/connection-page";
 import { HeadersPage } from "./pages/headers-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { getAppClient } from "./lib/api";
+import type { HandshakeResult, PingResult, UiLogEvent } from "./lib/api/types";
 
 const defaultNode = "seed.bitcoin.sipa.be:8333";
 const sampleBlockHash =
@@ -16,7 +17,8 @@ const sampleBlockHash =
 
 export function App() {
   const [selectedPage, setSelectedPage] = useState<AppPageId>("connection");
-  const client = getAppClient();
+  const [client] = useState(() => getAppClient());
+  const [node, setNode] = useState(defaultNode);
   const pageIcons = {
     connection: Radio,
     "peer-tools": Network,
@@ -24,28 +26,19 @@ export function App() {
     blocks: Blocks,
   } satisfies Record<AppPageId, typeof Radio>;
 
-  const [events] = useState(() => [
+  const [events, setEvents] = useState<UiLogEvent[]>(() => [
     {
       at: new Date().toISOString(),
       level: "info" as const,
-      message: "Frontend scaffold loaded. Native Rust commands are the next integration step.",
+      message: "Frontend scaffold loaded. Tauri-backed handshake and ping are available in desktop mode.",
     },
   ]);
 
-  const [lastHandshake] = useState(() => ({
-    node: defaultNode,
-    protocolVersion: 70016,
-    services: "0x0000000000000000",
-    userAgent: "/btc-network:ui-placeholder/",
-    startHeight: 0,
-    relay: null,
-  }));
+  const [lastHandshake, setLastHandshake] = useState<HandshakeResult | null>(null);
+  const [isHandshaking, setIsHandshaking] = useState(false);
 
-  const [lastPing] = useState(() => ({
-    node: defaultNode,
-    nonce: "0xfeedfacecafebeef",
-    echoedNonce: "0xfeedfacecafebeef",
-  }));
+  const [lastPing, setLastPing] = useState<PingResult | null>(null);
+  const [isPinging, setIsPinging] = useState(false);
 
   const [lastAddrResult] = useState(() => ({
     node: defaultNode,
@@ -83,6 +76,49 @@ export function App() {
   }));
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
+
+  function pushEvent(level: "info" | "warn" | "error", message: string) {
+    setEvents((current) => [
+      {
+        at: new Date().toISOString(),
+        level,
+        message,
+      },
+      ...current,
+    ]);
+  }
+
+  async function handleHandshake() {
+    setIsHandshaking(true);
+    pushEvent("info", `Running handshake against ${node}`);
+
+    try {
+      const result = await client.handshake({ node });
+      setLastHandshake(result);
+      pushEvent("info", `Handshake complete. Peer start height: ${result.startHeight}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushEvent("error", `Handshake failed: ${message}`);
+    } finally {
+      setIsHandshaking(false);
+    }
+  }
+
+  async function handlePing() {
+    setIsPinging(true);
+    pushEvent("info", `Sending ping to ${node}`);
+
+    try {
+      const result = await client.ping(node);
+      setLastPing(result);
+      pushEvent("info", `Ping complete. Echoed nonce: ${result.echoedNonce}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushEvent("error", `Ping failed: ${message}`);
+    } finally {
+      setIsPinging(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -181,7 +217,7 @@ export function App() {
               <div className="flex flex-wrap items-center gap-3">
                 <Badge variant="muted">Primary peer</Badge>
                 <div className="rounded-[6px] border border-primary/50 bg-primary px-4 py-2 font-mono text-sm font-semibold text-primary-foreground shadow-[0_0_20px_rgba(245,179,1,0.15)]">
-                  {defaultNode}
+                  {node}
                 </div>
               </div>
             </CardContent>
@@ -190,17 +226,22 @@ export function App() {
           <div className="grid gap-6">
             {selectedPage === "connection" ? (
               <ConnectionPage
-                defaultNode={defaultNode}
+                node={node}
                 lastHandshake={lastHandshake}
                 events={events}
+                isRunning={isHandshaking}
+                onNodeChange={setNode}
+                onHandshake={handleHandshake}
               />
             ) : null}
 
             {selectedPage === "peer-tools" ? (
               <PeerToolsPage
-                node={defaultNode}
+                node={node}
                 lastPing={lastPing}
                 lastAddrResult={lastAddrResult}
+                isPinging={isPinging}
+                onPing={handlePing}
               />
             ) : null}
 
