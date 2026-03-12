@@ -52,3 +52,11 @@ The current Ubuntu 22.04-compatible package set is:
 - `make desktop-install`
 - `make desktop-dev`
 - `make desktop-test`
+
+## Editor Support
+
+The repository root `Cargo.toml` includes `apps/desktop/src-tauri` as a workspace member so `rust-analyzer` can index the desktop crate from the repo root.
+
+The workspace also includes a VS Code fallback in `.vscode/settings.json` via `rust-analyzer.linkedProjects` for cases where the editor does not automatically pick up the nested manifest.
+
+The workspace root `Cargo.lock` is the single lockfile that should be kept in version control for Rust dependencies. The desktop crate should not maintain an independent lockfile once it is part of the root workspace.

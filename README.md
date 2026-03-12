@@ -176,6 +176,8 @@ Desktop architecture notes:
 - `handshake` and `ping` are exposed as Tauri commands
 - Those commands call the shared Rust application layer in `src/app/peer.rs`
 - The frontend still selects between `web-client` and `tauri-client` at runtime
+- The root Cargo manifest includes `apps/desktop/src-tauri` as a workspace member so `rust-analyzer` can index the desktop crate
+- The root `Cargo.lock` is the workspace lockfile for both Rust crates; keep the desktop crate on the shared lockfile instead of maintaining a second one
 
 ## Security Checks
 

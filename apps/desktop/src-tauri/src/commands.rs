@@ -1,11 +1,13 @@
 use btc_network::app::peer;
 use serde::{Deserialize, Serialize};
 
+/// Minimal desktop request for single-peer actions.
 #[derive(Debug, Deserialize)]
 pub struct ConnectionRequest {
     pub node: String,
 }
 
+/// Desktop-facing handshake payload exposed to the web UI through Tauri.
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct HandshakeResponse {
@@ -17,6 +19,7 @@ pub struct HandshakeResponse {
     pub relay: Option<bool>,
 }
 
+/// Desktop-facing ping result with hex-encoded nonces for direct display.
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PingResponse {
@@ -39,6 +42,7 @@ pub fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String
     })
 }
 
+/// Runs the shared Rust ping workflow through the desktop command boundary.
 #[tauri::command]
 pub fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
     let summary = peer::ping_node(&request.node).map_err(|err| err.to_string())?;

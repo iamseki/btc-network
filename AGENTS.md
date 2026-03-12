@@ -115,6 +115,12 @@ Preferred structure:
 - `apps/desktop/` — Tauri application reusing the frontend with native bindings
 - `crates/` — optional shared Rust crates for app-facing contracts or adapters if needed later
 
+Workspace/editor note:
+
+- The root `Cargo.toml` must keep `apps/desktop/src-tauri` as a workspace member so `rust-analyzer` can index both Rust crates from the repo root
+- If editor discovery regresses, update `.vscode/settings.json` `rust-analyzer.linkedProjects` rather than adding ad-hoc editor instructions elsewhere
+- The workspace root `Cargo.lock` is authoritative for both Rust crates; do not keep a second desktop-specific lockfile in sync
+
 ### Frontend Design Direction
 
 When extending the UI:

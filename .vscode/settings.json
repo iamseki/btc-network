@@ -1,3 +1,7 @@
 {
-  "chatgpt.commentCodeLensEnabled": false
+  "chatgpt.commentCodeLensEnabled": false,
+  "rust-analyzer.linkedProjects": [
+    "Cargo.toml",
+    "apps/desktop/src-tauri/Cargo.toml"
+  ]
 }

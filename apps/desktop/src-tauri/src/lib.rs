@@ -1,5 +1,6 @@
 mod commands;
 
+/// Boots the desktop shell and exposes the narrow Tauri command surface used by the UI.
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![

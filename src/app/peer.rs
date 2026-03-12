@@ -7,6 +7,7 @@ use crate::session::Session;
 use crate::wire::message::VersionMessage;
 use crate::wire::{Command, Message};
 
+/// App-facing summary of the peer metadata collected during the Bitcoin handshake.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HandshakeSummary {
     pub node: String,
@@ -17,6 +18,7 @@ pub struct HandshakeSummary {
     pub relay: Option<bool>,
 }
 
+/// App-facing summary of a ping roundtrip.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PingSummary {
     pub node: String,
@@ -24,17 +26,21 @@ pub struct PingSummary {
     pub echoed_nonce: u64,
 }
 
+/// Connects to a node and completes the Bitcoin handshake.
 pub fn handshake_node(node: &str) -> Result<HandshakeSummary, Box<dyn Error>> {
     let mut session = connect(node, Duration::from_secs(30))?;
     handshake_session(node, &mut session)
 }
 
+/// Connects to a node, performs the handshake, and validates a ping/pong exchange.
 pub fn ping_node(node: &str) -> Result<PingSummary, Box<dyn Error>> {
     let mut session = connect(node, Duration::from_secs(30))?;
     let _ = handshake_session(node, &mut session)?;
     ping_session(node, &mut session)
 }
 
+/// Reuses an existing session to complete the handshake and map the peer version into
+/// a UI-friendly summary.
 pub fn handshake_session(
     node: &str,
     session: &mut Session,
@@ -43,6 +49,7 @@ pub fn handshake_session(
     Ok(map_handshake(node, version))
 }
 
+/// Reuses an existing session to perform a ping roundtrip.
 pub fn ping_session(node: &str, session: &mut Session) -> Result<PingSummary, Box<dyn Error>> {
     let nonce: u64 = rand::thread_rng().r#gen();
     ping_session_with_nonce(node, session, nonce)
@@ -76,6 +83,8 @@ fn ping_session_with_nonce(
 ) -> Result<PingSummary, Box<dyn Error>> {
     session.send(Command::Ping, &nonce.to_le_bytes())?;
 
+    // Keep consuming messages until the matching pong arrives. Any inbound ping must
+    // still be answered to preserve session liveness while we wait.
     recv_until(session, |msg| match msg {
         Message::Pong(payload) => {
             let returned = u64::from_le_bytes(payload[..8].try_into()?);
