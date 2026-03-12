@@ -7,7 +7,7 @@ export function Sidebar({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return (
     <aside
       className={cn(
-        "flex h-full flex-col border-r border-border bg-card/70 backdrop-blur-sm",
+        "relative z-20 flex h-full flex-col overflow-visible border-r border-border bg-card/70 backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -46,7 +46,7 @@ export function SidebarHeader({ className, ...props }: HTMLAttributes<HTMLDivEle
 }
 
 export function SidebarContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex-1 px-2 py-3", className)} {...props} />;
+  return <div className={cn("flex-1 overflow-visible px-2 py-3", className)} {...props} />;
 }
 
 export function SidebarGroup({
@@ -150,22 +150,22 @@ export function SidebarNavButton({
   return (
     <button
       className={cn(
-        "flex w-full cursor-pointer rounded-md border px-3 py-2.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative flex w-full cursor-pointer rounded-md border px-3 py-2.5 text-left transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring",
         collapsed ? "items-center justify-center" : "items-center gap-3",
         active
-          ? "border-border bg-muted text-foreground"
-          : "border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+          ? "border-border bg-muted text-foreground shadow-[0_0_0_1px_rgba(245,158,11,0.08)]"
+          : "border-transparent bg-transparent text-muted-foreground hover:border-primary/20 hover:bg-primary/8 hover:text-foreground hover:shadow-[0_12px_30px_rgba(10,10,10,0.18)]",
         className,
       )}
-      title={collapsed ? tooltip ?? title : tooltip}
+      aria-label={collapsed ? title : undefined}
       {...props}
     >
       <span
         className={cn(
-          "rounded-md border p-2",
+          "rounded-md border p-2 transition-colors",
           active
-            ? "border-border bg-background text-foreground"
-            : "border-border/70 bg-background/55 text-muted-foreground",
+            ? "border-primary/20 bg-background text-primary"
+            : "border-border/70 bg-background/55 text-muted-foreground group-hover:border-primary/30 group-hover:bg-primary/12 group-hover:text-primary",
         )}
       >
         {icon}
@@ -177,6 +177,18 @@ export function SidebarNavButton({
           </span>
         </span>
       )}
+      {collapsed ? (
+        <span className="pointer-events-none absolute left-[calc(100%+0.65rem)] top-1/2 z-50 hidden -translate-y-1/2 group-hover:inline-flex group-focus-visible:inline-flex">
+          <span className="relative inline-flex items-center pl-2">
+            <span className="absolute left-0 top-1/2 h-5 w-2 -translate-y-1/2 overflow-hidden">
+              <span className="absolute left-[1px] top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-r-[4px] border-r border-t border-b border-primary/25 bg-card" />
+            </span>
+            <span className="relative whitespace-nowrap rounded-md border border-primary/25 bg-card px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-primary shadow-[0_12px_32px_rgba(10,10,10,0.32)]">
+              {tooltip ?? title}
+            </span>
+          </span>
+        </span>
+      ) : null}
     </button>
   );
 }
