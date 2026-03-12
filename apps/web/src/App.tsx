@@ -1,10 +1,17 @@
-import { Activity, Blocks, Network, Radio, Waypoints } from "lucide-react";
+import { Blocks, Network, Radio, Waypoints } from "lucide-react";
 import { useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
 import { prependLogEvent } from "./app/log-events";
-import { Badge } from "./components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarNavButton,
+  SidebarProfile,
+  SidebarTrigger,
+} from "./components/ui/sidebar";
 import { BlocksPage } from "./pages/blocks-page";
 import { ConnectionPage } from "./pages/connection-page";
 import { HeadersPage } from "./pages/headers-page";
@@ -17,7 +24,8 @@ const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
 
 export function App() {
-  const [selectedPage, setSelectedPage] = useState<AppPageId>("connection");
+  const [selectedPage, setSelectedPage] = useState<AppPageId>("peer-tools");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
@@ -77,6 +85,8 @@ export function App() {
   }));
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
+  const currentPageIcon = pageIcons[selectedPage];
+  const runtimeLabel = client.constructor.name || "web-client";
 
   function pushEvent(level: "info" | "warn" | "error", message: string) {
     setEvents((current) =>
@@ -123,108 +133,83 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto grid min-h-screen w-full max-w-[1600px] gap-6 px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6 lg:py-6">
-        <Card className="overflow-hidden">
-          <CardHeader className="gap-8 border-b border-primary/20 bg-[linear-gradient(180deg,rgba(245,179,1,0.07),rgba(0,0,0,0)_20%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]">
-            <div className="space-y-3">
-              <Badge>btc-network</Badge>
-              <div className="space-y-2">
-                <CardTitle className="text-4xl">Protocol Workbench</CardTitle>
-                <CardDescription>
-                  Retro instrument panel for exploring the Rust Bitcoin P2P client without
-                  dragging protocol rules into the frontend.
-                </CardDescription>
+      <div
+        className={`grid min-h-screen w-full ${
+          sidebarCollapsed
+            ? "lg:grid-cols-[72px_minmax(0,1fr)]"
+            : "lg:grid-cols-[240px_minmax(0,1fr)]"
+        }`}
+      >
+        <Sidebar className="min-h-screen">
+          <SidebarContent className="space-y-3 py-2">
+            <SidebarGroup label={undefined}>
+              <div
+                className={
+                  sidebarCollapsed
+                    ? "flex justify-center px-2"
+                    : "flex items-center justify-between px-3"
+                }
+              >
+                {sidebarCollapsed ? null : (
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Menu
+                  </p>
+                )}
+                <SidebarTrigger
+                  collapsed={sidebarCollapsed}
+                  className="shrink-0"
+                  onClick={() => setSidebarCollapsed((current) => !current)}
+                />
+              </div>
+              <nav className="grid gap-1.5" aria-label="Primary">
+                {appPages.map((entry) => {
+                  const Icon = pageIcons[entry.id];
+                  return (
+                    <SidebarNavButton
+                      key={entry.id}
+                      type="button"
+                      active={entry.id === selectedPage}
+                      icon={<Icon className="h-4 w-4" />}
+                      collapsed={sidebarCollapsed}
+                      title={entry.title}
+                      tooltip={entry.title}
+                      onClick={() => setSelectedPage(entry.id)}
+                    />
+                  );
+                })}
+              </nav>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter>
+            <SidebarProfile collapsed={sidebarCollapsed} name="Operator Zero" role={runtimeLabel} />
+          </SidebarFooter>
+        </Sidebar>
+
+        <main className="flex min-w-0 flex-col bg-background">
+          <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="rounded-md border border-border bg-muted/60 p-2 text-muted-foreground">
+                {(() => {
+                  const PageIcon = currentPageIcon;
+                  return <PageIcon className="h-4 w-4" />;
+                })()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Overview
+                </p>
+                <p className="truncate text-sm text-foreground">{page.title}</p>
               </div>
             </div>
-
-            <div className="grid gap-3">
-              <div className="rounded-[6px] border border-primary/20 bg-background/80 p-4">
-                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-                  Aesthetic
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Black phosphor, amber signals, and a cleaner terminal-era feel.
-                </p>
-              </div>
-              <div className="rounded-[6px] border border-border/80 bg-muted/40 p-4">
-                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-                  Adapter
-                </p>
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="rounded-[4px] border border-primary/20 bg-primary/10 p-2 text-primary">
-                    <Activity className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-mono text-sm font-semibold uppercase tracking-[0.14em] text-foreground">
-                      Web Placeholder
-                    </p>
-                    <p className="font-mono text-xs text-muted-foreground">
-                      {client.constructor.name || "web-client"}
-                    </p>
-                  </div>
-                </div>
+            <div className="ml-auto flex items-center gap-3">
+              <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground">
+                {node}
               </div>
             </div>
-          </CardHeader>
+          </header>
 
-          <CardContent className="p-4">
-            <nav className="grid gap-2">
-              {appPages.map((entry) => {
-                const Icon = pageIcons[entry.id];
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className={
-                      entry.id === selectedPage
-                        ? "group cursor-pointer rounded-[6px] border border-primary/35 bg-primary/10 px-4 py-4 text-left transition-colors"
-                        : "group cursor-pointer rounded-[6px] border border-transparent bg-transparent px-4 py-4 text-left transition-colors hover:border-border hover:bg-muted/40"
-                    }
-                    onClick={() => setSelectedPage(entry.id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-[4px] border border-border/80 bg-background/80 p-2 text-primary">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-mono text-sm font-semibold uppercase tracking-[0.14em] text-foreground">
-                          {entry.title}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{entry.description}</p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </nav>
-          </CardContent>
-        </Card>
-
-        <main className="flex min-w-0 flex-col gap-6">
-          <Card className="overflow-hidden">
-            <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-2">
-                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.26em] text-primary">
-                  Current page
-                </p>
-                <div>
-                  <h2 className="font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
-                    {page.title}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">{page.description}</p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge variant="muted">Primary peer</Badge>
-                <div className="rounded-[6px] border border-primary/50 bg-primary px-4 py-2 font-mono text-sm font-semibold text-primary-foreground shadow-[0_0_20px_rgba(245,179,1,0.15)]">
-                  {node}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-6">
+          <div className="grid gap-6 p-4 lg:p-6">
             {selectedPage === "connection" ? (
               <ConnectionPage
                 node={node}
