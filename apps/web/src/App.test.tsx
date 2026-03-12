@@ -23,21 +23,21 @@ afterEach(() => {
 });
 
 describe("App sidebar shell", () => {
-  it("renders expanded by default", () => {
+  it("renders collapsed by default", () => {
     render(<App />);
-
-    expect(screen.getByText("Menu")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Peer Tools" })).toBeTruthy();
-  });
-
-  it("collapses the sidebar when the trigger is clicked", () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
 
     expect(screen.queryByText("Menu")).toBeNull();
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Peer Tools" })).toBeTruthy();
+  });
+
+  it("expands the sidebar when the trigger is clicked", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+
+    expect(screen.getByText("Menu")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
   });
 
   it("switches the visible page from the sidebar", () => {

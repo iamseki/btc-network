@@ -25,7 +25,7 @@ const sampleBlockHash =
 
 export function App() {
   const [selectedPage, setSelectedPage] = useState<AppPageId>("peer-tools");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
