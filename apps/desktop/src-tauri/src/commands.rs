@@ -29,8 +29,11 @@ pub struct PingResponse {
 }
 
 #[tauri::command]
-pub fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String> {
-    let summary = peer::handshake_node(&request.node).map_err(|err| err.to_string())?;
+pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String> {
+    let summary =
+        tauri::async_runtime::spawn_blocking(move || peer::handshake_node(&request.node).map_err(|err| err.to_string()))
+        .await
+        .map_err(|err| err.to_string())??;
 
     Ok(HandshakeResponse {
         node: summary.node,
@@ -44,8 +47,11 @@ pub fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String
 
 /// Runs the shared Rust ping workflow through the desktop command boundary.
 #[tauri::command]
-pub fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
-    let summary = peer::ping_node(&request.node).map_err(|err| err.to_string())?;
+pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
+    let summary =
+        tauri::async_runtime::spawn_blocking(move || peer::ping_node(&request.node).map_err(|err| err.to_string()))
+        .await
+        .map_err(|err| err.to_string())??;
 
     Ok(PingResponse {
         node: summary.node,
@@ -97,9 +103,9 @@ mod tests {
             send_message(&mut peer, Command::Verack, &[]).expect("send verack");
         });
 
-        let result = handshake(ConnectionRequest {
+        let result = tauri::async_runtime::block_on(handshake(ConnectionRequest {
             node: addr.to_string(),
-        })
+        }))
         .expect("handshake command");
 
         assert_eq!(result.node, addr.to_string());
@@ -141,9 +147,9 @@ mod tests {
             send_message(&mut peer, Command::Pong, &ping.payload).expect("send pong");
         });
 
-        let result = ping(ConnectionRequest {
+        let result = tauri::async_runtime::block_on(ping(ConnectionRequest {
             node: addr.to_string(),
-        })
+        }))
         .expect("ping command");
 
         assert_eq!(result.node, addr.to_string());

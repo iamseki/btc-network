@@ -1,3 +1,5 @@
+import { LoaderCircle } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,7 +33,8 @@ export function PeerToolsPage({
           actions={
             <>
               <Button type="button" onClick={() => void onPing()} disabled={isPinging}>
-                {isPinging ? "Pinging Peer" : `Ping ${node}`}
+                {isPinging ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                {isPinging ? "Pinging..." : `Ping ${node}`}
               </Button>
               <Button type="button" variant="secondary">
                 GetAddr {node}

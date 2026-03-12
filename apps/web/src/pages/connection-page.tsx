@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import type { FormEvent } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +53,8 @@ export function ConnectionPage({
             onChange={(event) => onNodeChange(event.target.value)}
           />
           <Button type="submit" disabled={isRunning}>
-            {isRunning ? "Contacting Peer" : "Run Handshake"}
+            {isRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+            {isRunning ? "Handshaking..." : "Run Handshake"}
           </Button>
         </form>
 
@@ -72,7 +74,11 @@ export function ConnectionPage({
                 ]}
               />
             ) : (
-              <p className="text-sm text-muted-foreground">No handshake result yet.</p>
+              <p className="text-sm text-muted-foreground">
+                {isRunning
+                  ? "Waiting for the handshake summary from the Rust backend."
+                  : "No handshake result yet."}
+              </p>
             )}
           </div>
 

@@ -2,6 +2,7 @@ import { Activity, Blocks, Network, Radio, Waypoints } from "lucide-react";
 import { useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
+import { prependLogEvent } from "./app/log-events";
 import { Badge } from "./components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { BlocksPage } from "./pages/blocks-page";
@@ -10,7 +11,6 @@ import { HeadersPage } from "./pages/headers-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { getAppClient } from "./lib/api";
 import type { HandshakeResult, PingResult, UiLogEvent } from "./lib/api/types";
-import { prependLogEvent } from "./app/log-events";
 
 const defaultNode = "seed.bitcoin.sipa.be:8333";
 const sampleBlockHash =
@@ -90,6 +90,7 @@ export function App() {
 
   async function handleHandshake() {
     setIsHandshaking(true);
+    setLastHandshake(null);
     pushEvent("info", `Running handshake against ${node}`);
 
     try {
