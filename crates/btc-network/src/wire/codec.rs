@@ -100,7 +100,7 @@ pub fn read_message<R: Read>(reader: &mut R) -> io::Result<RawMessage> {
 /// # Arguments
 ///
 /// * `writer`  - Any type implementing [`Write`] (e.g. `TcpStream`,
-///               `Cursor<Vec<u8>>`, `BufWriter`, TLS streams, etc.)
+///   `Cursor<Vec<u8>>`, `BufWriter`, TLS streams, etc.)
 /// * `command` - The Bitcoin P2P command to send
 /// * `payload` - The raw payload bytes
 ///

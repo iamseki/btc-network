@@ -709,23 +709,23 @@ impl Debug for Services {
 /// Fields:
 ///
 /// - `header`:
-///     The 80-byte block header (version, prev_blockhash, merkle_root,
-///     time, bits, nonce). See [`BlockHeader`].
+///   The 80-byte block header (version, prev_blockhash, merkle_root,
+///   time, bits, nonce). See [`BlockHeader`].
 ///
 /// - `tx_count`:
-///     The number of transactions in the block, decoded from the
-///     CompactSize (varint) immediately following the header.
+///   The number of transactions in the block, decoded from the
+///   CompactSize (varint) immediately following the header.
 ///
 /// - `serialized_size`:
-///     The total size in bytes of the serialized block payload as
-///     received over the wire. This includes:
-///     - 80-byte header
-///     - CompactSize transaction count
-///     - All serialized transactions
-///     - Witness data (if present)
+///   The total size in bytes of the serialized block payload as
+///   received over the wire. This includes:
+///   - 80-byte header
+///   - CompactSize transaction count
+///   - All serialized transactions
+///   - Witness data (if present)
 ///
-///     This value does NOT include the 24-byte P2P message header
-///     (magic, command, length, checksum).
+///   This value does NOT include the 24-byte P2P message header
+///   (magic, command, length, checksum).
 ///
 /// Notes:
 ///
@@ -914,23 +914,23 @@ impl fmt::Debug for Transaction {
 /// # Fields
 ///
 /// - `previous_output`:
-///     The referenced UTXO being spent.
+///   The referenced UTXO being spent.
 ///
 /// - `script_sig`:
-///     Unlocking script that satisfies the spending conditions of the
-///     referenced output's `script_pubkey`.
+///   Unlocking script that satisfies the spending conditions of the
+///   referenced output's `script_pubkey`.
 ///
 /// - `sequence`:
-///     Originally intended for transaction replacement.
-///     Now used for:
-///     - Enabling/disabling absolute `locktime`
-///     - Relative timelocks (BIP68)
-///     - Replace-By-Fee (RBF) signaling
+///   Originally intended for transaction replacement.
+///   Now used for:
+///   - Enabling/disabling absolute `locktime`
+///   - Relative timelocks (BIP68)
+///   - Replace-By-Fee (RBF) signaling
 ///
 /// - `witness`:
-///     Present only for SegWit transactions.
-///     Contains witness stack items corresponding to this input.
-///     Witness data is not included in the legacy `txid` hash.
+///   Present only for SegWit transactions.
+///   Contains witness stack items corresponding to this input.
+///   Witness data is not included in the legacy `txid` hash.
 ///
 /// # Coinbase Input
 ///
@@ -1257,12 +1257,12 @@ pub struct OutPoint {
 /// # Fields
 ///
 /// - `value`:
-///     Amount in satoshis (1 BTC = 100_000_000 satoshis).
-///     Must be non-negative and within consensus monetary limits.
+///   Amount in satoshis (1 BTC = 100_000_000 satoshis).
+///   Must be non-negative and within consensus monetary limits.
 ///
 /// - `script_pubkey`:
-///     Locking script that defines the conditions required to spend
-///     this output.
+///   Locking script that defines the conditions required to spend
+///   this output.
 ///
 /// # UTXO Model
 ///

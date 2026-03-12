@@ -1043,7 +1043,7 @@ mod tests {
         assert_eq!(tx.inputs.len(), 1);
         assert_eq!(tx.outputs.len(), 1);
         assert_eq!(tx.locktime, 0);
-        assert_eq!(tx.has_witness, false);
+        assert!(!tx.has_witness);
 
         assert_eq!(block.serialized_size, payload.len());
     }
