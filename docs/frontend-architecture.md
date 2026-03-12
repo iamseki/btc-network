@@ -22,6 +22,22 @@ Guidelines:
 - Avoid novelty effects that reduce readability or feel theatrical
 - Preserve the same visual discipline on desktop and web builds
 
+## shadcn Workflow
+
+Frontend composition should start from shadcn blocks when a matching pattern exists.
+
+Default order:
+
+1. Look for a relevant shadcn block first
+2. Adapt that block to the repository's visual direction and feature needs
+3. Drop to lower-level shadcn primitives only when no suitable block exists or the block is materially heavier than the interface needs
+
+Practical rule:
+
+- Use blocks first for sidebars, app shells, headers, menus, settings/profile chrome, and other common product frames
+- Keep adapted blocks clean by removing extra marketing copy, oversized panels, or dashboard filler
+- Do not rebuild a known shadcn block pattern from scratch unless there is a clear functional reason
+
 ## High-Level Shape
 
 ```text

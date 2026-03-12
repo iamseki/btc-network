@@ -104,6 +104,7 @@ This means:
 
 - Build the frontend as a normal SPA using React + Vite + TypeScript
 - Use shadcn/ui on top of Tailwind for the component layer
+- Use shadcn blocks as the first source for page and shell composition before hand-assembling layouts from lower-level primitives
 - Treat Tauri as a desktop shell and native bridge, not as the frontend architecture itself
 - Keep the Rust crate as the protocol/core implementation
 - Reuse the same UI concepts and components across desktop and future web deployment paths
@@ -131,6 +132,7 @@ Workspace/editor note:
 
 When extending the UI:
 
+- Start from a relevant shadcn block first when one exists; adapt it to the product instead of rebuilding the same pattern from scratch
 - Prefer clean, restrained layouts over dashboard-heavy compositions
 - Use a black / carbon base with Bitcoin-gold accents
 - Favor a retro instrument-panel / terminal-console feel over polished SaaS styling
@@ -139,6 +141,12 @@ When extending the UI:
 - Use retro cues sparingly: mono labels, squarer frames, subtle glow, and panel texture are good; gimmicky effects are not
 - Favor a small reusable component set over page-local styling
 - Preserve web portability even when adding desktop-specific features
+
+When using shadcn:
+
+- Prefer blocks for app shells, sidebars, headers, auth chrome, and other common page structures
+- Use component primitives directly only when there is no suitable block or the block would add unnecessary complexity
+- Keep block adaptations restrained; remove excess copy and decorative sections rather than adding custom chrome
 
 ### Frontend Boundary Rules
 

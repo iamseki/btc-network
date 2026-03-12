@@ -52,6 +52,7 @@ Current frontend stack:
 - TypeScript
 - Tailwind CSS
 - shadcn/ui-style component structure
+- shadcn blocks first for page and shell composition, with primitives as fallback
 
 Frontend architecture rules:
 
