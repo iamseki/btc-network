@@ -2,6 +2,8 @@
 
 Guidance for Codex and other coding agents working in this repository.
 
+Start with `docs/architecture-decisions.md` for the compact version of settled repo decisions.
+
 ## Project Summary
 
 Language: Rust (edition 2024)
@@ -18,6 +20,53 @@ Develop a research-focused Bitcoin P2P implementation in Rust that exposes the p
 - Architectural rigor suitable for systems exploration
 
 This is not a wallet, miner, or full node clone. It is a protocol engineering project designed to understand how Bitcoin works under the hood.
+
+## Open These First
+
+Pick the smallest relevant set.
+
+Frontend shell or page task:
+
+- `docs/architecture-decisions.md`
+- `docs/frontend-architecture.md`
+- `apps/web/src/App.tsx`
+- the specific page or component being changed
+
+Frontend API/runtime task:
+
+- `docs/architecture-decisions.md`
+- `apps/web/src/lib/api/client.ts`
+- `apps/web/src/lib/api/types.ts`
+- the relevant adapter (`tauri-client.ts` or `web-client.ts`)
+
+Shared Rust protocol/session task:
+
+- `docs/architecture-decisions.md`
+- `crates/btc-network/src/lib.rs`
+- the target module under `crates/btc-network/src/`
+- the tests next to that module
+
+Desktop bridge task:
+
+- `docs/architecture-decisions.md`
+- `apps/desktop/src-tauri/src/commands.rs`
+- `crates/btc-network/src/client/peer.rs`
+- the relevant frontend adapter file
+
+CI or security task:
+
+- `docs/architecture-decisions.md`
+- `Makefile`
+- `.github/workflows/ci.yml`
+- `audit.toml`
+- `deny.toml`
+
+## Usually Do Not Read
+
+- `apps/crawler/` for frontend tasks
+- `apps/web/` for wire parser work
+- `crates/btc-network/src/wire/` for pure shell/layout tasks
+- CLI files for desktop/web UI changes unless a user flow is being extracted
 
 ## Architectural Principles
 
@@ -95,6 +144,17 @@ Binaries must not:
 - apps/crawler/src/main.rs — DNS seed crawler
 - apps/listener/src/main.rs — long-running listener
 - docs/crawler-first-design.png — first crawler architecture draft
+
+## Task Map
+
+- Frontend shell: `apps/web/src/App.tsx`, `apps/web/src/components/ui/`
+- Frontend pages: `apps/web/src/pages/`
+- Frontend API boundary: `apps/web/src/lib/api/`
+- Desktop bridge: `apps/desktop/src-tauri/src/commands.rs`
+- Shared client workflows: `crates/btc-network/src/client/`
+- Session layer: `crates/btc-network/src/session/`
+- Wire layer: `crates/btc-network/src/wire/`
+- CLI orchestration: `apps/cli/src/main.rs`
 
 ## Frontend Architecture Decision
 
@@ -194,6 +254,31 @@ For most frontend tasks, start with this minimal context:
 - the specific page or component being changed
 
 Do not read unrelated crawler, wire, or CLI files unless the task requires protocol or backend integration changes.
+
+### Preferred Change Patterns
+
+For new protocol support:
+
+- wire decode/message support
+- session behavior
+- client-facing workflow
+- CLI or desktop exposure
+- focused tests in changed modules
+
+For new desktop-backed UI features:
+
+- shared Rust client workflow
+- Tauri command
+- frontend API adapter
+- page/component wiring
+- Rust and frontend tests
+
+For frontend visual work:
+
+- start from a relevant shadcn block
+- adapt it down to the repo style
+- use lower-level primitives only if the block is not a good fit
+- add or update render tests when behavior changes
 
 ## Protocol Rules To Preserve
 
@@ -319,6 +404,14 @@ When changing desktop-backed flows:
 - Add or update desktop command tests in `apps/desktop/src-tauri/src/commands.rs`
 - Keep the web runtime path working through `web-client`
 - Keep the desktop runtime path isolated in `tauri-client`
+
+## Verification Matrix
+
+- Full project: `make test`
+- Frontend only: `npm run test --prefix apps/web` and `npm run build --prefix apps/web`
+- Shared Rust only: `cargo test -p btc-network`
+- Desktop Rust only: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
+- Security/dependency checks: `make security`
 
 When changing shared peer operations:
 

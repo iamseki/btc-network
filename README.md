@@ -87,6 +87,8 @@ Design direction:
 
 See also:
 
+- `CONTRIBUTING.md`
+- `docs/architecture-decisions.md`
 - `docs/frontend-architecture.md`
 - `apps/web/README.md`
 
