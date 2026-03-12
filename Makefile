@@ -4,6 +4,7 @@ MAKEFLAGS += --no-print-directory
 
 LOCAL_CARGO_HOME := $(CURDIR)/.cargo-home
 LOCAL_ADVISORY_DB := $(LOCAL_CARGO_HOME)/advisory-db
+LOCAL_DENY_ADVISORY_DB := $(firstword $(wildcard $(LOCAL_CARGO_HOME)/advisory-dbs/*))
 LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 
 ## Run the crawler binary
@@ -76,7 +77,7 @@ security-rust-audit:
 ## Enforce Rust dependency policy (advisories, bans, sources)
 security-rust-deny:
 	@mkdir -p "$(LOCAL_CARGO_HOME)"
-	@if test -d "$(LOCAL_ADVISORY_DB)/.git"; then \
+	@if test -n "$(LOCAL_DENY_ADVISORY_DB)" && test -d "$(LOCAL_DENY_ADVISORY_DB)/.git"; then \
 		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources --disable-fetch; \
 	else \
 		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources; \
