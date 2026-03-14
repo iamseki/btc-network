@@ -234,7 +234,7 @@ Initial frontend pages should mirror the current CLI capabilities before adding 
 
 - Connection / handshake
 - Peer tools (`ping`, `get-addr`)
-- Headers (`get-headers`, `last-block-header`)
+- Chain height (`last-block-header`)
 - Block explorer (`get-block`, `download-block`)
 - Crawler UI later, after the single-peer workflows are stable
 
@@ -242,6 +242,10 @@ Current real desktop-backed flows:
 
 - Handshake
 - Ping
+- Get peer addresses
+- Get last block height
+- Get block summary
+- Download block
 
 ### Frontend Working Set
 
@@ -251,6 +255,11 @@ For most frontend tasks, start with this minimal context:
 - `apps/web/src/App.tsx`
 - `apps/web/src/lib/api/client.ts`
 - `apps/web/src/lib/api/types.ts`
+- `apps/web/src/pages/connection-page.tsx`
+- `apps/web/src/pages/peer-tools-page.tsx`
+- `apps/web/src/pages/headers-page.tsx`
+- `apps/web/src/pages/blocks-page.tsx`
+- `apps/web/src/lib/api/tauri-client.ts`
 - the specific page or component being changed
 
 Do not read unrelated crawler, wire, or CLI files unless the task requires protocol or backend integration changes.

@@ -49,6 +49,8 @@ Frontend UI or shell:
 - The frontend is web-first
 - React components must not import Tauri APIs directly
 - Desktop-only behavior must stay behind the frontend API adapter layer
+- The current desktop-backed UI surface is handshake, ping, peer addresses, chain height, block summary, and block download
+- The plain web runtime is still placeholder-backed until a browser-safe backend exists
 - Start with a relevant shadcn block when building a sidebar, header, shell, or other common page structure
 - Drop to lower-level shadcn primitives only when no suitable block exists or the block is heavier than needed
 

@@ -67,18 +67,22 @@ Current frontend scope mirrors the CLI:
 
 - Connection / handshake
 - Peer tools (`ping`, `get-addr`)
-- Headers (`get-headers`, `last-block-header`)
+- Chain height (`last-block-header`)
 - Block explorer (`get-block`, `download-block`)
 
 Current real desktop-backed flows:
 
 - Handshake
 - Ping
+- Get peer addresses
+- Get last block height
+- Get block summary
+- Download block
 
 Current web runtime behavior:
 
 - the app shell, pages, and navigation are real React UI
-- the desktop runtime calls real Rust/Tauri commands for `handshake` and `ping`
+- the desktop runtime calls real Rust/Tauri commands for handshake, peer address lookup, chain height, block summary, and block download
 - the plain web runtime still uses a placeholder adapter for actions that are not browser-safe or not yet backed by a service
 
 Design direction:
@@ -161,7 +165,7 @@ Build the frontend for production:
 
 Notes:
 
-- In desktop mode, `handshake` and `ping` now call real Rust/Tauri commands
+- In desktop mode, handshake, peer address lookup, chain height, block summary, and block download now call real Rust/Tauri commands
 - In plain web mode, the adapter remains placeholder/mock-backed for flows that do not yet have a browser-safe backend
 - Browser deployment remains a design goal, so UI code must stay portable
 
@@ -194,7 +198,7 @@ Linux prerequisites for desktop builds on Ubuntu/Debian:
 Desktop architecture notes:
 
 - The desktop shell lives in `apps/desktop/src-tauri`
-- `handshake` and `ping` are exposed as Tauri commands
+- `handshake`, `ping`, `get_peer_addresses`, `get_last_block_height`, `get_block_summary`, and `download_block` are exposed as Tauri commands
 - Those commands call the shared Rust client workflow layer in `crates/btc-network/src/client/peer.rs`
 - The frontend still selects between `web-client` and `tauri-client` at runtime
 - The root Cargo manifest is a virtual workspace that includes `crates/btc-network`, `apps/cli`, `apps/crawler`, `apps/listener`, and `apps/desktop/src-tauri`

@@ -6,5 +6,13 @@
     "urls": ["http://localhost:*", "http://127.0.0.1:*"]
   },
   "windows": ["*"],
-  "permissions": ["core:default", "allow-handshake", "allow-ping"]
+  "permissions": [
+    "core:default",
+    "allow-download-block",
+    "allow-get-block-summary",
+    "allow-get-last-block-height",
+    "allow-get-peer-addresses",
+    "allow-handshake",
+    "allow-ping"
+  ]
 }

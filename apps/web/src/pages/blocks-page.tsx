@@ -1,3 +1,6 @@
+import { LoaderCircle } from "lucide-react";
+import type { FormEvent } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +15,11 @@ export type BlocksPageProps = {
   blockHash: string;
   blockSummary: BlockSummary | null;
   downloadResult: BlockDownloadResult | null;
+  isLoadingBlock?: boolean;
+  isDownloadingBlock?: boolean;
+  onBlockHashChange?: (value: string) => void;
+  onGetBlock?: () => void | Promise<void>;
+  onDownloadBlock?: () => void | Promise<void>;
 };
 
 export function BlocksPage({
@@ -19,7 +27,17 @@ export function BlocksPage({
   blockHash,
   blockSummary,
   downloadResult,
+  isLoadingBlock = false,
+  isDownloadingBlock = false,
+  onBlockHashChange,
+  onGetBlock,
+  onDownloadBlock,
 }: BlocksPageProps) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void onGetBlock?.();
+  }
+
   return (
     <Card>
       <CardContent className="space-y-8 p-6">
@@ -30,11 +48,28 @@ export function BlocksPage({
           actions={<Badge>Witness-aware getdata</Badge>}
         />
 
-        <form className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <TextInput id="block-hash" name="block-hash" defaultValue={blockHash} />
-          <Button type="submit">GetBlock {node}</Button>
-          <Button type="button" variant="secondary">
-            DownloadBlock {node}
+        <form
+          className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]"
+          onSubmit={handleSubmit}
+        >
+          <TextInput
+            id="block-hash"
+            name="block-hash"
+            value={blockHash}
+            onChange={(event) => onBlockHashChange?.(event.target.value)}
+          />
+          <Button type="submit" disabled={isLoadingBlock}>
+            {isLoadingBlock ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+            {isLoadingBlock ? "Loading..." : `Fetch Block ${node}`}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={isDownloadingBlock}
+            onClick={() => void onDownloadBlock?.()}
+          >
+            {isDownloadingBlock ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+            {isDownloadingBlock ? "Downloading..." : `Download Block ${node}`}
           </Button>
         </form>
 

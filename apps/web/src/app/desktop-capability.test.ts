@@ -13,7 +13,15 @@ describe("desktop capability", () => {
     };
 
     expect([...capability.permissions].sort()).toEqual(
-      ["allow-handshake", "allow-ping", "core:default"].sort(),
+      [
+        "allow-download-block",
+        "allow-get-block-summary",
+        "allow-get-last-block-height",
+        "allow-get-peer-addresses",
+        "allow-handshake",
+        "allow-ping",
+        "core:default",
+      ].sort(),
     );
     expect(capability.windows).toEqual(["*"]);
     expect([...((capability.remote?.urls ?? []) as string[])].sort()).toEqual(

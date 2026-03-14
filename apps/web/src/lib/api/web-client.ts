@@ -6,7 +6,7 @@ import type {
   ConnectionRequest,
   HandshakeResult,
   HeaderFetchResult,
-  HeaderSyncResult,
+  LastBlockHeightResult,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -66,12 +66,12 @@ export const webClient: BtcAppClient = {
     });
   },
 
-  syncHeadersToTip(): Promise<HeaderSyncResult> {
+  getLastBlockHeight(_node: string): Promise<LastBlockHeightResult> {
     return delay({
-      totalHeaders: 0,
-      rounds: 0,
-      elapsedMs: 0,
-      mostRecentBlock: null,
+      height: 938408,
+      rounds: 470,
+      elapsedMs: 545450,
+      bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
     });
   },
 

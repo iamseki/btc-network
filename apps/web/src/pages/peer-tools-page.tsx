@@ -13,7 +13,9 @@ export type PeerToolsPageProps = {
   lastPing: PingResult | null;
   lastAddrResult: AddrResult | null;
   isPinging: boolean;
+  isGettingAddr?: boolean;
   onPing: () => void | Promise<void>;
+  onGetAddr?: () => void | Promise<void>;
 };
 
 export function PeerToolsPage({
@@ -21,7 +23,9 @@ export function PeerToolsPage({
   lastPing,
   lastAddrResult,
   isPinging,
+  isGettingAddr = false,
   onPing,
+  onGetAddr,
 }: PeerToolsPageProps) {
   return (
     <Card>
@@ -36,8 +40,14 @@ export function PeerToolsPage({
                 {isPinging ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                 {isPinging ? "Pinging..." : `Ping ${node}`}
               </Button>
-              <Button type="button" variant="secondary">
-                GetAddr {node}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void onGetAddr?.()}
+                disabled={isGettingAddr}
+              >
+                {isGettingAddr ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                {isGettingAddr ? "Fetching peers..." : `Fetch Peer Addresses ${node}`}
               </Button>
             </>
           }

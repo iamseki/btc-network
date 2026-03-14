@@ -21,6 +21,8 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Desktop is a thin Tauri shell over the same frontend concepts
 - React components must not import Tauri APIs directly
 - Frontend code talks to an app-facing client boundary under `apps/web/src/lib/api/`
+- The current real desktop-backed flows are handshake, ping, peer address lookup, chain height, block summary, and block download
+- The plain web runtime remains placeholder-backed until a browser-safe backend/API exists
 
 ## Frontend Composition Rule
 

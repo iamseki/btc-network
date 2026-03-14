@@ -33,11 +33,11 @@ export type HeaderFetchResult = {
   lastHeaderHash: string | null;
 };
 
-export type HeaderSyncResult = {
-  totalHeaders: number;
+export type LastBlockHeightResult = {
+  height: number;
   rounds: number;
   elapsedMs: number;
-  mostRecentBlock: string | null;
+  bestBlockHash: string | null;
 };
 
 export type BlockSummary = {

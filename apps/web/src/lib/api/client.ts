@@ -5,7 +5,7 @@ import type {
   ConnectionRequest,
   HandshakeResult,
   HeaderFetchResult,
-  HeaderSyncResult,
+  LastBlockHeightResult,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -15,7 +15,7 @@ export interface BtcAppClient {
   ping(node: string): Promise<PingResult>;
   getAddr(node: string): Promise<AddrResult>;
   getHeaders(node: string): Promise<HeaderFetchResult>;
-  syncHeadersToTip(node: string): Promise<HeaderSyncResult>;
+  getLastBlockHeight(node: string): Promise<LastBlockHeightResult>;
   getBlock(node: string, hash: string): Promise<BlockSummary>;
   downloadBlock(node: string, hash: string): Promise<BlockDownloadResult>;
   getRecentEvents(): Promise<UiLogEvent[]>;

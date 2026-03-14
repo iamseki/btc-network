@@ -17,7 +17,7 @@ import { ConnectionPage } from "./pages/connection-page";
 import { HeadersPage } from "./pages/headers-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { getAppClient } from "./lib/api";
-import type { HandshakeResult, PingResult, UiLogEvent } from "./lib/api/types";
+import type { HandshakeResult, LastBlockHeightResult, PingResult, UiLogEvent } from "./lib/api/types";
 
 const defaultNode = "seed.bitcoin.sipa.be:8333";
 const sampleBlockHash =
@@ -39,7 +39,7 @@ export function App() {
     {
       at: new Date().toISOString(),
       level: "info" as const,
-      message: "Frontend scaffold loaded. Tauri-backed handshake and ping are available in desktop mode.",
+      message: "Frontend loaded. Desktop mode exposes real handshake, ping, and last block height flows.",
     },
   ]);
 
@@ -48,41 +48,17 @@ export function App() {
 
   const [lastPing, setLastPing] = useState<PingResult | null>(null);
   const [isPinging, setIsPinging] = useState(false);
+  const [lastAddrResult, setLastAddrResult] = useState<Awaited<ReturnType<typeof client.getAddr>> | null>(null);
+  const [isGettingAddr, setIsGettingAddr] = useState(false);
 
-  const [lastAddrResult] = useState(() => ({
-    node: defaultNode,
-    addresses: [
-      { address: "127.0.0.1", port: 8333, network: "ipv4" as const },
-      { address: "::1", port: 8333, network: "ipv6" as const },
-    ],
-  }));
+  const [lastBlockHeight, setLastBlockHeight] = useState<LastBlockHeightResult | null>(null);
+  const [isLoadingLastBlockHeight, setIsLoadingLastBlockHeight] = useState(false);
 
-  const [headersResult] = useState(() => ({
-    count: 2000,
-    lastHeaderHash:
-      "0000000000000000000000000000000000000000000000000000000000000000",
-  }));
-
-  const [syncResult] = useState(() => ({
-    totalHeaders: 938408,
-    rounds: 470,
-    elapsedMs: 545450,
-    mostRecentBlock:
-      "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
-  }));
-
-  const [blockSummary] = useState(() => ({
-    hash: sampleBlockHash,
-    txCount: 1,
-    serializedSize: 285,
-    coinbaseTxDetected: true,
-  }));
-
-  const [downloadResult] = useState(() => ({
-    hash: sampleBlockHash,
-    outputPath: "blk-00000000-8ce26f.dat",
-    rawBytes: 285,
-  }));
+  const [blockHash, setBlockHash] = useState(sampleBlockHash);
+  const [blockSummary, setBlockSummary] = useState<Awaited<ReturnType<typeof client.getBlock>> | null>(null);
+  const [downloadResult, setDownloadResult] = useState<Awaited<ReturnType<typeof client.downloadBlock>> | null>(null);
+  const [isLoadingBlock, setIsLoadingBlock] = useState(false);
+  const [isDownloadingBlock, setIsDownloadingBlock] = useState(false);
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
@@ -115,6 +91,26 @@ export function App() {
     }
   }
 
+  async function handleGetLastBlockHeight() {
+    setIsLoadingLastBlockHeight(true);
+    setLastBlockHeight(null);
+    pushEvent("info", `Fetching last block height from ${node}`);
+
+    try {
+      const result = await client.getLastBlockHeight(node);
+      setLastBlockHeight(result);
+      pushEvent(
+        "info",
+        `Last block height: ${result.height} (${result.rounds} rounds, ${result.elapsedMs}ms)`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushEvent("error", `Last block height failed: ${message}`);
+    } finally {
+      setIsLoadingLastBlockHeight(false);
+    }
+  }
+
   async function handlePing() {
     setIsPinging(true);
     pushEvent("info", `Sending ping to ${node}`);
@@ -128,6 +124,56 @@ export function App() {
       pushEvent("error", `Ping failed: ${message}`);
     } finally {
       setIsPinging(false);
+    }
+  }
+
+  async function handleGetAddr() {
+    setIsGettingAddr(true);
+    pushEvent("info", `Fetching peer addresses from ${node}`);
+
+    try {
+      const result = await client.getAddr(node);
+      setLastAddrResult(result);
+      pushEvent("info", `Received ${result.addresses.length} peer addresses`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushEvent("error", `Peer address fetch failed: ${message}`);
+    } finally {
+      setIsGettingAddr(false);
+    }
+  }
+
+  async function handleGetBlock() {
+    setIsLoadingBlock(true);
+    setBlockSummary(null);
+    pushEvent("info", `Fetching block ${blockHash} from ${node}`);
+
+    try {
+      const result = await client.getBlock(node, blockHash);
+      setBlockSummary(result);
+      pushEvent("info", `Loaded block ${result.hash} with ${result.txCount} transactions`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushEvent("error", `Block fetch failed: ${message}`);
+    } finally {
+      setIsLoadingBlock(false);
+    }
+  }
+
+  async function handleDownloadBlock() {
+    setIsDownloadingBlock(true);
+    setDownloadResult(null);
+    pushEvent("info", `Downloading block ${blockHash} from ${node}`);
+
+    try {
+      const result = await client.downloadBlock(node, blockHash);
+      setDownloadResult(result);
+      pushEvent("info", `Saved block record to ${result.outputPath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      pushEvent("error", `Block download failed: ${message}`);
+    } finally {
+      setIsDownloadingBlock(false);
     }
   }
 
@@ -227,24 +273,32 @@ export function App() {
                 lastPing={lastPing}
                 lastAddrResult={lastAddrResult}
                 isPinging={isPinging}
+                isGettingAddr={isGettingAddr}
                 onPing={handlePing}
+                onGetAddr={handleGetAddr}
               />
             ) : null}
 
             {selectedPage === "headers" ? (
               <HeadersPage
-                node={defaultNode}
-                headersResult={headersResult}
-                syncResult={syncResult}
+                node={node}
+                lastBlockHeight={lastBlockHeight}
+                isLoadingLastBlockHeight={isLoadingLastBlockHeight}
+                onGetLastBlockHeight={handleGetLastBlockHeight}
               />
             ) : null}
 
             {selectedPage === "blocks" ? (
               <BlocksPage
-                node={defaultNode}
-                blockHash={sampleBlockHash}
+                node={node}
+                blockHash={blockHash}
                 blockSummary={blockSummary}
                 downloadResult={downloadResult}
+                isLoadingBlock={isLoadingBlock}
+                isDownloadingBlock={isDownloadingBlock}
+                onBlockHashChange={setBlockHash}
+                onGetBlock={handleGetBlock}
+                onDownloadBlock={handleDownloadBlock}
               />
             ) : null}
           </div>

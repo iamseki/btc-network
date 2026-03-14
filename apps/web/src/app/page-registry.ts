@@ -19,8 +19,8 @@ export const appPages: AppPage[] = [
   },
   {
     id: "headers",
-    title: "Headers",
-    description: "Fetch headers or sync forward to the peer tip with visible progress.",
+    title: "Chain Height",
+    description: "Fetch the peer's latest known block height and inspect the best block hash.",
   },
   {
     id: "blocks",

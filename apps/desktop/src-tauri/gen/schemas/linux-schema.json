@@ -177,6 +177,30 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the download_block command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-download-block",
+          "markdownDescription": "Enables the download_block command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_block_summary command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-block-summary",
+          "markdownDescription": "Enables the get_block_summary command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_last_block_height command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-last-block-height",
+          "markdownDescription": "Enables the get_last_block_height command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_peer_addresses command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-peer-addresses",
+          "markdownDescription": "Enables the get_peer_addresses command without any pre-configured scope."
+        },
+        {
           "description": "Enables the handshake command without any pre-configured scope.",
           "type": "string",
           "const": "allow-handshake",
@@ -187,6 +211,30 @@
           "type": "string",
           "const": "allow-ping",
           "markdownDescription": "Enables the ping command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the download_block command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-download-block",
+          "markdownDescription": "Denies the download_block command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_block_summary command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-block-summary",
+          "markdownDescription": "Denies the get_block_summary command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_last_block_height command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-last-block-height",
+          "markdownDescription": "Denies the get_last_block_height command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_peer_addresses command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-peer-addresses",
+          "markdownDescription": "Denies the get_peer_addresses command without any pre-configured scope."
         },
         {
           "description": "Denies the handshake command without any pre-configured scope.",

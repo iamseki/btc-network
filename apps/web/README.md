@@ -29,7 +29,7 @@ Current state:
 - app shell and page navigation are implemented
 - the sidebar shell is covered by render tests in `src/App.test.tsx`
 - runtime selection between `web-client` and `tauri-client` is in place
-- desktop-backed `handshake` and `ping` are wired through Tauri
+- desktop-backed handshake, ping, peer address lookup, chain height, block summary, and block download are wired through Tauri
 - plain web mode still uses placeholder/mock responses where a browser-safe backend does not yet exist
 
 ## Local commands
@@ -41,6 +41,7 @@ Current state:
 
 Next implementation priorities:
 
-- continue extracting shared Rust workflows for headers, address, and block flows
-- expose those flows through the desktop bridge
+- keep the browser-safe adapter boundary ready for a future HTTP/backend implementation
+- improve progress and streaming feedback for longer-running protocol actions
+- decide whether one-shot `getheaders` belongs in the product surface beyond the current chain-height view
 - keep the web runtime behind a browser-safe adapter boundary

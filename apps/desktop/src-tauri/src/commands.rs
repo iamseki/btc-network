@@ -28,6 +28,59 @@ pub struct PingResponse {
     pub echoed_nonce: String,
 }
 
+/// Desktop-facing result of the peer's current best-known block height.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LastBlockHeightResponse {
+    pub node: String,
+    pub height: usize,
+    pub rounds: usize,
+    pub elapsed_ms: u64,
+    pub best_block_hash: Option<String>,
+}
+
+/// Desktop-facing peer address entry.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PeerAddressResponse {
+    pub address: String,
+    pub port: u16,
+    pub network: String,
+}
+
+/// Desktop-facing peer address result.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PeerAddressesResponse {
+    pub node: String,
+    pub addresses: Vec<PeerAddressResponse>,
+}
+
+/// Desktop-facing block summary.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockSummaryResponse {
+    pub hash: String,
+    pub tx_count: u64,
+    pub serialized_size: usize,
+    pub coinbase_tx_detected: bool,
+}
+
+/// Desktop-facing block download result.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockDownloadResponse {
+    pub hash: String,
+    pub output_path: String,
+    pub raw_bytes: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BlockRequest {
+    pub node: String,
+    pub hash: String,
+}
+
 #[tauri::command]
 pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String> {
     let summary = tauri::async_runtime::spawn_blocking(move || {
@@ -62,13 +115,89 @@ pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
     })
 }
 
+#[tauri::command]
+pub async fn get_last_block_height(
+    request: ConnectionRequest,
+) -> Result<LastBlockHeightResponse, String> {
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        peer::get_last_block_height_node(&request.node).map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())??;
+
+    Ok(LastBlockHeightResponse {
+        node: summary.node,
+        height: summary.height,
+        rounds: summary.rounds,
+        elapsed_ms: summary.elapsed_ms,
+        best_block_hash: summary.best_block_hash,
+    })
+}
+
+#[tauri::command]
+pub async fn get_peer_addresses(
+    request: ConnectionRequest,
+) -> Result<PeerAddressesResponse, String> {
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        peer::get_peer_addresses_node(&request.node).map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())??;
+
+    Ok(PeerAddressesResponse {
+        node: summary.node,
+        addresses: summary
+            .addresses
+            .into_iter()
+            .map(|entry| PeerAddressResponse {
+                address: entry.address,
+                port: entry.port,
+                network: entry.network,
+            })
+            .collect(),
+    })
+}
+
+#[tauri::command]
+pub async fn get_block_summary(request: BlockRequest) -> Result<BlockSummaryResponse, String> {
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        peer::get_block_summary_node(&request.node, &request.hash).map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())??;
+
+    Ok(BlockSummaryResponse {
+        hash: summary.hash,
+        tx_count: summary.tx_count,
+        serialized_size: summary.serialized_size,
+        coinbase_tx_detected: summary.coinbase_tx_detected,
+    })
+}
+
+#[tauri::command]
+pub async fn download_block(request: BlockRequest) -> Result<BlockDownloadResponse, String> {
+    let summary = tauri::async_runtime::spawn_blocking(move || {
+        peer::download_block_node(&request.node, &request.hash, None).map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())??;
+
+    Ok(BlockDownloadResponse {
+        hash: summary.hash,
+        output_path: summary.output_path,
+        raw_bytes: summary.raw_bytes,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use btc_network::wire::message::{Block, BlockHeader, Decode};
     use btc_network::wire::{Command, build_version_payload, read_message, send_message};
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::thread;
+
     fn bind_listener_or_skip() -> Option<TcpListener> {
         match TcpListener::bind("127.0.0.1:0") {
             Ok(listener) => Some(listener),
@@ -78,6 +207,72 @@ mod tests {
             }
             Err(err) => panic!("bind listener failed: {err}"),
         }
+    }
+
+    fn encode_single_headers_message(header: &BlockHeader) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(82);
+        payload.push(1);
+        payload.extend_from_slice(&header.version.to_le_bytes());
+        payload.extend_from_slice(&header.prev_blockhash);
+        payload.extend_from_slice(&header.merkle_root);
+        payload.extend_from_slice(&header.time.to_le_bytes());
+        payload.extend_from_slice(&header.bits.to_le_bytes());
+        payload.extend_from_slice(&header.nonce.to_le_bytes());
+        payload.push(0);
+        payload
+    }
+
+    fn encode_addrv2_ipv4(address: [u8; 4], port: u16) -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.push(1); // one entry
+        payload.extend_from_slice(&1_700_000_000u32.to_le_bytes());
+        payload.push(1); // services varint
+        payload.push(0x01); // IPv4
+        payload.push(4); // addr len
+        payload.extend_from_slice(&address);
+        payload.extend_from_slice(&port.to_be_bytes());
+        payload
+    }
+
+    fn sample_header_bytes() -> [u8; 80] {
+        let mut header = [0u8; 80];
+        header[0..4].copy_from_slice(&1i32.to_le_bytes());
+        header[4..36].copy_from_slice(&[0x11; 32]);
+        header[36..68].copy_from_slice(&[0x22; 32]);
+        header[68..72].copy_from_slice(&1234567890u32.to_le_bytes());
+        header[72..76].copy_from_slice(&0x1d00ffffu32.to_le_bytes());
+        header[76..80].copy_from_slice(&42u32.to_le_bytes());
+        header
+    }
+
+    fn minimal_legacy_tx() -> Vec<u8> {
+        let mut tx = Vec::new();
+        tx.extend(&1i32.to_le_bytes());
+        tx.push(1);
+        tx.extend([0u8; 32]);
+        tx.extend(&0xffff_ffffu32.to_le_bytes());
+        tx.push(0);
+        tx.extend(&0xffff_ffffu32.to_le_bytes());
+        tx.push(1);
+        tx.extend(&50_0000_0000u64.to_le_bytes());
+        tx.push(0);
+        tx.extend(&0u32.to_le_bytes());
+        tx
+    }
+
+    fn minimal_block_payload() -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.extend(sample_header_bytes());
+        payload.push(1);
+        payload.extend(minimal_legacy_tx());
+        payload
+    }
+
+    fn sample_block_hash_hex() -> String {
+        let block = Block::decode(&minimal_block_payload()).expect("decode sample block");
+        let mut hash = block.header.hash();
+        hash.reverse();
+        hash.iter().map(|byte| format!("{byte:02x}")).collect()
     }
 
     #[test]
@@ -157,6 +352,187 @@ mod tests {
         assert!(result.nonce.starts_with("0x"));
         assert_eq!(result.nonce, result.echoed_nonce);
 
+        server.join().expect("join");
+    }
+
+    #[test]
+    fn get_last_block_height_command_maps_last_block_height() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept");
+
+            let first = read_message(&mut peer).expect("read version");
+            assert_eq!(first.command, Command::Version);
+
+            let version = build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("version");
+            send_message(&mut peer, Command::Version, &version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read sendaddrv2");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message(&mut peer).expect("read verack");
+            assert_eq!(third.command, Command::Verack);
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+
+            let getheaders = read_message(&mut peer).expect("read getheaders");
+            assert_eq!(getheaders.command, Command::GetHeaders);
+
+            let header = BlockHeader {
+                version: 1,
+                prev_blockhash: [0u8; 32],
+                merkle_root: [0x11; 32],
+                time: 1_700_000_000,
+                bits: 0x1d00ffff,
+                nonce: 42,
+            };
+            let payload = encode_single_headers_message(&header);
+            send_message(&mut peer, Command::Headers, &payload).expect("send headers");
+        });
+
+        let result = tauri::async_runtime::block_on(get_last_block_height(ConnectionRequest {
+            node: addr.to_string(),
+        }))
+        .expect("last block height command");
+
+        assert_eq!(result.node, addr.to_string());
+        assert_eq!(result.height, 1);
+        assert_eq!(result.rounds, 1);
+        assert!(result.elapsed_ms > 0);
+        assert!(result.best_block_hash.is_some());
+
+        server.join().expect("join");
+    }
+
+    #[test]
+    fn get_peer_addresses_command_maps_addrv2_entries() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept");
+
+            let first = read_message(&mut peer).expect("read version");
+            assert_eq!(first.command, Command::Version);
+
+            let version = build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("version");
+            send_message(&mut peer, Command::Version, &version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read sendaddrv2");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message(&mut peer).expect("read verack");
+            assert_eq!(third.command, Command::Verack);
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+
+            let getaddr = read_message(&mut peer).expect("read getaddr");
+            assert_eq!(getaddr.command, Command::GetAddr);
+            send_message(&mut peer, Command::AddrV2, &encode_addrv2_ipv4([127, 0, 0, 1], 8333))
+                .expect("send addrv2");
+        });
+
+        let result = tauri::async_runtime::block_on(get_peer_addresses(ConnectionRequest {
+            node: addr.to_string(),
+        }))
+        .expect("get peer addresses command");
+
+        assert_eq!(result.node, addr.to_string());
+        assert_eq!(result.addresses.len(), 1);
+        assert_eq!(result.addresses[0].address, "127.0.0.1");
+        assert_eq!(result.addresses[0].port, 8333);
+        assert_eq!(result.addresses[0].network, "ipv4");
+
+        server.join().expect("join");
+    }
+
+    #[test]
+    fn get_block_summary_command_maps_decoded_block() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let requested_hash = sample_block_hash_hex();
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept");
+
+            let first = read_message(&mut peer).expect("read version");
+            assert_eq!(first.command, Command::Version);
+
+            let version = build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("version");
+            send_message(&mut peer, Command::Version, &version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read sendaddrv2");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message(&mut peer).expect("read verack");
+            assert_eq!(third.command, Command::Verack);
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+
+            let getdata = read_message(&mut peer).expect("read getdata");
+            assert_eq!(getdata.command, Command::GetData);
+            send_message(&mut peer, Command::Block, &minimal_block_payload()).expect("send block");
+        });
+
+        let result = tauri::async_runtime::block_on(get_block_summary(BlockRequest {
+            node: addr.to_string(),
+            hash: requested_hash.clone(),
+        }))
+        .expect("get block summary command");
+
+        assert_eq!(result.hash, requested_hash);
+        assert_eq!(result.tx_count, 1);
+        assert_eq!(result.serialized_size, minimal_block_payload().len());
+        assert!(result.coinbase_tx_detected);
+
+        server.join().expect("join");
+    }
+
+    #[test]
+    fn download_block_command_writes_blk_record() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let requested_hash = sample_block_hash_hex();
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept");
+
+            let first = read_message(&mut peer).expect("read version");
+            assert_eq!(first.command, Command::Version);
+
+            let version = build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("version");
+            send_message(&mut peer, Command::Version, &version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read sendaddrv2");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message(&mut peer).expect("read verack");
+            assert_eq!(third.command, Command::Verack);
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+
+            let getdata = read_message(&mut peer).expect("read getdata");
+            assert_eq!(getdata.command, Command::GetData);
+            send_message(&mut peer, Command::Block, &minimal_block_payload()).expect("send block");
+        });
+
+        let result = tauri::async_runtime::block_on(download_block(BlockRequest {
+            node: addr.to_string(),
+            hash: requested_hash.clone(),
+        }))
+        .expect("download block command");
+
+        assert_eq!(result.hash, requested_hash);
+        assert_eq!(result.raw_bytes, minimal_block_payload().len());
+        assert!(result.output_path.ends_with(".dat"));
+        assert!(std::path::Path::new(&result.output_path).exists());
+
+        std::fs::remove_file(&result.output_path).expect("remove temp block file");
         server.join().expect("join");
     }
 }

@@ -75,6 +75,22 @@ Never add parsing logic inside CLI or session.
 
 **Ping/pong:** always respond to `Ping` with matching `Pong` payload. Do not ignore keepalive.
 
+## Current Implementation State
+
+What is real and wired end-to-end (Rust client → Tauri command → frontend):
+
+| Flow | Rust (`client/peer.rs`) | Tauri command | Frontend |
+|------|------------------------|---------------|----------|
+| `handshake` | `handshake_node` / `handshake_session` | ✓ | ✓ real |
+| `ping` | `ping_node` / `ping_session` | ✓ | ✓ real |
+| `getAddr` | `get_peer_addresses_node` / `get_peer_addresses_session` | ✓ | ✓ real |
+| `lastBlockHeight` | `get_last_block_height_node` / `get_last_block_height_session` | ✓ | ✓ real |
+| `getBlock` | `get_block_summary_node` / `get_block_summary_session` | ✓ | ✓ real |
+| `downloadBlock` | `download_block_node` / `download_block_session` | ✓ | ✓ real |
+| `getHeaders` | not product-wired | ✗ | not exposed |
+
+The plain web runtime still uses `web-client.ts` placeholders for browser-safe development. Do not wire Tauri commands directly to CLI code.
+
 ## Frontend Rules
 
 - Components must not import Tauri APIs directly — isolate behind `tauri-client.ts`

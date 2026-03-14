@@ -73,6 +73,10 @@ Current real desktop-backed commands:
 
 - `handshake`
 - `ping`
+- `get_peer_addresses`
+- `get_last_block_height`
+- `get_block_summary`
+- `download_block`
 
 These commands are implemented in the desktop shell and mapped from the shared Rust client workflow layer in `crates/btc-network/src/client/peer.rs`.
 
@@ -93,11 +97,11 @@ These pages map directly to the current CLI commands in `apps/cli/src/main.rs`.
 - `get-addr`
 - Address list display
 
-### Headers
+### Chain Height
 
-- `get-headers`
 - `last-block-header`
-- Progress and summary metrics
+- Height summary
+- Best-block hash and sync timing
 
 ### Block Explorer
 
@@ -113,24 +117,25 @@ Already in place:
 
 - shared Rust handshake flow extracted into `crates/btc-network/src/client/peer.rs`
 - shared Rust ping flow extracted into `crates/btc-network/src/client/peer.rs`
-- Tauri desktop commands wired for `handshake` and `ping`
+- shared Rust peer address flow extracted into `crates/btc-network/src/client/peer.rs`
+- shared Rust last-block-height flow extracted into `crates/btc-network/src/client/peer.rs`
+- shared Rust block summary and download flows extracted into `crates/btc-network/src/client/peer.rs`
+- Tauri desktop commands wired for handshake, ping, peer addresses, chain height, block summary, and block download
 - runtime selection between `web-client` and `tauri-client`
-- render tests for the app shell and sidebar behavior
+- render tests for the app shell, sidebar behavior, and current page actions
 
 Still intentionally incomplete:
 
-- desktop commands for `getAddr`, headers flows, and block flows
 - browser-safe backend/API for non-placeholder web execution
+- one-shot `getheaders` UI if that workflow becomes a product need beyond chain height
 
 ## Rust Extraction Direction
 
-The CLI still contains user flows that should move into reusable library modules as integration grows:
+The shared Rust client workflow layer already covers the current desktop-backed single-peer flows.
 
-- handshake/connect flow
-- ping flow
-- address retrieval flow
-- headers fetch/sync flow
-- block fetch flow
-- block download flow
+As integration grows, keep using the same pattern:
 
-The CLI and the desktop shell should both call the same Rust application layer once extracted.
+- session behavior in `crates/btc-network/src/session/`
+- app-facing workflow extraction in `crates/btc-network/src/client/`
+- Tauri commands as thin bridges only
+- browser-safe behavior isolated behind `web-client.ts`

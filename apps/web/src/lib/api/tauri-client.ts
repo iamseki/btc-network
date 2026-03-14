@@ -1,7 +1,11 @@
 import type { BtcAppClient } from "./client";
 import type {
+  AddrResult,
+  BlockDownloadResult,
+  BlockSummary,
   ConnectionRequest,
   HandshakeResult,
+  LastBlockHeightResult,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -21,20 +25,20 @@ export const tauriClient: BtcAppClient = {
   ping(node: string): Promise<PingResult> {
     return invoke<PingResult>("ping", { request: { node } });
   },
-  getAddr() {
-    return Promise.reject(new Error("Tauri adapter not implemented yet: getAddr"));
+  getAddr(node: string): Promise<AddrResult> {
+    return invoke<AddrResult>("get_peer_addresses", { request: { node } });
   },
   getHeaders() {
     return Promise.reject(new Error("Tauri adapter not implemented yet: getHeaders"));
   },
-  syncHeadersToTip() {
-    return Promise.reject(new Error("Tauri adapter not implemented yet: syncHeadersToTip"));
+  getLastBlockHeight(node: string): Promise<LastBlockHeightResult> {
+    return invoke<LastBlockHeightResult>("get_last_block_height", { request: { node } });
   },
-  getBlock() {
-    return Promise.reject(new Error("Tauri adapter not implemented yet: getBlock"));
+  getBlock(node: string, hash: string): Promise<BlockSummary> {
+    return invoke<BlockSummary>("get_block_summary", { request: { node, hash } });
   },
-  downloadBlock() {
-    return Promise.reject(new Error("Tauri adapter not implemented yet: downloadBlock"));
+  downloadBlock(node: string, hash: string): Promise<BlockDownloadResult> {
+    return invoke<BlockDownloadResult>("download_block", { request: { node, hash } });
   },
   getRecentEvents(): Promise<UiLogEvent[]> {
     return Promise.resolve([]);
