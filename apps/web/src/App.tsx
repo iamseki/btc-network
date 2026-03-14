@@ -190,8 +190,8 @@ export function App() {
       <div
         className={`grid min-h-screen w-full ${
           sidebarCollapsed
-            ? "lg:grid-cols-[72px_minmax(0,1fr)]"
-            : "lg:grid-cols-[240px_minmax(0,1fr)]"
+            ? "grid-cols-[72px_minmax(0,1fr)]"
+            : "grid-cols-[72px_minmax(0,1fr)] md:grid-cols-[240px_minmax(0,1fr)]"
         }`}
       >
         <Sidebar className="min-h-screen">
