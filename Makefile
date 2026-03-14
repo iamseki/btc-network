@@ -114,10 +114,7 @@ security:
 
 ## Run tests
 test:
-	@printf "\n== Rust tests ==\n"
-	@$(MAKE) rust-test
-	@printf "\n== Web tests ==\n"
-	@$(MAKE) web-test
+	@bash scripts/test_summary.sh
 
 ## Clean build artifacts
 clean:
@@ -134,6 +131,7 @@ help:
 	@echo "  make cli ARGS=\"--node host:port ping\""
 	@echo "  make build"
 	@echo "  make test"
+	@echo "    runs Rust workspace tests and web tests with an aggregate summary"
 	@echo "  make security-tools-install"
 	@echo "  make security-rust"
 	@echo "  make security-web"

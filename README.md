@@ -164,6 +164,7 @@ Run frontend tests:
 Run the full project test suite:
 
 - `make test`
+  - Runs each Rust workspace package plus the web test suite and prints an aggregate project summary.
 
 Build the frontend for production:
 
