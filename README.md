@@ -104,6 +104,8 @@ See also:
 
 Minimal Bitcoin P2P CLI for interacting with a single peer.
 
+The CLI now prefers the shared workflows in `crates/btc-network/src/client/peer.rs` for single-peer commands such as `ping`, `get-addr`, `last-block-header`, `get-block`, and `download-block`. The one-shot `get-headers` command remains a direct CLI/session path.
+
 ### Available Commands
 
 Ping a node:

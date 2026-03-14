@@ -1,18 +1,13 @@
 use clap::{Parser, Subcommand};
 use std::error::Error;
-use std::fs::File;
-use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use btc_network::client::peer as peer_client;
 use btc_network::observability;
 use btc_network::session::Session;
-use btc_network::wire::message::{Block, Decode};
 use btc_network::wire::{self, Command, Message};
-use tracing::{debug, info, warn};
-
-use std::time::Instant;
+use tracing::{debug, info};
 
 #[derive(Parser)]
 #[command(name = "btc-cli")]
@@ -46,13 +41,55 @@ fn main() -> Result<(), Box<dyn Error>> {
     observability::init_tracing();
     let cli = Cli::parse();
 
-    if matches!(&cli.command, Commands::Ping) {
-        let result = peer_client::ping_node(&cli.node)?;
-        info!(
-            "Received matching pong. ping nonce: {}, pong nonce: {}",
-            result.nonce, result.echoed_nonce
-        );
-        return Ok(());
+    match &cli.command {
+        Commands::Ping => {
+            let result = peer_client::ping_node(&cli.node)?;
+            info!(
+                "Received matching pong. ping nonce: {}, pong nonce: {}",
+                result.nonce, result.echoed_nonce
+            );
+            return Ok(());
+        }
+        Commands::GetAddr => {
+            let result = peer_client::get_peer_addresses_node(&cli.node)?;
+            info!("Received {} peers", result.addresses.len());
+            for entry in result.addresses {
+                info!("  [{}] {}:{}", entry.network, entry.address, entry.port);
+            }
+            return Ok(());
+        }
+        Commands::LastBlockHeader => {
+            let result = peer_client::get_last_block_height_node(&cli.node)?;
+            info!("Reached peer tip.");
+            info!("Total headers fetched: {}", result.height);
+            info!("Rounds: {}", result.rounds);
+            info!("Elapsed: {:.2?}", Duration::from_millis(result.elapsed_ms));
+            info!(
+                "Most recent block: {}",
+                result.best_block_hash.as_deref().unwrap_or("n/a")
+            );
+            return Ok(());
+        }
+        Commands::GetBlock { hash } => {
+            let result = peer_client::get_block_summary_node(&cli.node, hash)?;
+            let mb = result.serialized_size as f64 / (1024.0 * 1024.0);
+            info!("Block hash: {}", result.hash);
+            info!("Tx count: {}", result.tx_count);
+            info!("Size: {:.2} MB", mb);
+            info!("Coinbase detected => {}", result.coinbase_tx_detected);
+            return Ok(());
+        }
+        Commands::DownloadBlock { hash, out } => {
+            let result = peer_client::download_block_node(&cli.node, hash, out.as_deref())?;
+            info!(
+                "Saved block to {} (raw block: {} bytes, blk record: {} bytes)",
+                result.output_path,
+                result.raw_bytes,
+                result.raw_bytes + 8
+            );
+            return Ok(());
+        }
+        Commands::GetHeaders => {}
     }
 
     info!("Connecting to {}", cli.node);
@@ -71,12 +108,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     session.handshake()?;
 
     match cli.command {
-        Commands::GetAddr => get_addresses(&mut session)?,
         Commands::GetHeaders => get_headers(&mut session)?,
-        Commands::LastBlockHeader => last_block_header(&mut session)?,
-        Commands::GetBlock { hash } => get_block(&mut session, hash)?,
-        Commands::DownloadBlock { hash, out } => download_block(&mut session, hash, out)?,
-        Commands::Ping => unreachable!("ping handled before session setup"),
+        Commands::Ping
+        | Commands::GetAddr
+        | Commands::LastBlockHeader
+        | Commands::GetBlock { .. }
+        | Commands::DownloadBlock { .. } => unreachable!("handled before session setup"),
     }
 
     Ok(())
@@ -108,32 +145,6 @@ where
     Ok(())
 }
 
-fn get_addresses(session: &mut Session) -> Result<(), Box<dyn Error>> {
-    info!("Requesting peer addresses...");
-    session.send(Command::GetAddr, &[])?;
-
-    recv_until(session, |msg| match msg {
-        Message::AddrV2(entries) => {
-            info!("Received {} peers (addrv2)", entries.len());
-            for e in entries {
-                info!("  {:?}:{:?}", e.addr, e.port);
-            }
-            Ok(true)
-        }
-        Message::Addr(entries) => {
-            info!("Received {} peers (legacy addr)", entries.len());
-            for e in entries {
-                info!("  {}:{}", e.addr.ip, e.addr.port);
-            }
-            Ok(true)
-        }
-        other => {
-            debug!("Received (ignored): {:?}", other);
-            Ok(false)
-        }
-    })
-}
-
 fn get_headers(session: &mut Session) -> Result<(), Box<dyn Error>> {
     info!("Requesting headers from genesis...");
 
@@ -160,194 +171,41 @@ fn get_headers(session: &mut Session) -> Result<(), Box<dyn Error>> {
     })
 }
 
-/// The `headers` message returns block headers in strictly
-/// chronological (forward) order along the peer's active chain.
-///
-/// Semantics:
-/// - The peer finds the first locator hash it recognizes.
-/// - It then returns headers *after* that block.
-/// - Headers are ordered from oldest → newest.
-/// - At most 2000 headers are returned per message.
-///
-/// This ordering allows the client to validate linkage linearly:
-///
-///     header[i].prev_blockhash == header[i-1].hash()
-///
-/// Even though block headers only contain a backward pointer
-/// (`prev_blockhash`), peers maintain a forward index internally
-/// and iterate forward when constructing the response.
-///
-/// Reference:
-/// https://developer.bitcoin.org/reference/p2p_networking.html#getheaders
-///
-/// This forward ordering is relied upon by header-first sync
-/// and is required for deterministic chain construction.
-fn last_block_header(session: &mut Session) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Starting header sync from genesis...");
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let start = Instant::now();
-    let mut round = 0usize;
-    let mut total_headers = 0usize;
-    let mut current_locator = wire::constants::GENESIS_BLOCK_HASH_MAINNET;
+    #[test]
+    fn cli_parses_get_headers_command() {
+        let cli = Cli::try_parse_from(["btc-cli", "--node", "seed.bitcoin.sipa.be:8333", "get-headers"])
+            .expect("parse get-headers");
 
-    loop {
-        round += 1;
+        assert!(matches!(cli.command, Commands::GetHeaders));
+        assert_eq!(cli.node, "seed.bitcoin.sipa.be:8333");
+    }
 
-        info!(
-            "[round {}] requesting headers (total so far: {})",
-            round, total_headers
+    #[test]
+    fn cli_parses_download_block_command_with_output() {
+        let cli = Cli::try_parse_from([
+            "btc-cli",
+            "--node",
+            "seed.bitcoin.sipa.be:8333",
+            "download-block",
+            "--hash",
+            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+            "--out",
+            "blk.dat",
+        ])
+        .expect("parse download-block");
+
+        let Commands::DownloadBlock { hash, out } = cli.command else {
+            panic!("expected download-block");
+        };
+
+        assert_eq!(
+            hash,
+            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
         );
-
-        let payload = wire::build_getheaders_payload(&[current_locator]);
-        session.send(Command::GetHeaders, &payload)?;
-
-        let mut received_headers = None;
-
-        recv_until(session, |msg| match msg {
-            Message::Headers(h) => {
-                received_headers = Some(h);
-                Ok(true)
-            }
-            other => {
-                debug!("Received: {:?}", other);
-                Ok(false)
-            }
-        })?;
-
-        let headers = received_headers.expect("headers expected");
-
-        let count = headers.len();
-        info!("[round {}] received {} headers", round, count);
-
-        if count == 0 {
-            info!("No new headers returned. Already at tip?");
-            break;
-        }
-
-        total_headers += count;
-
-        let last = headers.last().expect("headers not empty");
-
-        let mut last_hash = last.hash();
-        last_hash.reverse(); // big-endian for display
-
-        info!(
-            "[round {}] last header hash: {}",
-            round,
-            hex::encode(last_hash)
-        );
-
-        // If less than 2000, we reached peer tip
-        if count < 2000 {
-            info!("Reached peer tip.");
-            info!("Total headers fetched: {}", total_headers);
-            info!("Rounds: {}", round);
-            info!("Elapsed: {:.2?}", start.elapsed());
-            info!("Most recent block: {}", hex::encode(last_hash));
-            break;
-        }
-
-        current_locator = last.hash();
+        assert_eq!(out.as_deref(), Some("blk.dat"));
     }
-
-    Ok(())
-}
-
-fn get_block(session: &mut Session, hash_hex: String) -> Result<(), Box<dyn Error>> {
-    let hash = parse_requested_block_hash(&hash_hex)?;
-    let payload = wire::build_getdata_block_payload(hash);
-    session.send(Command::GetData, &payload)?;
-
-    recv_until(session, |msg| match msg {
-        Message::Block(block) => {
-            let mb = block.serialized_size as f64 / (1024.0 * 1024.0);
-
-            info!("Block header: {:?}", block.header);
-            info!("Tx count: {}", block.tx_count);
-            info!("Size: {:.2} MB", mb);
-
-            if block.tx_count > 0 {
-                let tx = block
-                    .transactions
-                    .last()
-                    .ok_or("block has no transactions")?;
-
-                info!("tx.is_coinbase => {}, tx: {:?}", tx.is_coinbase(), tx);
-            }
-
-            Ok(true)
-        }
-        other => {
-            debug!("Received (ignored): {:?}", other);
-            Ok(false)
-        }
-    })
-}
-
-fn download_block(
-    session: &mut Session,
-    hash_hex: String,
-    out: Option<String>,
-) -> Result<(), Box<dyn Error>> {
-    let requested_hash = parse_requested_block_hash(&hash_hex)?;
-    let payload = wire::build_getdata_block_payload(requested_hash);
-    session.send(Command::GetData, &payload)?;
-
-    let out_path = out.unwrap_or_else(|| {
-        let first8 = &hash_hex[..8];
-        let last6 = &hash_hex[hash_hex.len() - 6..];
-        format!("blk-{}-{}.dat", first8, last6)
-    });
-
-    loop {
-        let raw = session.recv_raw()?;
-
-        match raw.command {
-            Command::Ping => {
-                session.send(Command::Pong, &raw.payload)?;
-            }
-            Command::Block => {
-                let block = Block::decode(&raw.payload)?;
-                let got_hash = block.header.hash();
-
-                if got_hash != requested_hash {
-                    let mut display_hash = got_hash;
-                    display_hash.reverse();
-                    let display_hash_hex = hex::encode(display_hash);
-                    warn!("Received different block {}, ignoring...", display_hash_hex);
-                    continue;
-                }
-
-                write_blk_record(&out_path, &raw.payload)?;
-                info!(
-                    "Saved block to {} (raw block: {} bytes, blk record: {} bytes)",
-                    out_path,
-                    raw.payload.len(),
-                    raw.payload.len() + 8
-                );
-                return Ok(());
-            }
-            _ => {}
-        }
-    }
-}
-
-fn parse_requested_block_hash(hash_hex: &str) -> Result<[u8; 32], Box<dyn Error>> {
-    let mut hash = hex::decode(hash_hex)?;
-    if hash.len() != 32 {
-        return Err("block hash must be 32 bytes (64 hex chars)".into());
-    }
-    hash.reverse();
-
-    let mut arr = [0u8; 32];
-    arr.copy_from_slice(&hash);
-    Ok(arr)
-}
-
-fn write_blk_record(path: &str, raw_block: &[u8]) -> Result<(), Box<dyn Error>> {
-    let mut file = File::create(path)?;
-    file.write_all(&wire::constants::MAIN_NET_MAGIC.to_le_bytes())?;
-    file.write_all(&(raw_block.len() as u32).to_le_bytes())?;
-    file.write_all(raw_block)?;
-    Ok(())
 }

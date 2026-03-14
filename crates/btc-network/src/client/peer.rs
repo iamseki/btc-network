@@ -757,4 +757,18 @@ mod tests {
         fs::remove_file(&output_path).expect("cleanup blk record");
         server.join().expect("join");
     }
+
+    #[test]
+    fn parse_requested_block_hash_rejects_non_32_byte_hashes() {
+        let err = parse_requested_block_hash("abcd").expect_err("short hash should fail");
+        assert_eq!(err.to_string(), "block hash must be 32 bytes (64 hex chars)");
+    }
+
+    #[test]
+    fn display_ip_normalizes_ipv4_mapped_ipv6_addresses() {
+        let mapped = "::ffff:1.2.3.4".parse::<IpAddr>().expect("parse mapped ip");
+
+        assert_eq!(display_ip(mapped), "1.2.3.4");
+        assert_eq!(ip_network(mapped), "ipv4");
+    }
 }

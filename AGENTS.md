@@ -147,6 +147,7 @@ Binaries must not:
 - Implement ad-hoc parsing
 - Bypass session or wire layers
 - Re-encode protocol rules locally
+- Reimplement shared single-peer workflows that already exist in `crates/btc-network/src/client/`
 
 ## Repository Layout
 
@@ -300,6 +301,12 @@ For new desktop-backed UI features:
 - frontend API adapter
 - page/component wiring
 - Rust and frontend tests
+
+For backend maintainability:
+
+- keep Tauri commands as thin bridges over `crates/btc-network/src/client/`
+- prefer shared-client tests for workflow behavior over duplicating logic in bridge tests
+- extract small helpers only when they remove repeated glue without hiding control flow
 
 For frontend visual work:
 

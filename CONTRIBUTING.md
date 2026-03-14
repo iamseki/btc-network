@@ -42,6 +42,7 @@ Reusable app-facing workflows used by CLI and desktop:
 CLI-only orchestration:
 
 - change `apps/cli/`
+- prefer calling `crates/btc-network/src/client/` workflows when a shared single-peer flow already exists
 
 Desktop command bridge:
 
@@ -78,6 +79,12 @@ Add a new desktop-backed UI feature:
 3. Update the frontend client adapter
 4. Wire it into the relevant page or component
 5. Add Rust and frontend tests
+
+Keep the Rust bridge thin:
+
+- put workflow logic in `crates/btc-network/src/client/`
+- keep `apps/desktop/src-tauri/src/commands.rs` focused on request/response mapping
+- prefer direct tests in the shared crate for workflow behavior, with desktop tests covering bridge mapping and command wiring
 
 Adjust frontend layout or navigation:
 

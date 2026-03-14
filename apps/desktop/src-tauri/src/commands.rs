@@ -81,112 +81,152 @@ pub struct BlockRequest {
     pub hash: String,
 }
 
+async fn run_blocking<T, F>(task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+impl From<peer::HandshakeSummary> for HandshakeResponse {
+    fn from(summary: peer::HandshakeSummary) -> Self {
+        Self {
+            node: summary.node,
+            protocol_version: summary.protocol_version,
+            services: summary.services,
+            user_agent: summary.user_agent,
+            start_height: summary.start_height,
+            relay: summary.relay,
+        }
+    }
+}
+
+impl From<peer::PingSummary> for PingResponse {
+    fn from(summary: peer::PingSummary) -> Self {
+        Self {
+            node: summary.node,
+            nonce: format!("{:#018x}", summary.nonce),
+            echoed_nonce: format!("{:#018x}", summary.echoed_nonce),
+        }
+    }
+}
+
+impl From<peer::LastBlockHeightSummary> for LastBlockHeightResponse {
+    fn from(summary: peer::LastBlockHeightSummary) -> Self {
+        Self {
+            node: summary.node,
+            height: summary.height,
+            rounds: summary.rounds,
+            elapsed_ms: summary.elapsed_ms,
+            best_block_hash: summary.best_block_hash,
+        }
+    }
+}
+
+impl From<peer::PeerAddressesSummary> for PeerAddressesResponse {
+    fn from(summary: peer::PeerAddressesSummary) -> Self {
+        Self {
+            node: summary.node,
+            addresses: summary
+                .addresses
+                .into_iter()
+                .map(|entry| PeerAddressResponse {
+                    address: entry.address,
+                    port: entry.port,
+                    network: entry.network,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<peer::BlockSummary> for BlockSummaryResponse {
+    fn from(summary: peer::BlockSummary) -> Self {
+        Self {
+            hash: summary.hash,
+            tx_count: summary.tx_count,
+            serialized_size: summary.serialized_size,
+            coinbase_tx_detected: summary.coinbase_tx_detected,
+        }
+    }
+}
+
+impl From<peer::BlockDownloadSummary> for BlockDownloadResponse {
+    fn from(summary: peer::BlockDownloadSummary) -> Self {
+        Self {
+            hash: summary.hash,
+            output_path: summary.output_path,
+            raw_bytes: summary.raw_bytes,
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String> {
-    let summary = tauri::async_runtime::spawn_blocking(move || {
+    let summary = run_blocking(move || {
         peer::handshake_node(&request.node).map_err(|err| err.to_string())
     })
-    .await
-    .map_err(|err| err.to_string())??;
+    .await?;
 
-    Ok(HandshakeResponse {
-        node: summary.node,
-        protocol_version: summary.protocol_version,
-        services: summary.services,
-        user_agent: summary.user_agent,
-        start_height: summary.start_height,
-        relay: summary.relay,
-    })
+    Ok(summary.into())
 }
 
 /// Runs the shared Rust ping workflow through the desktop command boundary.
 #[tauri::command]
 pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
-    let summary = tauri::async_runtime::spawn_blocking(move || {
+    let summary = run_blocking(move || {
         peer::ping_node(&request.node).map_err(|err| err.to_string())
     })
-    .await
-    .map_err(|err| err.to_string())??;
+    .await?;
 
-    Ok(PingResponse {
-        node: summary.node,
-        nonce: format!("{:#018x}", summary.nonce),
-        echoed_nonce: format!("{:#018x}", summary.echoed_nonce),
-    })
+    Ok(summary.into())
 }
 
 #[tauri::command]
 pub async fn get_last_block_height(
     request: ConnectionRequest,
 ) -> Result<LastBlockHeightResponse, String> {
-    let summary = tauri::async_runtime::spawn_blocking(move || {
+    let summary = run_blocking(move || {
         peer::get_last_block_height_node(&request.node).map_err(|err| err.to_string())
     })
-    .await
-    .map_err(|err| err.to_string())??;
+    .await?;
 
-    Ok(LastBlockHeightResponse {
-        node: summary.node,
-        height: summary.height,
-        rounds: summary.rounds,
-        elapsed_ms: summary.elapsed_ms,
-        best_block_hash: summary.best_block_hash,
-    })
+    Ok(summary.into())
 }
 
 #[tauri::command]
 pub async fn get_peer_addresses(
     request: ConnectionRequest,
 ) -> Result<PeerAddressesResponse, String> {
-    let summary = tauri::async_runtime::spawn_blocking(move || {
+    let summary = run_blocking(move || {
         peer::get_peer_addresses_node(&request.node).map_err(|err| err.to_string())
     })
-    .await
-    .map_err(|err| err.to_string())??;
+    .await?;
 
-    Ok(PeerAddressesResponse {
-        node: summary.node,
-        addresses: summary
-            .addresses
-            .into_iter()
-            .map(|entry| PeerAddressResponse {
-                address: entry.address,
-                port: entry.port,
-                network: entry.network,
-            })
-            .collect(),
-    })
+    Ok(summary.into())
 }
 
 #[tauri::command]
 pub async fn get_block_summary(request: BlockRequest) -> Result<BlockSummaryResponse, String> {
-    let summary = tauri::async_runtime::spawn_blocking(move || {
+    let summary = run_blocking(move || {
         peer::get_block_summary_node(&request.node, &request.hash).map_err(|err| err.to_string())
     })
-    .await
-    .map_err(|err| err.to_string())??;
+    .await?;
 
-    Ok(BlockSummaryResponse {
-        hash: summary.hash,
-        tx_count: summary.tx_count,
-        serialized_size: summary.serialized_size,
-        coinbase_tx_detected: summary.coinbase_tx_detected,
-    })
+    Ok(summary.into())
 }
 
 #[tauri::command]
 pub async fn download_block(request: BlockRequest) -> Result<BlockDownloadResponse, String> {
-    let summary = tauri::async_runtime::spawn_blocking(move || {
+    let summary = run_blocking(move || {
         peer::download_block_node(&request.node, &request.hash, None).map_err(|err| err.to_string())
     })
-    .await
-    .map_err(|err| err.to_string())??;
+    .await?;
 
-    Ok(BlockDownloadResponse {
-        hash: summary.hash,
-        output_path: summary.output_path,
-        raw_bytes: summary.raw_bytes,
-    })
+    Ok(summary.into())
 }
 
 #[cfg(test)]
