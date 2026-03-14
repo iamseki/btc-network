@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 
+import { PeerAddressTable } from "@/components/peer-address-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,29 +84,7 @@ export function PeerToolsPage({
               </Badge>
             </div>
             {lastAddrResult ? (
-              <div className="overflow-hidden rounded-[24px] border border-border/80 bg-background/80">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-muted/50 text-left text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Network</th>
-                      <th className="px-4 py-3 font-medium">Address</th>
-                      <th className="px-4 py-3 font-medium">Port</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lastAddrResult.addresses.map((entry) => (
-                      <tr
-                        key={`${entry.network}-${entry.address}-${entry.port}`}
-                        className="border-t border-border/80"
-                      >
-                        <td className="px-4 py-3 text-muted-foreground">{entry.network}</td>
-                        <td className="px-4 py-3 break-all text-foreground">{entry.address}</td>
-                        <td className="px-4 py-3 text-foreground">{entry.port}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <PeerAddressTable addresses={lastAddrResult.addresses} />
             ) : (
               <p className="text-sm text-muted-foreground">No address result yet.</p>
             )}
