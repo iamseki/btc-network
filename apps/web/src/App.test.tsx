@@ -45,7 +45,8 @@ describe("App sidebar shell", () => {
 
     expect(screen.queryByText("Menu")).toBeNull();
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Peer Tools" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connection" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Connection" })).toBeTruthy();
   });
 
   it("expands the sidebar when the trigger is clicked", () => {
@@ -95,6 +96,7 @@ describe("App sidebar shell", () => {
 
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Peer Tools" }));
     fireEvent.click(screen.getByRole("button", { name: /Fetch Peer Addresses/i }));
 
     expect(mockGetAddr).toHaveBeenCalledWith("seed.bitcoin.sipa.be:8333");

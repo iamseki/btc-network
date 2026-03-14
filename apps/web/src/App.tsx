@@ -24,7 +24,7 @@ const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
 
 export function App() {
-  const [selectedPage, setSelectedPage] = useState<AppPageId>("peer-tools");
+  const [selectedPage, setSelectedPage] = useState<AppPageId>("connection");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
