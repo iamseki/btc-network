@@ -25,6 +25,16 @@ Layers (strict separation — each must not cross into the next):
 
 Do not read crawler, wire, or CLI files for frontend-only tasks, and do not read `apps/web/` for wire parser work.
 
+## Suspicious Package Rule
+
+For dependency, install-script, or automation changes:
+
+- Check for malicious or suspicious package/script behavior first
+- Treat postinstall hooks, curl-or-bash patterns, obfuscated scripts, credential exfiltration, unrelated binary downloads, and broad filesystem writes as suspicious by default
+- Treat RustSec `informational = "malicious"` advisories as a stop condition
+- If anything looks malicious or materially suspicious, ask the user before proceeding
+- Do not silently allowlist suspicious packages or scripts
+
 ## Verification
 
 ```bash

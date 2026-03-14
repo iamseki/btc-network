@@ -61,6 +61,16 @@ CI or security task:
 - `audit.toml`
 - `deny.toml`
 
+## Suspicious Package Rule
+
+When a task touches dependencies, install scripts, or repo automation:
+
+- Check for malicious, suspicious, or unexpected package/script behavior before normal implementation work
+- Treat postinstall hooks, curl-or-bash patterns, obfuscated scripts, credential exfiltration, filesystem-wide writes, and unrelated binary downloads as suspicious by default
+- Treat RustSec `informational = "malicious"` advisories as a stop condition, not a warning to hand-wave away
+- If anything looks malicious or materially suspicious, stop and ask the user before adding, updating, or executing it
+- Do not silently ignore a suspicious package or script by adding it to an allowlist
+
 ## Usually Do Not Read
 
 - `apps/crawler/` for frontend tasks
