@@ -5,7 +5,6 @@ import type {
   BlockSummary,
   ConnectionRequest,
   HandshakeResult,
-  HeaderFetchResult,
   LastBlockHeightResult,
   PingResult,
   UiLogEvent,
@@ -56,13 +55,6 @@ export const webClient: BtcAppClient = {
         { address: "127.0.0.1", port: 8333, network: "ipv4" },
         { address: "::1", port: 8333, network: "ipv6" },
       ],
-    });
-  },
-
-  getHeaders(): Promise<HeaderFetchResult> {
-    return delay({
-      count: 2000,
-      lastHeaderHash: "0000000000000000000000000000000000000000000000000000000000000000",
     });
   },
 

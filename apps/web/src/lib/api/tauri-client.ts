@@ -28,9 +28,6 @@ export const tauriClient: BtcAppClient = {
   getAddr(node: string): Promise<AddrResult> {
     return invoke<AddrResult>("get_peer_addresses", { request: { node } });
   },
-  getHeaders() {
-    return Promise.reject(new Error("Tauri adapter not implemented yet: getHeaders"));
-  },
   getLastBlockHeight(node: string): Promise<LastBlockHeightResult> {
     return invoke<LastBlockHeightResult>("get_last_block_height", { request: { node } });
   },

@@ -8,7 +8,6 @@ import { App } from "./App";
 const mockHandshake = vi.fn();
 const mockPing = vi.fn();
 const mockGetAddr = vi.fn();
-const mockGetHeaders = vi.fn();
 const mockGetLastBlockHeight = vi.fn();
 const mockGetBlock = vi.fn();
 const mockDownloadBlock = vi.fn();
@@ -19,7 +18,6 @@ vi.mock("./lib/api", () => ({
     handshake: mockHandshake,
     ping: mockPing,
     getAddr: mockGetAddr,
-    getHeaders: mockGetHeaders,
     getLastBlockHeight: mockGetLastBlockHeight,
     getBlock: mockGetBlock,
     downloadBlock: mockDownloadBlock,
@@ -32,7 +30,6 @@ afterEach(() => {
   mockHandshake.mockReset();
   mockPing.mockReset();
   mockGetAddr.mockReset();
-  mockGetHeaders.mockReset();
   mockGetLastBlockHeight.mockReset();
   mockGetBlock.mockReset();
   mockDownloadBlock.mockReset();

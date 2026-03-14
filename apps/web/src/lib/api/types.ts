@@ -28,11 +28,6 @@ export type AddrResult = {
   addresses: PeerAddress[];
 };
 
-export type HeaderFetchResult = {
-  count: number;
-  lastHeaderHash: string | null;
-};
-
 export type LastBlockHeightResult = {
   height: number;
   rounds: number;

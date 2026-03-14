@@ -86,6 +86,12 @@ Adjust frontend layout or navigation:
 3. Keep Tauri out of components
 4. Add or update render tests when behavior changes
 
+Keep the frontend API surface small:
+
+- only keep adapter methods that are wired to the current product surface
+- remove dead placeholder methods when a page is not using them
+- do not mirror every CLI command in the frontend boundary unless the UI actually exposes it
+
 ## Verification
 
 Run the smallest relevant checks while working, then run the broader project check before finishing.

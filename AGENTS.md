@@ -308,6 +308,12 @@ For frontend visual work:
 - use lower-level primitives only if the block is not a good fit
 - add or update render tests when behavior changes
 
+For frontend API cleanup:
+
+- keep the client boundary aligned with the actual product surface
+- remove dead adapter methods that are not wired to any page
+- do not preserve placeholder API methods just because a CLI command exists
+
 ## Protocol Rules To Preserve
 
 These rules reflect real Bitcoin behavior and must not be violated.
