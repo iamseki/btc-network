@@ -132,3 +132,5 @@ The plain web runtime still uses `web-client.ts` placeholders for browser-safe d
 - Provide only the final solution unless asked for reasoning.
 - Prefer compact, idiomatic code.
 - If assumptions are needed, state them in one line.
+- Put the outcome first and avoid padded explanations.
+- Do not restate repo context unless it is necessary for the answer.

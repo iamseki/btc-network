@@ -30,6 +30,16 @@ Prefer code that is easy to maintain.
 - Apply KISS: prefer straightforward control flow, explicit types, and small focused helpers over clever reuse
 - Add indirection only when it removes real duplication or protects an important boundary
 
+## Communication Rule
+
+When reporting work to the user:
+
+- Be concise and direct
+- State the outcome first
+- Do not include unnecessary recap, filler, or repeated context
+- Prefer short paragraphs over long structured writeups unless the task truly needs detail
+- Mention commands/tests run only when they materially help the user evaluate the result
+
 ## Open These First
 
 Pick the smallest relevant set.
