@@ -2,6 +2,10 @@
 
 A minimal Bitcoin P2P client in Rust. Reference to the protocol: https://developer.bitcoin.org/devguide/p2p_network.html#connecting-to-peers
 
+## License
+
+Licensed under the Apache License, Version 2.0. See `LICENSE`.
+
 ## Workspace Layout
 
 This repository is organized as a small monorepo:
