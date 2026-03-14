@@ -48,8 +48,8 @@ apps/listener/          Listener orchestration
 
 apps/web/               Primary React frontend
   src/app/              App shell and page registry
-  src/pages/            Route-level pages
-  src/features/         Page-level UI and local state
+  src/components/ui/    Shared UI primitives and sidebar shell pieces
+  src/pages/            Page-level screens
   src/lib/api/          App-facing client boundary
 
 apps/desktop/           Tauri shell
@@ -61,13 +61,13 @@ apps/desktop/           Tauri shell
 The UI must depend on a frontend-facing client interface, not on Tauri imports and not on CLI binaries.
 
 ```text
-React page -> feature component -> api client interface -> adapter implementation
+React page -> shared UI/components -> api client interface -> adapter implementation
 ```
 
 Examples:
 
 - Desktop: `tauri-client.ts` calls native commands exposed by Tauri
-- Web: `web-client.ts` can call a future HTTP API or provide local mocks during early UI work
+- Web: `web-client.ts` currently provides placeholder/mock responses where a browser-safe backend does not yet exist
 
 Current real desktop-backed commands:
 
@@ -107,23 +107,24 @@ These pages map directly to the current CLI commands in `apps/cli/src/main.rs`.
 - Transaction count
 - Output file path for block record writes
 
-## Implementation Sequence
+## Current Implementation State
 
-1. Build page skeletons and frontend contracts in `apps/web`
-2. Extract shared Rust application workflows from `apps/cli/src/main.rs`
-3. Expose those workflows through Tauri commands in `apps/desktop`
-4. Keep a separate web adapter for future browser deployment
+Already in place:
 
-Current implementation status:
+- shared Rust handshake flow extracted into `crates/btc-network/src/client/peer.rs`
+- shared Rust ping flow extracted into `crates/btc-network/src/client/peer.rs`
+- Tauri desktop commands wired for `handshake` and `ping`
+- runtime selection between `web-client` and `tauri-client`
+- render tests for the app shell and sidebar behavior
 
-- shared Rust handshake flow extracted
-- shared Rust ping flow extracted
-- Tauri desktop commands wired for handshake and ping
-- frontend runtime selection between `web-client` and `tauri-client` in place
+Still intentionally incomplete:
+
+- desktop commands for `getAddr`, headers flows, and block flows
+- browser-safe backend/API for non-placeholder web execution
 
 ## Rust Extraction Direction
 
-The CLI currently contains user flows that should be moved into reusable library modules before Tauri integration grows:
+The CLI still contains user flows that should move into reusable library modules as integration grows:
 
 - handshake/connect flow
 - ping flow

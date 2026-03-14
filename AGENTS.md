@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for Codex and other coding agents working in this repository.
+Guidance for coding agents working in this repository.
 
 Start with `docs/architecture-decisions.md` for the compact version of settled repo decisions.
 

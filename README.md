@@ -43,7 +43,7 @@ orchestration (cli, crawler, etc)
 
 ## Frontend Status
 
-The repository now includes a web-first frontend scaffold under `apps/web`.
+The repository includes a web-first frontend under `apps/web` and a Tauri desktop shell under `apps/desktop`.
 
 Current frontend stack:
 
@@ -75,7 +75,11 @@ Current real desktop-backed flows:
 - Handshake
 - Ping
 
-These now run through a shared Rust application layer and a minimal Tauri command bridge instead of placeholder-only frontend behavior.
+Current web runtime behavior:
+
+- the app shell, pages, and navigation are real React UI
+- the desktop runtime calls real Rust/Tauri commands for `handshake` and `ping`
+- the plain web runtime still uses a placeholder adapter for actions that are not browser-safe or not yet backed by a service
 
 Design direction:
 
@@ -92,7 +96,7 @@ See also:
 - `docs/frontend-architecture.md`
 - `apps/web/README.md`
 
-## btc-cli Usage
+## CLI Usage
 
 Minimal Bitcoin P2P CLI for interacting with a single peer.
 
@@ -158,7 +162,7 @@ Build the frontend for production:
 Notes:
 
 - In desktop mode, `handshake` and `ping` now call real Rust/Tauri commands
-- The remaining flows still use placeholder/mock adapter behavior until they are wired
+- In plain web mode, the adapter remains placeholder/mock-backed for flows that do not yet have a browser-safe backend
 - Browser deployment remains a design goal, so UI code must stay portable
 
 ## Desktop Usage

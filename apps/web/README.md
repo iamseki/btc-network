@@ -24,7 +24,13 @@ This app does not own:
 
 ## Current Status
 
-The repository currently includes the frontend structure, page registry, and client contracts.
+Current state:
+
+- app shell and page navigation are implemented
+- the sidebar shell is covered by render tests in `src/App.test.tsx`
+- runtime selection between `web-client` and `tauri-client` is in place
+- desktop-backed `handshake` and `ping` are wired through Tauri
+- plain web mode still uses placeholder/mock responses where a browser-safe backend does not yet exist
 
 ## Local commands
 
@@ -33,4 +39,8 @@ The repository currently includes the frontend structure, page registry, and cli
 - `npm run test --prefix apps/web`
 - `npm run build --prefix apps/web`
 
-The next implementation step after the scaffold is wiring the desktop adapter to Rust commands and continuing to build the UI from shadcn blocks first, with lower-level components as a fallback.
+Next implementation priorities:
+
+- continue extracting shared Rust workflows for headers, address, and block flows
+- expose those flows through the desktop bridge
+- keep the web runtime behind a browser-safe adapter boundary
