@@ -4,6 +4,13 @@ This repository is a small workspace around a shared Bitcoin P2P Rust core and t
 
 Start here if you want to understand where a change belongs and what to run before opening a PR.
 
+## Maintenance Style
+
+- Prefer pragmatic changes over speculative architecture
+- Apply YAGNI: do not add new abstractions or options until the codebase clearly needs them
+- Apply KISS: favor direct logic, explicit naming, and small focused helpers
+- Reach for reuse only when it removes real duplication or protects an existing boundary
+
 ## Where Things Live
 
 - `crates/btc-network/` — shared Rust protocol, session, and client workflow library

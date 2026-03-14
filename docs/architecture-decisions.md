@@ -37,6 +37,12 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Favor a retro instrument-panel / terminal-console feel over generic SaaS styling
 - Avoid decorative chrome that does not help protocol exploration
 
+## Maintenance Bias
+
+- Prefer maintainable, pragmatic code over speculative architecture
+- Apply YAGNI before adding new layers, options, or generalized helpers
+- Apply KISS with direct control flow and explicit types unless a real boundary needs more structure
+
 ## Verification Defaults
 
 - `make test` is the project-level verification command

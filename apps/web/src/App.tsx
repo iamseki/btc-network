@@ -17,7 +17,15 @@ import { ConnectionPage } from "./pages/connection-page";
 import { HeadersPage } from "./pages/headers-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { getAppClient } from "./lib/api";
-import type { HandshakeResult, LastBlockHeightResult, PingResult, UiLogEvent } from "./lib/api/types";
+import type {
+  AddrResult,
+  BlockDownloadResult,
+  BlockSummary,
+  HandshakeResult,
+  LastBlockHeightResult,
+  PingResult,
+  UiLogEvent,
+} from "./lib/api/types";
 
 const defaultNode = "seed.bitcoin.sipa.be:8333";
 const sampleBlockHash =
@@ -48,15 +56,15 @@ export function App() {
 
   const [lastPing, setLastPing] = useState<PingResult | null>(null);
   const [isPinging, setIsPinging] = useState(false);
-  const [lastAddrResult, setLastAddrResult] = useState<Awaited<ReturnType<typeof client.getAddr>> | null>(null);
+  const [lastAddrResult, setLastAddrResult] = useState<AddrResult | null>(null);
   const [isGettingAddr, setIsGettingAddr] = useState(false);
 
   const [lastBlockHeight, setLastBlockHeight] = useState<LastBlockHeightResult | null>(null);
   const [isLoadingLastBlockHeight, setIsLoadingLastBlockHeight] = useState(false);
 
   const [blockHash, setBlockHash] = useState(sampleBlockHash);
-  const [blockSummary, setBlockSummary] = useState<Awaited<ReturnType<typeof client.getBlock>> | null>(null);
-  const [downloadResult, setDownloadResult] = useState<Awaited<ReturnType<typeof client.downloadBlock>> | null>(null);
+  const [blockSummary, setBlockSummary] = useState<BlockSummary | null>(null);
+  const [downloadResult, setDownloadResult] = useState<BlockDownloadResult | null>(null);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [isDownloadingBlock, setIsDownloadingBlock] = useState(false);
 

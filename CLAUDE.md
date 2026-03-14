@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Research-focused Bitcoin P2P client in Rust. Goal is protocol correctness and architectural clarity, not a wallet, miner, or full node.
 
+## Maintenance Rule
+
+Prefer maintainable code over speculative architecture.
+
+- Apply YAGNI: do not introduce abstractions before there is a real second use or a boundary to protect
+- Apply KISS: favor direct control flow, explicit naming, and small focused helpers
+- Add complexity only when it clearly reduces duplication, risk, or boundary leakage
+
 Layers (strict separation — each must not cross into the next):
 
 - **wire** (`crates/btc-network/src/wire/`) — framing, deterministic parsing, typed message dispatch. No connection state, no business logic.

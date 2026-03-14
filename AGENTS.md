@@ -21,6 +21,15 @@ Develop a research-focused Bitcoin P2P implementation in Rust that exposes the p
 
 This is not a wallet, miner, or full node clone. It is a protocol engineering project designed to understand how Bitcoin works under the hood.
 
+## Maintenance Rule
+
+Prefer code that is easy to maintain.
+
+- Choose pragmatic changes over speculative architecture
+- Apply YAGNI: do not add abstractions, layers, or options before the project clearly needs them
+- Apply KISS: prefer straightforward control flow, explicit types, and small focused helpers over clever reuse
+- Add indirection only when it removes real duplication or protects an important boundary
+
 ## Open These First
 
 Pick the smallest relevant set.
