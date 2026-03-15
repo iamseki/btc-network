@@ -1,5 +1,5 @@
 use btc_network::crawler::{Crawler, CrawlerConfig};
-use btc_network_observability as observability;
+use btc_network_observability::init_tracing;
 use clap::Parser;
 use std::error::Error;
 use std::time::Duration;
@@ -29,7 +29,7 @@ struct Cli {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-    observability::init_tracing();
+    init_tracing();
     let cli = Cli::parse();
     let config = CrawlerConfig {
         max_concurrency: cli.max_concurrency,

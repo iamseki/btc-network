@@ -3,8 +3,8 @@ use std::error::Error;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-use btc_network_observability as observability;
-use btc_network::client::peer as peer_client;
+use btc_network::client::peer;
+use btc_network_observability::init_tracing;
 use btc_network::session::Session;
 use btc_network::wire::{self, Command, Message};
 use tracing::{debug, info};
@@ -38,12 +38,12 @@ enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    observability::init_tracing();
+    init_tracing();
     let cli = Cli::parse();
 
     match &cli.command {
         Commands::Ping => {
-            let result = peer_client::ping_node(&cli.node)?;
+            let result = peer::ping_node(&cli.node)?;
             info!(
                 "Received matching pong. ping nonce: {}, pong nonce: {}",
                 result.nonce, result.echoed_nonce
@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
         Commands::GetAddr => {
-            let result = peer_client::get_peer_addresses_node(&cli.node)?;
+            let result = peer::get_peer_addresses_node(&cli.node)?;
             info!("Received {} peers", result.addresses.len());
             for entry in result.addresses {
                 info!("  [{}] {}:{}", entry.network, entry.address, entry.port);
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
         Commands::LastBlockHeader => {
-            let result = peer_client::get_last_block_height_node(&cli.node)?;
+            let result = peer::get_last_block_height_node(&cli.node)?;
             info!("Reached peer tip.");
             info!("Total headers fetched: {}", result.height);
             info!("Rounds: {}", result.rounds);
@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
         Commands::GetBlock { hash } => {
-            let result = peer_client::get_block_summary_node(&cli.node, hash)?;
+            let result = peer::get_block_summary_node(&cli.node, hash)?;
             let mb = result.serialized_size as f64 / (1024.0 * 1024.0);
             info!("Block hash: {}", result.hash);
             info!("Tx count: {}", result.tx_count);
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
         Commands::DownloadBlock { hash, out } => {
-            let result = peer_client::download_block_node(&cli.node, hash, out.as_deref())?;
+            let result = peer::download_block_node(&cli.node, hash, out.as_deref())?;
             info!(
                 "Saved block to {} (raw block: {} bytes, blk record: {} bytes)",
                 result.output_path,

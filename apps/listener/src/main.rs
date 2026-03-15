@@ -1,5 +1,5 @@
 use btc_network::wire;
-use btc_network_observability as observability;
+use btc_network_observability::init_tracing;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 use tracing::{info, warn};
@@ -59,7 +59,7 @@ fn listen(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    observability::init_tracing();
+    init_tracing();
     let node = "seed.bitcoin.sipa.be:8333";
     info!("Connecting to: {node}");
 
