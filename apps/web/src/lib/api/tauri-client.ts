@@ -1,6 +1,7 @@
 import type { BtcAppClient } from "./client";
 import type {
   AddrResult,
+  BlockDownloadRequest,
   BlockDownloadResult,
   BlockSummary,
   ConnectionRequest,
@@ -67,8 +68,20 @@ export const tauriClient: BtcAppClient = {
   getBlock(node: string, hash: string): Promise<BlockSummary> {
     return invoke<BlockSummary>("get_block_summary", { request: { node, hash } });
   },
-  downloadBlock(node: string, hash: string): Promise<BlockDownloadResult> {
-    return invoke<BlockDownloadResult>("download_block", { request: { node, hash } });
+  downloadBlock(request: BlockDownloadRequest): Promise<BlockDownloadResult> {
+    return invoke<BlockDownloadResult>("download_block", { request });
+  },
+  async getSuggestedBlockDownloadPath(hash: string): Promise<string> {
+    const filename = `blk-${hash.slice(0, 8)}-${hash.slice(-6)}.dat`;
+
+    try {
+      const pathMod = await import("@tauri-apps/api/path");
+      const downloadsDir = await pathMod.downloadDir();
+      const separator = downloadsDir.endsWith("/") || downloadsDir.endsWith("\\") ? "" : "/";
+      return `${downloadsDir}${separator}${filename}`;
+    } catch {
+      return filename;
+    }
   },
   getRecentEvents(): Promise<UiLogEvent[]> {
     return Promise.resolve([]);

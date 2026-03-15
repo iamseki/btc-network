@@ -1,5 +1,5 @@
 import { Blocks, Network, Radio, Waypoints } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
 import { prependLogEvent } from "./app/log-events";
@@ -68,6 +68,7 @@ export function App() {
   const [isLoadingLastBlockHeight, setIsLoadingLastBlockHeight] = useState(false);
 
   const [blockHash, setBlockHash] = useState(sampleBlockHash);
+  const [downloadPath, setDownloadPath] = useState("");
   const [blockSummary, setBlockSummary] = useState<BlockSummary | null>(null);
   const [downloadResult, setDownloadResult] = useState<BlockDownloadResult | null>(null);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
@@ -91,6 +92,20 @@ export function App() {
     setEvents([]);
   }
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void client.getSuggestedBlockDownloadPath(blockHash).then((nextPath) => {
+      if (!cancelled) {
+        setDownloadPath(nextPath);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [blockHash, client]);
+
   async function handleHandshake() {
     setIsHandshaking(true);
     setLastHandshake(null);
@@ -99,7 +114,10 @@ export function App() {
     try {
       const result = await client.handshake({ node });
       setLastHandshake(result);
-      pushEvent("info", `Handshake complete. Peer start height: ${result.startHeight}`);
+      pushEvent(
+        "info",
+        `Handshake complete. Services: ${result.serviceNames.join(", ")}. Peer start height: ${result.startHeight}`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       pushEvent("error", `Handshake failed: ${message}`);
@@ -186,7 +204,11 @@ export function App() {
     pushEvent("info", `Downloading block ${blockHash} from ${node}`);
 
     try {
-      const result = await client.downloadBlock(node, blockHash);
+      const result = await client.downloadBlock({
+        node,
+        hash: blockHash,
+        outputPath: downloadPath,
+      });
       setDownloadResult(result);
       pushEvent("info", `Saved block record to ${result.outputPath}`);
     } catch (error) {
@@ -313,11 +335,13 @@ export function App() {
                 <BlocksPage
                   node={node}
                   blockHash={blockHash}
+                  downloadPath={downloadPath}
                   blockSummary={blockSummary}
                   downloadResult={downloadResult}
                   isLoadingBlock={isLoadingBlock}
                   isDownloadingBlock={isDownloadingBlock}
                   onBlockHashChange={setBlockHash}
+                  onDownloadPathChange={setDownloadPath}
                   onGetBlock={handleGetBlock}
                   onDownloadBlock={handleDownloadBlock}
                 />

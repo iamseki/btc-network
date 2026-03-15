@@ -51,7 +51,7 @@ export function HeadersPage({
 
   return (
     <Card>
-      <CardContent className="space-y-8 p-6">
+      <CardContent className="space-y-6 p-6">
         <SectionHeading
           eyebrow="Chain"
           title="Chain Height"
@@ -59,8 +59,8 @@ export function HeadersPage({
           actions={<Badge>Best Known Tip</Badge>}
         />
 
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="rounded-[20px] border border-border/80 bg-background/80 px-4 py-3 font-mono text-sm text-foreground">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="rounded-[8px] border border-border/80 bg-background/80 px-4 py-3 font-mono text-sm text-foreground">
             {node}
           </div>
           <Button
@@ -73,7 +73,7 @@ export function HeadersPage({
           </Button>
         </div>
         {isLoadingLastBlockHeight ? (
-          <div className="rounded-[20px] border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-muted-foreground">
+          <div className="rounded-[8px] border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-muted-foreground">
             <p className="flex items-center gap-2 text-foreground">
               <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
               Scanning the peer's best-known chain tip.
@@ -104,53 +104,28 @@ export function HeadersPage({
           </div>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-                Chain Height
+                Scan Summary
               </p>
               <Badge>{isLoadingLastBlockHeight ? "Updating" : "Ready"}</Badge>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-border/80 bg-background/80 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  Status
-                </p>
-                <p className="mt-3 font-mono text-lg text-foreground">
-                  {viewState.statusLabel}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {isLoadingLastBlockHeight && viewState.liveElapsedSeconds !== null
-                    ? `${viewState.liveElapsedSeconds}s into the current request.`
-                    : "Ready to query the peer again."}
-                </p>
-              </div>
-
-              <div className="rounded-[20px] border border-border/80 bg-background/80 p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                  Last observed height
-                </p>
-                <p className="mt-3 font-mono text-2xl text-foreground">
-                  {viewState.observedHeight ?? "n/a"}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {viewState.observedRounds !== null
-                    ? `Observed after ${viewState.observedRounds} rounds.`
-                    : "No successful chain-height snapshot yet."}
-                </p>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <MetricPanel label="Status" value={viewState.statusLabel} />
+              <MetricPanel label="Height" value={viewState.observedHeight ?? "n/a"} />
+              <MetricPanel
+                label="Elapsed"
+                value={viewState.elapsedMs !== null ? `${viewState.elapsedMs} ms` : "n/a"}
+              />
             </div>
-
-            <DataList
-              items={[
-                { label: "Phase", value: viewState.statusLabel },
-                { label: "Headers scanned", value: viewState.observedHeight ?? "n/a" },
-                { label: "Rounds completed", value: viewState.observedRounds ?? "n/a" },
-                { label: "Last batch", value: viewState.lastBatchCount ?? "n/a" },
-              ]}
-            />
+            <p className="text-sm text-muted-foreground">
+              {isLoadingLastBlockHeight && viewState.liveElapsedSeconds !== null
+                ? `${viewState.liveElapsedSeconds}s into the current request.`
+                : "Ready to query the peer again."}
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -165,7 +140,7 @@ export function HeadersPage({
 
             {lastBlockHeight || lastBlockHeightProgress ? (
               <div className="space-y-4">
-                <div className="rounded-[20px] border border-border/80 bg-background/80 p-4">
+                <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     Best block hash
                   </p>
@@ -176,9 +151,8 @@ export function HeadersPage({
 
                 <DataList
                   items={[
-                    { label: "Last block height", value: viewState.observedHeight ?? "n/a" },
                     { label: "Rounds", value: viewState.observedRounds ?? "n/a" },
-                    { label: "Elapsed (ms)", value: viewState.elapsedMs ?? "n/a" },
+                    { label: "Last batch", value: viewState.lastBatchCount ?? "n/a" },
                   ]}
                 />
               </div>
@@ -191,6 +165,26 @@ export function HeadersPage({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function MetricPanel({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
+  return (
+    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-3 font-mono text-base text-foreground">{value}</p>
+      {detail ? <p className="mt-2 text-sm text-muted-foreground">{detail}</p> : null}
+    </div>
   );
 }
 

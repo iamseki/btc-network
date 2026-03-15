@@ -6,6 +6,7 @@ export type HandshakeResult = {
   node: string;
   protocolVersion: number;
   services: string;
+  serviceNames: string[];
   userAgent: string;
   startHeight: number;
   relay: boolean | null;
@@ -64,6 +65,12 @@ export type BlockDownloadResult = {
   hash: string;
   outputPath: string;
   rawBytes: number;
+};
+
+export type BlockDownloadRequest = {
+  node: string;
+  hash: string;
+  outputPath?: string;
 };
 
 export type UiLogEvent = {

@@ -16,6 +16,7 @@ pub struct HandshakeSummary {
     pub node: String,
     pub protocol_version: i32,
     pub services: String,
+    pub service_names: Vec<String>,
     pub user_agent: String,
     pub start_height: i32,
     pub relay: Option<bool>,
@@ -422,6 +423,12 @@ fn map_handshake(node: &str, version: VersionMessage) -> HandshakeSummary {
         node: node.to_owned(),
         protocol_version: version.version,
         services: format!("{:#018x}", version.services.bits()),
+        service_names: version
+            .services
+            .names()
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
         user_agent: version.user_agent,
         start_height: version.start_height,
         relay: version.relay,
@@ -662,6 +669,7 @@ mod tests {
             crate::wire::constants::PROTOCOL_VERSION
         );
         assert_eq!(summary.services, "0x0000000000000008");
+        assert_eq!(summary.service_names, vec!["NODE_WITNESS".to_owned()]);
 
         server.join().expect("join");
     }

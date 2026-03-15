@@ -63,15 +63,15 @@ describe("HeadersPage", () => {
     expect(
       screen.getByText((content) => content.includes("Holding the last successful snapshot")),
     ).toBeTruthy();
-    expect(screen.getByText("Last observed height")).toBeTruthy();
-    expect(screen.getByText("Observed after 471 rounds.")).toBeTruthy();
-    expect(screen.getAllByText("Scanning headers")).toHaveLength(2);
-    expect(screen.getByText("Headers scanned")).toBeTruthy();
+    expect(screen.getByText("Height")).toBeTruthy();
+    expect(screen.getByText("Scanning headers")).toBeTruthy();
+    expect(screen.getByText("Rounds")).toBeTruthy();
     expect(screen.getByText("1592")).toBeTruthy();
     expect(screen.getByText("1s into the current request.")).toBeTruthy();
     expect(
       screen.getByText("00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde"),
     ).toBeTruthy();
+    expect(screen.getByText("Last batch")).toBeTruthy();
   });
 
   it("requests the last block height when the action is clicked", () => {
@@ -114,7 +114,8 @@ describe("HeadersPage", () => {
       />,
     );
 
-    expect(screen.getAllByText("Completed")).toHaveLength(2);
+    expect(screen.getByText("Completed")).toBeTruthy();
     expect(screen.getByText("Ready to query the peer again.")).toBeTruthy();
+    expect(screen.getByText("Elapsed")).toBeTruthy();
   });
 });

@@ -8,6 +8,7 @@ describe("webClient", () => {
 
     expect(result.node).toBe("seed.bitcoin.sipa.be:8333");
     expect(result.protocolVersion).toBe(70016);
+    expect(result.serviceNames).toEqual(["NONE"]);
   });
 
   it("returns placeholder peer addresses", async () => {
@@ -47,8 +48,17 @@ describe("webClient", () => {
   it("derives the default output filename for block downloads", async () => {
     const hash =
       "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
-    const result = await webClient.downloadBlock("node", hash);
+    const result = await webClient.downloadBlock({ node: "node", hash });
 
-    expect(result.outputPath).toBe("blk-00000000-8ce26f.dat");
+    expect(result.outputPath).toBe("downloads/blk-00000000-8ce26f.dat");
+  });
+
+  it("returns a suggested host download path for block downloads", async () => {
+    const hash =
+      "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+
+    const result = await webClient.getSuggestedBlockDownloadPath(hash);
+
+    expect(result).toBe("downloads/blk-00000000-8ce26f.dat");
   });
 });

@@ -17,6 +17,7 @@ describe("BlocksPage", () => {
       <BlocksPage
         node="seed.bitcoin.sipa.be:8333"
         blockHash="000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+        downloadPath="downloads/blk-00000000-8ce26f.dat"
         blockSummary={null}
         downloadResult={null}
         onGetBlock={onGetBlock}
@@ -35,14 +36,36 @@ describe("BlocksPage", () => {
       <BlocksPage
         node="seed.bitcoin.sipa.be:8333"
         blockHash="000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+        downloadPath="downloads/blk-00000000-8ce26f.dat"
         blockSummary={null}
         downloadResult={null}
         onDownloadBlock={onDownloadBlock}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Download Block/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Download to Host Path/i }));
 
     expect(onDownloadBlock).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the editable host download path", () => {
+    const onDownloadPathChange = vi.fn();
+
+    render(
+      <BlocksPage
+        node="seed.bitcoin.sipa.be:8333"
+        blockHash="000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+        downloadPath="downloads/blk-00000000-8ce26f.dat"
+        blockSummary={null}
+        downloadResult={null}
+        onDownloadPathChange={onDownloadPathChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Host download path" }), {
+      target: { value: "/tmp/custom.dat" },
+    });
+
+    expect(onDownloadPathChange).toHaveBeenCalledWith("/tmp/custom.dat");
   });
 });

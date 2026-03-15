@@ -17,6 +17,10 @@ export type ConnectionPageProps = {
   onHandshake: () => void | Promise<void>;
 };
 
+function formatServiceNames(serviceNames: string[]) {
+  return serviceNames.join(", ");
+}
+
 export function ConnectionPage({
   node,
   lastHandshake,
@@ -63,7 +67,11 @@ export function ConnectionPage({
               items={[
                 { label: "Node", value: lastHandshake.node },
                 { label: "Protocol version", value: lastHandshake.protocolVersion },
-                { label: "Services", value: lastHandshake.services },
+                {
+                  label: "Services",
+                  value: formatServiceNames(lastHandshake.serviceNames),
+                },
+                { label: "Service flags", value: lastHandshake.services },
                 { label: "User agent", value: lastHandshake.userAgent },
                 { label: "Start height", value: lastHandshake.startHeight },
               ]}

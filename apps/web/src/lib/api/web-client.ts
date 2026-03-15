@@ -1,6 +1,7 @@
 import type { BtcAppClient } from "./client";
 import type {
   AddrResult,
+  BlockDownloadRequest,
   BlockDownloadResult,
   BlockSummary,
   ConnectionRequest,
@@ -35,6 +36,7 @@ export const webClient: BtcAppClient = {
       node: request.node,
       protocolVersion: 70016,
       services: "0x0000000000000000",
+      serviceNames: ["NONE"],
       userAgent: "/btc-network:ui-placeholder/",
       startHeight: 0,
       relay: null,
@@ -107,12 +109,16 @@ export const webClient: BtcAppClient = {
     });
   },
 
-  downloadBlock(_node: string, hash: string): Promise<BlockDownloadResult> {
+  downloadBlock(request: BlockDownloadRequest): Promise<BlockDownloadResult> {
+    const filename = request.outputPath?.trim() || `downloads/blk-${request.hash.slice(0, 8)}-${request.hash.slice(-6)}.dat`;
     return delay({
-      hash,
-      outputPath: `blk-${hash.slice(0, 8)}-${hash.slice(-6)}.dat`,
+      hash: request.hash,
+      outputPath: filename,
       rawBytes: 285,
     });
+  },
+  getSuggestedBlockDownloadPath(hash: string): Promise<string> {
+    return delay(`downloads/blk-${hash.slice(0, 8)}-${hash.slice(-6)}.dat`);
   },
 
   getRecentEvents(): Promise<UiLogEvent[]> {

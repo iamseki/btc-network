@@ -186,17 +186,24 @@ pub async fn get_block_summary(request: BlockRequest) -> Result<BlockSummaryResp
 pub async fn download_block(request: BlockRequest) -> Result<BlockDownloadResponse, DesktopError> {
     validate_node(&request.node)?;
     validate_block_hash(&request.hash)?;
+    let output_path = request
+        .output_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(str::to_owned);
     info!(
         command = "download_block",
         node = %request.node,
         hash = %request.hash,
+        output_path = ?output_path,
         "starting desktop command"
     );
 
     let node = request.node.clone();
     let hash = request.hash.clone();
     let summary = run_blocking("download_block", move || {
-        peer::download_block_node(&request.node, &request.hash, None)
+        peer::download_block_node(&request.node, &request.hash, output_path.as_deref())
             .map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
@@ -335,6 +342,7 @@ mod tests {
             btc_network::wire::constants::PROTOCOL_VERSION
         );
         assert_eq!(result.services, "0x0000000000000008");
+        assert_eq!(result.service_names, vec!["NODE_WITNESS".to_owned()]);
 
         server.join().expect("join");
     }
@@ -526,6 +534,7 @@ mod tests {
         let result = tauri::async_runtime::block_on(get_block_summary(BlockRequest {
             node: addr.to_string(),
             hash: requested_hash.clone(),
+            output_path: None,
         }))
         .expect("get block summary command");
 
@@ -568,6 +577,7 @@ mod tests {
         let result = tauri::async_runtime::block_on(download_block(BlockRequest {
             node: addr.to_string(),
             hash: requested_hash.clone(),
+            output_path: None,
         }))
         .expect("download block command");
 
@@ -594,6 +604,7 @@ mod tests {
         let err = tauri::async_runtime::block_on(get_block_summary(BlockRequest {
             node: "127.0.0.1:8333".to_owned(),
             hash: "bad-hash".to_owned(),
+            output_path: None,
         }))
         .expect_err("invalid hash");
 

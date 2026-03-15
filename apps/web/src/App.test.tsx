@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
@@ -11,6 +11,7 @@ const mockGetAddr = vi.fn();
 const mockGetLastBlockHeight = vi.fn();
 const mockGetBlock = vi.fn();
 const mockDownloadBlock = vi.fn();
+const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
 
 vi.mock("./lib/api", () => ({
@@ -21,6 +22,7 @@ vi.mock("./lib/api", () => ({
     getLastBlockHeight: mockGetLastBlockHeight,
     getBlock: mockGetBlock,
     downloadBlock: mockDownloadBlock,
+    getSuggestedBlockDownloadPath: mockGetSuggestedBlockDownloadPath,
     getRecentEvents: mockGetRecentEvents,
   }),
 }));
@@ -33,7 +35,17 @@ afterEach(() => {
   mockGetLastBlockHeight.mockReset();
   mockGetBlock.mockReset();
   mockDownloadBlock.mockReset();
+  mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
+  mockGetSuggestedBlockDownloadPath.mockResolvedValue(
+    "downloads/blk-00000000-8ce26f.dat",
+  );
+});
+
+beforeEach(() => {
+  mockGetSuggestedBlockDownloadPath.mockResolvedValue(
+    "downloads/blk-00000000-8ce26f.dat",
+  );
 });
 
 describe("App sidebar shell", () => {
@@ -97,10 +109,10 @@ describe("App sidebar shell", () => {
       "seed.bitnodes.io:8333",
       expect.any(Function),
     );
-    expect(await screen.findByText("Last block height")).toBeTruthy();
-    expect(await screen.findByText("Last observed height")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Chain Height" })).toBeTruthy();
+    expect(await screen.findByText("Height")).toBeTruthy();
     expect(await screen.findByText("Best block hash")).toBeTruthy();
-    expect(await screen.findByText("Headers scanned")).toBeTruthy();
+    expect(await screen.findByText("Rounds")).toBeTruthy();
   });
 
   it("fetches peer addresses from the peer tools page", async () => {
@@ -153,12 +165,14 @@ describe("App sidebar shell", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "Block Explorer" }));
-    fireEvent.click(screen.getByRole("button", { name: /Download Block/i }));
+    await screen.findByDisplayValue("downloads/blk-00000000-8ce26f.dat");
+    fireEvent.click(screen.getByRole("button", { name: /Download to Host Path/i }));
 
-    expect(mockDownloadBlock).toHaveBeenCalledWith(
-      "seed.bitnodes.io:8333",
-      "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
-    );
+    expect(mockDownloadBlock).toHaveBeenCalledWith({
+      node: "seed.bitnodes.io:8333",
+      hash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+      outputPath: "downloads/blk-00000000-8ce26f.dat",
+    });
     expect(await screen.findByText("blk-00000000-8ce26f.dat")).toBeTruthy();
   });
 

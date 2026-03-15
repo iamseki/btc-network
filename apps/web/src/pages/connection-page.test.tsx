@@ -36,6 +36,7 @@ describe("ConnectionPage", () => {
           node: "seed.bitcoin.sipa.be:8333",
           protocolVersion: 70016,
           services: "0x0000000000000009",
+          serviceNames: ["NODE_NETWORK", "NODE_WITNESS"],
           userAgent: "/Satoshi:28.0.0/",
           startHeight: 938408,
           relay: true,
@@ -48,6 +49,7 @@ describe("ConnectionPage", () => {
 
     expect(screen.getByText("Protocol version")).toBeTruthy();
     expect(screen.getByText("70016")).toBeTruthy();
+    expect(screen.getByText("NODE_NETWORK, NODE_WITNESS")).toBeTruthy();
     expect(screen.getByText("/Satoshi:28.0.0/")).toBeTruthy();
   });
 });

@@ -19,6 +19,7 @@ pub struct ProgressConnectionRequest {
 pub struct BlockRequest {
     pub node: String,
     pub hash: String,
+    pub output_path: Option<String>,
 }
 
 /// Desktop-facing handshake payload exposed to the web UI through Tauri.
@@ -28,6 +29,7 @@ pub struct HandshakeResponse {
     pub node: String,
     pub protocol_version: i32,
     pub services: String,
+    pub service_names: Vec<String>,
     pub user_agent: String,
     pub start_height: i32,
     pub relay: Option<bool>,
@@ -118,6 +120,7 @@ impl From<peer::HandshakeSummary> for HandshakeResponse {
             node: summary.node,
             protocol_version: summary.protocol_version,
             services: summary.services,
+            service_names: summary.service_names,
             user_agent: summary.user_agent,
             start_height: summary.start_height,
             relay: summary.relay,

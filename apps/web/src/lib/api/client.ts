@@ -1,5 +1,6 @@
 import type {
   AddrResult,
+  BlockDownloadRequest,
   BlockDownloadResult,
   BlockSummary,
   ConnectionRequest,
@@ -21,6 +22,7 @@ export interface BtcAppClient {
     onProgress?: LastBlockHeightProgressListener,
   ): Promise<LastBlockHeightResult>;
   getBlock(node: string, hash: string): Promise<BlockSummary>;
-  downloadBlock(node: string, hash: string): Promise<BlockDownloadResult>;
+  downloadBlock(request: BlockDownloadRequest): Promise<BlockDownloadResult>;
+  getSuggestedBlockDownloadPath(hash: string): Promise<string>;
   getRecentEvents(): Promise<UiLogEvent[]>;
 }
