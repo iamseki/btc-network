@@ -89,4 +89,32 @@ describe("HeadersPage", () => {
 
     expect(onGetLastBlockHeight).toHaveBeenCalledTimes(1);
   });
+
+  it("renders a completed status from the final progress snapshot", () => {
+    render(
+      <HeadersPage
+        node="seed.bitcoin.sipa.be:8333"
+        lastBlockHeight={{
+          height: 938408,
+          rounds: 470,
+          elapsedMs: 545450,
+          bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
+        }}
+        lastBlockHeightProgress={{
+          operationId: "op-1",
+          node: "seed.bitcoin.sipa.be:8333",
+          phase: "completed",
+          roundsCompleted: 470,
+          headersSeen: 938408,
+          lastBatchCount: 0,
+          bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
+          elapsedMs: 545450,
+        }}
+        isLoadingLastBlockHeight={false}
+      />,
+    );
+
+    expect(screen.getAllByText("Completed")).toHaveLength(2);
+    expect(screen.getByText("Ready to query the peer again.")).toBeTruthy();
+  });
 });

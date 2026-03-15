@@ -42,21 +42,12 @@ export function HeadersPage({
     return () => window.clearInterval(intervalId);
   }, [isLoadingLastBlockHeight]);
 
-  const liveElapsedSeconds =
-    isLoadingLastBlockHeight
-      ? Math.max(
-          1,
-          Math.floor((lastBlockHeightProgress?.elapsedMs ?? loadingElapsedMs) / 1000),
-        )
-      : null;
-  const statusLabel = describeChainHeightPhase(
-    lastBlockHeightProgress?.phase,
+  const viewState = buildChainHeightViewState(
+    lastBlockHeight,
+    lastBlockHeightProgress,
     isLoadingLastBlockHeight,
+    loadingElapsedMs,
   );
-  const observedHeight = lastBlockHeightProgress?.headersSeen ?? lastBlockHeight?.height ?? null;
-  const observedHash = lastBlockHeightProgress?.bestBlockHash ?? lastBlockHeight?.bestBlockHash ?? null;
-  const observedRounds = lastBlockHeightProgress?.roundsCompleted ?? lastBlockHeight?.rounds ?? null;
-  const lastBatchCount = lastBlockHeightProgress?.lastBatchCount ?? null;
 
   return (
     <Card>
@@ -88,8 +79,8 @@ export function HeadersPage({
               Scanning the peer's best-known chain tip.
             </p>
             <p className="mt-2">
-              {liveElapsedSeconds !== null
-                ? `Active for ${liveElapsedSeconds}s. `
+              {viewState.liveElapsedSeconds !== null
+                ? `Active for ${viewState.liveElapsedSeconds}s. `
                 : null}
               The workflow advances with repeated{" "}
               <code className="font-mono text-xs text-foreground">getheaders</code> requests and
@@ -128,11 +119,11 @@ export function HeadersPage({
                   Status
                 </p>
                 <p className="mt-3 font-mono text-lg text-foreground">
-                  {statusLabel}
+                  {viewState.statusLabel}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {isLoadingLastBlockHeight && liveElapsedSeconds !== null
-                    ? `${liveElapsedSeconds}s into the current request.`
+                  {isLoadingLastBlockHeight && viewState.liveElapsedSeconds !== null
+                    ? `${viewState.liveElapsedSeconds}s into the current request.`
                     : "Ready to query the peer again."}
                 </p>
               </div>
@@ -142,11 +133,11 @@ export function HeadersPage({
                   Last observed height
                 </p>
                 <p className="mt-3 font-mono text-2xl text-foreground">
-                  {observedHeight ?? "n/a"}
+                  {viewState.observedHeight ?? "n/a"}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {observedRounds !== null
-                    ? `Observed after ${observedRounds} rounds.`
+                  {viewState.observedRounds !== null
+                    ? `Observed after ${viewState.observedRounds} rounds.`
                     : "No successful chain-height snapshot yet."}
                 </p>
               </div>
@@ -154,10 +145,10 @@ export function HeadersPage({
 
             <DataList
               items={[
-                { label: "Phase", value: statusLabel },
-                { label: "Headers scanned", value: observedHeight ?? "n/a" },
-                { label: "Rounds completed", value: observedRounds ?? "n/a" },
-                { label: "Last batch", value: lastBatchCount ?? "n/a" },
+                { label: "Phase", value: viewState.statusLabel },
+                { label: "Headers scanned", value: viewState.observedHeight ?? "n/a" },
+                { label: "Rounds completed", value: viewState.observedRounds ?? "n/a" },
+                { label: "Last batch", value: viewState.lastBatchCount ?? "n/a" },
               ]}
             />
           </div>
@@ -168,7 +159,7 @@ export function HeadersPage({
                 Tip Snapshot
               </p>
               <Badge variant="muted">
-                {observedHash ? "Hash available" : "Waiting"}
+                {viewState.observedHash ? "Hash available" : "Waiting"}
               </Badge>
             </div>
 
@@ -179,21 +170,15 @@ export function HeadersPage({
                     Best block hash
                   </p>
                   <p className="mt-3 break-all font-mono text-sm text-foreground">
-                    {observedHash ?? "n/a"}
+                    {viewState.observedHash ?? "n/a"}
                   </p>
                 </div>
 
                 <DataList
                   items={[
-                    { label: "Last block height", value: observedHeight ?? "n/a" },
-                    { label: "Rounds", value: observedRounds ?? "n/a" },
-                    {
-                      label: "Elapsed (ms)",
-                      value:
-                        lastBlockHeightProgress?.elapsedMs ??
-                        lastBlockHeight?.elapsedMs ??
-                        "n/a",
-                    },
+                    { label: "Last block height", value: viewState.observedHeight ?? "n/a" },
+                    { label: "Rounds", value: viewState.observedRounds ?? "n/a" },
+                    { label: "Elapsed (ms)", value: viewState.elapsedMs ?? "n/a" },
                   ]}
                 />
               </div>
@@ -207,6 +192,41 @@ export function HeadersPage({
       </CardContent>
     </Card>
   );
+}
+
+type ChainHeightViewState = {
+  liveElapsedSeconds: number | null;
+  statusLabel: string;
+  observedHeight: number | null;
+  observedHash: string | null;
+  observedRounds: number | null;
+  lastBatchCount: number | null;
+  elapsedMs: number | null;
+};
+
+function buildChainHeightViewState(
+  lastBlockHeight: LastBlockHeightResult | null,
+  lastBlockHeightProgress: LastBlockHeightProgress | null,
+  isLoadingLastBlockHeight: boolean,
+  loadingElapsedMs: number,
+): ChainHeightViewState {
+  const elapsedMs = lastBlockHeightProgress?.elapsedMs ?? lastBlockHeight?.elapsedMs ?? null;
+
+  return {
+    liveElapsedSeconds: isLoadingLastBlockHeight
+      ? Math.max(1, Math.floor((lastBlockHeightProgress?.elapsedMs ?? loadingElapsedMs) / 1000))
+      : null,
+    statusLabel: describeChainHeightPhase(
+      lastBlockHeightProgress?.phase,
+      isLoadingLastBlockHeight,
+    ),
+    observedHeight: lastBlockHeightProgress?.headersSeen ?? lastBlockHeight?.height ?? null,
+    observedHash:
+      lastBlockHeightProgress?.bestBlockHash ?? lastBlockHeight?.bestBlockHash ?? null,
+    observedRounds: lastBlockHeightProgress?.roundsCompleted ?? lastBlockHeight?.rounds ?? null,
+    lastBatchCount: lastBlockHeightProgress?.lastBatchCount ?? null,
+    elapsedMs,
+  };
 }
 
 function describeChainHeightPhase(

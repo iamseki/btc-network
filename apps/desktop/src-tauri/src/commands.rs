@@ -56,12 +56,21 @@ pub struct LastBlockHeightResponse {
 pub struct LastBlockHeightProgressResponse {
     pub operation_id: String,
     pub node: String,
-    pub phase: String,
+    pub phase: LastBlockHeightProgressPhaseResponse,
     pub rounds_completed: usize,
     pub headers_seen: usize,
     pub last_batch_count: usize,
     pub best_block_hash: Option<String>,
     pub elapsed_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LastBlockHeightProgressPhaseResponse {
+    Connecting,
+    Handshaking,
+    RequestingHeaders,
+    Completed,
 }
 
 /// Desktop-facing peer address entry.
@@ -179,12 +188,19 @@ impl LastBlockHeightProgressResponse {
             operation_id: operation_id.to_owned(),
             node: progress.node,
             phase: match progress.phase {
-                peer::LastBlockHeightPhase::Connecting => "connecting",
-                peer::LastBlockHeightPhase::Handshaking => "handshaking",
-                peer::LastBlockHeightPhase::RequestingHeaders => "requesting_headers",
-                peer::LastBlockHeightPhase::Completed => "completed",
-            }
-            .to_owned(),
+                peer::LastBlockHeightPhase::Connecting => {
+                    LastBlockHeightProgressPhaseResponse::Connecting
+                }
+                peer::LastBlockHeightPhase::Handshaking => {
+                    LastBlockHeightProgressPhaseResponse::Handshaking
+                }
+                peer::LastBlockHeightPhase::RequestingHeaders => {
+                    LastBlockHeightProgressPhaseResponse::RequestingHeaders
+                }
+                peer::LastBlockHeightPhase::Completed => {
+                    LastBlockHeightProgressPhaseResponse::Completed
+                }
+            },
             rounds_completed: progress.rounds_completed,
             headers_seen: progress.headers_seen,
             last_batch_count: progress.last_batch_count,
@@ -521,9 +537,14 @@ mod tests {
                 .lock()
                 .expect("lock progress")
                 .iter()
-                .map(|event| event.phase.as_str())
+                .map(|event| event.phase)
                 .collect::<Vec<_>>(),
-            vec!["connecting", "handshaking", "requesting_headers", "completed"]
+            vec![
+                LastBlockHeightProgressPhaseResponse::Connecting,
+                LastBlockHeightProgressPhaseResponse::Handshaking,
+                LastBlockHeightProgressPhaseResponse::RequestingHeaders,
+                LastBlockHeightProgressPhaseResponse::Completed,
+            ]
         );
 
         server.join().expect("join");
@@ -545,7 +566,10 @@ mod tests {
         );
 
         assert_eq!(response.operation_id, "op-1");
-        assert_eq!(response.phase, "requesting_headers");
+        assert_eq!(
+            response.phase,
+            LastBlockHeightProgressPhaseResponse::RequestingHeaders
+        );
         assert_eq!(response.rounds_completed, 3);
         assert_eq!(response.headers_seen, 4000);
         assert_eq!(response.last_batch_count, 2000);
