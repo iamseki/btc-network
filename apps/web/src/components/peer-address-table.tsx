@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 const DEFAULT_PAGE_SIZE = 10;
 const DEFAULT_SORT_COLUMN = "address";
 const DEFAULT_SORT_DIRECTION = "asc";
@@ -46,7 +46,7 @@ export function PeerAddressTable({ addresses }: PeerAddressTableProps) {
   const rangeEnd = sortedAddresses.length === 0 ? 0 : startIndex + paginatedAddresses.length;
 
   return (
-      <Card className="border-border/80 bg-background/75">
+    <Card className="border-border/80 bg-background/75">
       <CardHeader className="space-y-4 border-b border-border/70 bg-muted/20">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
@@ -123,9 +123,9 @@ export function PeerAddressTable({ addresses }: PeerAddressTableProps) {
           <div className="px-6 py-10 text-sm text-muted-foreground">No peer addresses yet.</div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="panel-scrollbar max-h-[26rem] overflow-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
                   <tr>
                     <TableHead>
                       <SortHeader
