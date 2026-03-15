@@ -565,12 +565,31 @@ mod tests {
     }
 
     fn headers_payload(headers: &[crate::wire::message::BlockHeader]) -> Vec<u8> {
-        let mut payload = vec![headers.len() as u8];
+        let mut payload = Vec::new();
+        write_test_varint(headers.len() as u64, &mut payload);
         for header in headers {
             payload.extend(header_bytes(header));
             payload.push(0);
         }
         payload
+    }
+
+    fn write_test_varint(value: u64, out: &mut Vec<u8>) {
+        match value {
+            0..=0xFC => out.push(value as u8),
+            0xFD..=0xFFFF => {
+                out.push(0xFD);
+                out.extend_from_slice(&(value as u16).to_le_bytes());
+            }
+            0x1_0000..=0xFFFF_FFFF => {
+                out.push(0xFE);
+                out.extend_from_slice(&(value as u32).to_le_bytes());
+            }
+            _ => {
+                out.push(0xFF);
+                out.extend_from_slice(&value.to_le_bytes());
+            }
+        }
     }
 
     fn minimal_legacy_tx() -> Vec<u8> {
