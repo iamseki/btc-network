@@ -44,6 +44,8 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connection" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Connection" })).toBeTruthy();
+    expect(screen.getByText("Session Log")).toBeTruthy();
+    expect(screen.getByText(/Frontend loaded\./)).toBeTruthy();
   });
 
   it("expands the sidebar when the trigger is clicked", () => {
@@ -158,5 +160,25 @@ describe("App sidebar shell", () => {
       "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
     );
     expect(await screen.findByText("blk-00000000-8ce26f.dat")).toBeTruthy();
+  });
+
+  it("shows the session log on non-connection pages and can expand it", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Peer Tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+
+    expect(
+      screen.getAllByText(/Frontend loaded\. Desktop mode exposes real handshake/),
+    ).toHaveLength(2);
+  });
+
+  it("clears the session log from the global panel", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(screen.getByText("No events captured for this session yet.")).toBeTruthy();
   });
 });

@@ -17,7 +17,6 @@ describe("ConnectionPage", () => {
       <ConnectionPage
         node="seed.bitcoin.sipa.be:8333"
         lastHandshake={null}
-        events={[]}
         isRunning={false}
         onNodeChange={() => {}}
         onHandshake={onHandshake}
@@ -41,7 +40,6 @@ describe("ConnectionPage", () => {
           startHeight: 938408,
           relay: true,
         }}
-        events={[]}
         isRunning={false}
         onNodeChange={() => {}}
         onHandshake={() => {}}

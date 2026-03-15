@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
 import { prependLogEvent } from "./app/log-events";
+import { SessionLogPanel } from "./components/session-log-panel";
 import {
   Sidebar,
   SidebarContent,
@@ -51,6 +52,7 @@ export function App() {
       message: "Frontend loaded. Desktop mode exposes real handshake, ping, and last block height flows.",
     },
   ]);
+  const [isSessionLogOpen, setIsSessionLogOpen] = useState(false);
 
   const [lastHandshake, setLastHandshake] = useState<HandshakeResult | null>(null);
   const [isHandshaking, setIsHandshaking] = useState(false);
@@ -83,6 +85,10 @@ export function App() {
         message,
       }),
     );
+  }
+
+  function clearEvents() {
+    setEvents([]);
   }
 
   async function handleHandshake() {
@@ -269,53 +275,61 @@ export function App() {
             </div>
           </header>
 
-          <div className="grid gap-6 p-4 lg:p-6">
-            {selectedPage === "connection" ? (
-              <ConnectionPage
-                node={node}
-                lastHandshake={lastHandshake}
-                events={events}
-                isRunning={isHandshaking}
-                onNodeChange={setNode}
-                onHandshake={handleHandshake}
-              />
-            ) : null}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="grid flex-1 gap-6 p-4 lg:p-6">
+              {selectedPage === "connection" ? (
+                <ConnectionPage
+                  node={node}
+                  lastHandshake={lastHandshake}
+                  isRunning={isHandshaking}
+                  onNodeChange={setNode}
+                  onHandshake={handleHandshake}
+                />
+              ) : null}
 
-            {selectedPage === "peer-tools" ? (
-              <PeerToolsPage
-                node={node}
-                lastPing={lastPing}
-                lastAddrResult={lastAddrResult}
-                isPinging={isPinging}
-                isGettingAddr={isGettingAddr}
-                onPing={handlePing}
-                onGetAddr={handleGetAddr}
-              />
-            ) : null}
+              {selectedPage === "peer-tools" ? (
+                <PeerToolsPage
+                  node={node}
+                  lastPing={lastPing}
+                  lastAddrResult={lastAddrResult}
+                  isPinging={isPinging}
+                  isGettingAddr={isGettingAddr}
+                  onPing={handlePing}
+                  onGetAddr={handleGetAddr}
+                />
+              ) : null}
 
-            {selectedPage === "headers" ? (
-              <HeadersPage
-                node={node}
-                lastBlockHeight={lastBlockHeight}
-                lastBlockHeightProgress={lastBlockHeightProgress}
-                isLoadingLastBlockHeight={isLoadingLastBlockHeight}
-                onGetLastBlockHeight={handleGetLastBlockHeight}
-              />
-            ) : null}
+              {selectedPage === "headers" ? (
+                <HeadersPage
+                  node={node}
+                  lastBlockHeight={lastBlockHeight}
+                  lastBlockHeightProgress={lastBlockHeightProgress}
+                  isLoadingLastBlockHeight={isLoadingLastBlockHeight}
+                  onGetLastBlockHeight={handleGetLastBlockHeight}
+                />
+              ) : null}
 
-            {selectedPage === "blocks" ? (
-              <BlocksPage
-                node={node}
-                blockHash={blockHash}
-                blockSummary={blockSummary}
-                downloadResult={downloadResult}
-                isLoadingBlock={isLoadingBlock}
-                isDownloadingBlock={isDownloadingBlock}
-                onBlockHashChange={setBlockHash}
-                onGetBlock={handleGetBlock}
-                onDownloadBlock={handleDownloadBlock}
-              />
-            ) : null}
+              {selectedPage === "blocks" ? (
+                <BlocksPage
+                  node={node}
+                  blockHash={blockHash}
+                  blockSummary={blockSummary}
+                  downloadResult={downloadResult}
+                  isLoadingBlock={isLoadingBlock}
+                  isDownloadingBlock={isDownloadingBlock}
+                  onBlockHashChange={setBlockHash}
+                  onGetBlock={handleGetBlock}
+                  onDownloadBlock={handleDownloadBlock}
+                />
+              ) : null}
+            </div>
+
+            <SessionLogPanel
+              events={events}
+              isOpen={isSessionLogOpen}
+              onToggle={() => setIsSessionLogOpen((current) => !current)}
+              onClear={clearEvents}
+            />
           </div>
         </main>
       </div>
