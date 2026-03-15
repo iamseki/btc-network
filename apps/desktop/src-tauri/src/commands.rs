@@ -591,6 +591,58 @@ mod tests {
     }
 
     #[test]
+    fn download_block_command_writes_to_explicit_output_path() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let requested_hash = sample_block_hash_hex();
+        let explicit_path = std::env::temp_dir().join(format!(
+            "btc-network-download-test-{}-{}.dat",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("time after epoch")
+                .as_nanos()
+        ));
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept");
+
+            let first = read_message(&mut peer).expect("read version");
+            assert_eq!(first.command, Command::Version);
+
+            let version = build_version_payload(btc_network::wire::constants::PROTOCOL_VERSION, 0)
+                .expect("version");
+            send_message(&mut peer, Command::Version, &version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read sendaddrv2");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message(&mut peer).expect("read verack");
+            assert_eq!(third.command, Command::Verack);
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+
+            let getdata = read_message(&mut peer).expect("read getdata");
+            assert_eq!(getdata.command, Command::GetData);
+            send_message(&mut peer, Command::Block, &minimal_block_payload()).expect("send block");
+        });
+
+        let result = tauri::async_runtime::block_on(download_block(BlockRequest {
+            node: addr.to_string(),
+            hash: requested_hash.clone(),
+            output_path: Some(explicit_path.to_string_lossy().into_owned()),
+        }))
+        .expect("download block command");
+
+        assert_eq!(result.hash, requested_hash);
+        assert_eq!(result.output_path, explicit_path.to_string_lossy());
+        assert!(explicit_path.exists());
+
+        std::fs::remove_file(&explicit_path).expect("remove explicit temp block file");
+        server.join().expect("join");
+    }
+
+    #[test]
     fn handshake_rejects_invalid_node_before_spawning_work() {
         let err =
             tauri::async_runtime::block_on(handshake(ConnectionRequest { node: "".to_owned() }))

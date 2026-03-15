@@ -176,6 +176,49 @@ describe("App sidebar shell", () => {
     expect(await screen.findByText("blk-00000000-8ce26f.dat")).toBeTruthy();
   });
 
+  it("logs human-readable services after a successful handshake", async () => {
+    mockHandshake.mockResolvedValue({
+      node: "seed.bitnodes.io:8333",
+      protocolVersion: 70016,
+      services: "0x0000000000000409",
+      serviceNames: ["NODE_NETWORK", "NODE_WITNESS", "NODE_NETWORK_LIMITED"],
+      userAgent: "/Satoshi:28.0.0/",
+      startHeight: 938408,
+      relay: true,
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Run Handshake" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+
+    expect(
+      await screen.findAllByText(
+        /Handshake complete\. Services: NODE_NETWORK, NODE_WITNESS, NODE_NETWORK_LIMITED\./,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("refreshes the suggested host download path when the block hash changes", async () => {
+    mockGetSuggestedBlockDownloadPath
+      .mockResolvedValueOnce("downloads/blk-00000000-8ce26f.dat")
+      .mockResolvedValueOnce("downloads/blk-ffffffff-abcdef.dat");
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Block Explorer" }));
+    const blockHashInput = await screen.findByRole("textbox", { name: "Block hash" });
+    fireEvent.change(blockHashInput, {
+      target: {
+        value: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffabcdef",
+      },
+    });
+
+    expect(
+      await screen.findByDisplayValue("downloads/blk-ffffffff-abcdef.dat"),
+    ).toBeTruthy();
+  });
+
   it("shows the session log on non-connection pages and can expand it", () => {
     render(<App />);
 

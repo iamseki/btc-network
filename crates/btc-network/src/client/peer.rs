@@ -675,6 +675,49 @@ mod tests {
     }
 
     #[test]
+    fn handshake_session_maps_multiple_service_flags_in_wire_order() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+
+            let first = read_message(&mut peer).expect("read version");
+            assert_eq!(first.command, Command::Version);
+
+            let peer_version =
+                build_version_payload(crate::wire::constants::PROTOCOL_VERSION, 0x0409)
+                    .expect("build version");
+            send_message(&mut peer, Command::Version, &peer_version).expect("send version");
+
+            let second = read_message(&mut peer).expect("read sendaddrv2");
+            assert_eq!(second.command, Command::SendAddrV2);
+
+            let third = read_message(&mut peer).expect("read verack");
+            assert_eq!(third.command, Command::Verack);
+
+            send_message(&mut peer, Command::Verack, &[]).expect("send verack");
+        });
+
+        let mut session = Session::new(TcpStream::connect(addr).expect("connect"));
+        let summary =
+            handshake_session(&addr.to_string(), &mut session).expect("handshake session");
+
+        assert_eq!(
+            summary.service_names,
+            vec![
+                "NODE_NETWORK".to_owned(),
+                "NODE_WITNESS".to_owned(),
+                "NODE_NETWORK_LIMITED".to_owned(),
+            ]
+        );
+
+        server.join().expect("join");
+    }
+
+    #[test]
     fn ping_session_returns_echoed_nonce() {
         let Some(listener) = bind_listener_or_skip() else {
             return;
