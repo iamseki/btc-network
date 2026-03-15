@@ -1,4 +1,5 @@
 mod commands;
+mod models;
 
 /// Boots the desktop shell and exposes the narrow Tauri command surface used by the UI.
 pub fn run() {

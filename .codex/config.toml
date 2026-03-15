@@ -1,0 +1,11 @@
+# There is a complete example of each value in: https://developers.openai.com/codex/config-sample
+
+web_search = "cached"
+personality = "pragmatic"
+
+[agents]
+max_depth = 2
+max_threads = 16
+
+[analytics]
+enabled = false
