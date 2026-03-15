@@ -29,10 +29,28 @@ export type AddrResult = {
 };
 
 export type LastBlockHeightResult = {
+  node?: string;
   height: number;
   rounds: number;
   elapsedMs: number;
   bestBlockHash: string | null;
+};
+
+export type LastBlockHeightProgressPhase =
+  | "connecting"
+  | "handshaking"
+  | "requesting_headers"
+  | "completed";
+
+export type LastBlockHeightProgress = {
+  operationId: string;
+  node: string;
+  phase: LastBlockHeightProgressPhase;
+  roundsCompleted: number;
+  headersSeen: number;
+  lastBatchCount: number;
+  bestBlockHash: string | null;
+  elapsedMs: number;
 };
 
 export type BlockSummary = {

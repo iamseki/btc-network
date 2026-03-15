@@ -1,10 +1,21 @@
 use btc_network::client::peer;
 use serde::{Deserialize, Serialize};
+use tauri::Emitter;
+
+const CHAIN_HEIGHT_PROGRESS_EVENT: &str = "chain-height-progress";
 
 /// Minimal desktop request for single-peer actions.
 #[derive(Debug, Deserialize)]
 pub struct ConnectionRequest {
     pub node: String,
+}
+
+/// Desktop request for workflows that also emit incremental progress.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgressConnectionRequest {
+    pub node: String,
+    pub operation_id: String,
 }
 
 /// Desktop-facing handshake payload exposed to the web UI through Tauri.
@@ -37,6 +48,20 @@ pub struct LastBlockHeightResponse {
     pub rounds: usize,
     pub elapsed_ms: u64,
     pub best_block_hash: Option<String>,
+}
+
+/// Desktop-facing progress snapshot for the chain-height workflow.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LastBlockHeightProgressResponse {
+    pub operation_id: String,
+    pub node: String,
+    pub phase: String,
+    pub rounds_completed: usize,
+    pub headers_seen: usize,
+    pub last_batch_count: usize,
+    pub best_block_hash: Option<String>,
+    pub elapsed_ms: u64,
 }
 
 /// Desktop-facing peer address entry.
@@ -91,6 +116,28 @@ where
         .map_err(|err| err.to_string())?
 }
 
+async fn run_get_last_block_height<E>(
+    request: ProgressConnectionRequest,
+    emit_progress: E,
+) -> Result<LastBlockHeightResponse, String>
+where
+    E: Fn(LastBlockHeightProgressResponse) + Send + 'static,
+{
+    let summary = run_blocking(move || {
+        let operation_id = request.operation_id.clone();
+        peer::get_last_block_height_node_with_progress(&request.node, |progress| {
+            emit_progress(LastBlockHeightProgressResponse::from_progress(
+                &operation_id,
+                progress,
+            ));
+        })
+        .map_err(|err| err.to_string())
+    })
+    .await?;
+
+    Ok(summary.into())
+}
+
 impl From<peer::HandshakeSummary> for HandshakeResponse {
     fn from(summary: peer::HandshakeSummary) -> Self {
         Self {
@@ -122,6 +169,27 @@ impl From<peer::LastBlockHeightSummary> for LastBlockHeightResponse {
             rounds: summary.rounds,
             elapsed_ms: summary.elapsed_ms,
             best_block_hash: summary.best_block_hash,
+        }
+    }
+}
+
+impl LastBlockHeightProgressResponse {
+    fn from_progress(operation_id: &str, progress: peer::LastBlockHeightProgress) -> Self {
+        Self {
+            operation_id: operation_id.to_owned(),
+            node: progress.node,
+            phase: match progress.phase {
+                peer::LastBlockHeightPhase::Connecting => "connecting",
+                peer::LastBlockHeightPhase::Handshaking => "handshaking",
+                peer::LastBlockHeightPhase::RequestingHeaders => "requesting_headers",
+                peer::LastBlockHeightPhase::Completed => "completed",
+            }
+            .to_owned(),
+            rounds_completed: progress.rounds_completed,
+            headers_seen: progress.headers_seen,
+            last_batch_count: progress.last_batch_count,
+            best_block_hash: progress.best_block_hash,
+            elapsed_ms: progress.elapsed_ms,
         }
     }
 }
@@ -187,14 +255,13 @@ pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
 
 #[tauri::command]
 pub async fn get_last_block_height(
-    request: ConnectionRequest,
+    app: tauri::AppHandle,
+    request: ProgressConnectionRequest,
 ) -> Result<LastBlockHeightResponse, String> {
-    let summary = run_blocking(move || {
-        peer::get_last_block_height_node(&request.node).map_err(|err| err.to_string())
+    run_get_last_block_height(request, move |payload| {
+        let _ = app.emit(CHAIN_HEIGHT_PROGRESS_EVENT, payload);
     })
-    .await?;
-
-    Ok(summary.into())
+    .await
 }
 
 #[tauri::command]
@@ -433,9 +500,15 @@ mod tests {
             send_message(&mut peer, Command::Headers, &payload).expect("send headers");
         });
 
-        let result = tauri::async_runtime::block_on(get_last_block_height(ConnectionRequest {
-            node: addr.to_string(),
-        }))
+        let progress_events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured_events = progress_events.clone();
+        let result = tauri::async_runtime::block_on(run_get_last_block_height(
+            ProgressConnectionRequest {
+                node: addr.to_string(),
+                operation_id: "test-op".to_owned(),
+            },
+            move |payload| captured_events.lock().expect("lock progress").push(payload),
+        ))
         .expect("last block height command");
 
         assert_eq!(result.node, addr.to_string());
@@ -443,8 +516,41 @@ mod tests {
         assert_eq!(result.rounds, 1);
         assert!(result.elapsed_ms > 0);
         assert!(result.best_block_hash.is_some());
+        assert_eq!(
+            progress_events
+                .lock()
+                .expect("lock progress")
+                .iter()
+                .map(|event| event.phase.as_str())
+                .collect::<Vec<_>>(),
+            vec!["connecting", "handshaking", "requesting_headers", "completed"]
+        );
 
         server.join().expect("join");
+    }
+
+    #[test]
+    fn last_block_height_progress_response_maps_shared_progress() {
+        let response = LastBlockHeightProgressResponse::from_progress(
+            "op-1",
+            peer::LastBlockHeightProgress {
+                node: "seed.bitcoin.sipa.be:8333".to_owned(),
+                phase: peer::LastBlockHeightPhase::RequestingHeaders,
+                rounds_completed: 3,
+                headers_seen: 4000,
+                last_batch_count: 2000,
+                best_block_hash: Some("abc123".to_owned()),
+                elapsed_ms: 1500,
+            },
+        );
+
+        assert_eq!(response.operation_id, "op-1");
+        assert_eq!(response.phase, "requesting_headers");
+        assert_eq!(response.rounds_completed, 3);
+        assert_eq!(response.headers_seen, 4000);
+        assert_eq!(response.last_batch_count, 2000);
+        assert_eq!(response.best_block_hash.as_deref(), Some("abc123"));
+        assert_eq!(response.elapsed_ms, 1500);
     }
 
     #[test]

@@ -31,6 +31,27 @@ pub struct LastBlockHeightSummary {
     pub best_block_hash: Option<String>,
 }
 
+/// App-facing progress snapshot for the best-known block height workflow.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LastBlockHeightProgress {
+    pub node: String,
+    pub phase: LastBlockHeightPhase,
+    pub rounds_completed: usize,
+    pub headers_seen: usize,
+    pub last_batch_count: usize,
+    pub best_block_hash: Option<String>,
+    pub elapsed_ms: u64,
+}
+
+/// High-level phase for block-height discovery progress updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LastBlockHeightPhase {
+    Connecting,
+    Handshaking,
+    RequestingHeaders,
+    Completed,
+}
+
 /// App-facing summary of a ping roundtrip.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PingSummary {
@@ -73,9 +94,43 @@ pub struct BlockDownloadSummary {
 
 /// Connects to a node, performs the handshake, and derives the current best block height.
 pub fn get_last_block_height_node(node: &str) -> Result<LastBlockHeightSummary, Box<dyn Error>> {
+    get_last_block_height_node_with_progress(node, |_| {})
+}
+
+/// Connects to a node, performs the handshake, and derives the current best block height while
+/// reporting progress snapshots at major workflow boundaries.
+pub fn get_last_block_height_node_with_progress<F>(
+    node: &str,
+    mut report: F,
+) -> Result<LastBlockHeightSummary, Box<dyn Error>>
+where
+    F: FnMut(LastBlockHeightProgress),
+{
+    let start = Instant::now();
+    report(LastBlockHeightProgress {
+        node: node.to_owned(),
+        phase: LastBlockHeightPhase::Connecting,
+        rounds_completed: 0,
+        headers_seen: 0,
+        last_batch_count: 0,
+        best_block_hash: None,
+        elapsed_ms: 0,
+    });
+
     let mut session = connect(node, Duration::from_secs(30))?;
+
+    report(LastBlockHeightProgress {
+        node: node.to_owned(),
+        phase: LastBlockHeightPhase::Handshaking,
+        rounds_completed: 0,
+        headers_seen: 0,
+        last_batch_count: 0,
+        best_block_hash: None,
+        elapsed_ms: start.elapsed().as_millis() as u64,
+    });
+
     let _ = handshake_session(node, &mut session)?;
-    get_last_block_height_session(node, &mut session)
+    get_last_block_height_session_with_progress(node, &mut session, start, report)
 }
 
 /// Reuses an existing session to derive the current best block height from the headers chain.
@@ -86,7 +141,20 @@ pub fn get_last_block_height_session(
     node: &str,
     session: &mut Session,
 ) -> Result<LastBlockHeightSummary, Box<dyn Error>> {
-    let start = Instant::now();
+    get_last_block_height_session_with_progress(node, session, Instant::now(), |_| {})
+}
+
+/// Reuses an existing session to derive the current best block height from the headers chain while
+/// reporting progress snapshots after each `headers` batch.
+pub fn get_last_block_height_session_with_progress<F>(
+    node: &str,
+    session: &mut Session,
+    start: Instant,
+    mut report: F,
+) -> Result<LastBlockHeightSummary, Box<dyn Error>>
+where
+    F: FnMut(LastBlockHeightProgress),
+{
     let mut round = 0usize;
     let mut total_headers = 0usize;
     let mut current_locator = wire::constants::GENESIS_BLOCK_HASH_MAINNET;
@@ -119,6 +187,16 @@ pub fn get_last_block_height_session(
         last_hash.reverse();
         best_block_hash = Some(hex::encode(last_hash));
 
+        report(LastBlockHeightProgress {
+            node: node.to_owned(),
+            phase: LastBlockHeightPhase::RequestingHeaders,
+            rounds_completed: round,
+            headers_seen: total_headers,
+            last_batch_count: count,
+            best_block_hash: best_block_hash.clone(),
+            elapsed_ms: start.elapsed().as_millis() as u64,
+        });
+
         if count < 2000 {
             break;
         }
@@ -126,13 +204,25 @@ pub fn get_last_block_height_session(
         current_locator = last.hash();
     }
 
-    Ok(LastBlockHeightSummary {
+    let summary = LastBlockHeightSummary {
         node: node.to_owned(),
         height: total_headers,
         rounds: round,
         elapsed_ms: start.elapsed().as_millis() as u64,
         best_block_hash,
-    })
+    };
+
+    report(LastBlockHeightProgress {
+        node: node.to_owned(),
+        phase: LastBlockHeightPhase::Completed,
+        rounds_completed: summary.rounds,
+        headers_seen: summary.height,
+        last_batch_count: 0,
+        best_block_hash: summary.best_block_hash.clone(),
+        elapsed_ms: summary.elapsed_ms,
+    });
+
+    Ok(summary)
 }
 
 /// Connects to a node and completes the Bitcoin handshake.
@@ -673,6 +763,61 @@ mod tests {
         assert_eq!(summary.height, 2);
         assert_eq!(summary.rounds, 1);
         assert_eq!(summary.best_block_hash.as_deref(), Some(expected_hash.as_str()));
+
+        server.join().expect("join");
+    }
+
+    #[test]
+    fn get_last_block_height_session_reports_progress_per_headers_batch() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let first_batch = vec![sample_block_header(42); 2000];
+        let second_batch = vec![sample_block_header(84), sample_block_header(126)];
+        let mut expected_hash = second_batch.last().expect("last header").hash();
+        expected_hash.reverse();
+        let expected_hash = hex::encode(expected_hash);
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+
+            let first_request = read_message(&mut peer).expect("read first getheaders");
+            assert_eq!(first_request.command, Command::GetHeaders);
+            send_message(&mut peer, Command::Headers, &headers_payload(&first_batch))
+                .expect("send first headers");
+
+            let second_request = read_message(&mut peer).expect("read second getheaders");
+            assert_eq!(second_request.command, Command::GetHeaders);
+            send_message(&mut peer, Command::Headers, &headers_payload(&second_batch))
+                .expect("send second headers");
+        });
+
+        let mut session = Session::new(TcpStream::connect(addr).expect("connect"));
+        let mut progress = Vec::new();
+        let summary = get_last_block_height_session_with_progress(
+            &addr.to_string(),
+            &mut session,
+            Instant::now(),
+            |update| progress.push(update),
+        )
+        .expect("height");
+
+        assert_eq!(summary.height, 2002);
+        assert_eq!(summary.rounds, 2);
+        assert_eq!(summary.best_block_hash.as_deref(), Some(expected_hash.as_str()));
+        assert_eq!(progress.len(), 3);
+        assert_eq!(progress[0].phase, LastBlockHeightPhase::RequestingHeaders);
+        assert_eq!(progress[0].rounds_completed, 1);
+        assert_eq!(progress[0].headers_seen, 2000);
+        assert_eq!(progress[0].last_batch_count, 2000);
+        assert_eq!(progress[1].phase, LastBlockHeightPhase::RequestingHeaders);
+        assert_eq!(progress[1].rounds_completed, 2);
+        assert_eq!(progress[1].headers_seen, 2002);
+        assert_eq!(progress[1].last_batch_count, 2);
+        assert_eq!(progress[1].best_block_hash.as_deref(), Some(expected_hash.as_str()));
+        assert_eq!(progress[2].phase, LastBlockHeightPhase::Completed);
+        assert_eq!(progress[2].headers_seen, 2002);
 
         server.join().expect("join");
     }

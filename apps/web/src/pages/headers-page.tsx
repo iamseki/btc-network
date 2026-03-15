@@ -1,4 +1,5 @@
 import { LoaderCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DataList } from "@/components/ui/data-list";
 import { SectionHeading } from "@/components/ui/section-heading";
 
-import type { LastBlockHeightResult } from "../lib/api/types";
+import type { LastBlockHeightProgress, LastBlockHeightResult } from "../lib/api/types";
 
 export type HeadersPageProps = {
   node: string;
   lastBlockHeight: LastBlockHeightResult | null;
+  lastBlockHeightProgress?: LastBlockHeightProgress | null;
   isLoadingLastBlockHeight?: boolean;
   onGetLastBlockHeight?: () => void;
 };
@@ -18,9 +20,44 @@ export type HeadersPageProps = {
 export function HeadersPage({
   node,
   lastBlockHeight,
+  lastBlockHeightProgress = null,
   isLoadingLastBlockHeight = false,
   onGetLastBlockHeight,
 }: HeadersPageProps) {
+  const [loadingElapsedMs, setLoadingElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (!isLoadingLastBlockHeight) {
+      setLoadingElapsedMs(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    setLoadingElapsedMs(0);
+
+    const intervalId = window.setInterval(() => {
+      setLoadingElapsedMs(Date.now() - startedAt);
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isLoadingLastBlockHeight]);
+
+  const liveElapsedSeconds =
+    isLoadingLastBlockHeight
+      ? Math.max(
+          1,
+          Math.floor((lastBlockHeightProgress?.elapsedMs ?? loadingElapsedMs) / 1000),
+        )
+      : null;
+  const statusLabel = describeChainHeightPhase(
+    lastBlockHeightProgress?.phase,
+    isLoadingLastBlockHeight,
+  );
+  const observedHeight = lastBlockHeightProgress?.headersSeen ?? lastBlockHeight?.height ?? null;
+  const observedHash = lastBlockHeightProgress?.bestBlockHash ?? lastBlockHeight?.bestBlockHash ?? null;
+  const observedRounds = lastBlockHeightProgress?.roundsCompleted ?? lastBlockHeight?.rounds ?? null;
+  const lastBatchCount = lastBlockHeightProgress?.lastBatchCount ?? null;
+
   return (
     <Card>
       <CardContent className="space-y-8 p-6">
@@ -48,13 +85,23 @@ export function HeadersPage({
           <div className="rounded-[20px] border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-muted-foreground">
             <p className="flex items-center gap-2 text-foreground">
               <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-              Fetching the best-known height from this peer.
+              Scanning the peer's best-known chain tip.
             </p>
             <p className="mt-2">
-              This can take a while because the workflow walks forward from the genesis block using
-              repeated <code className="font-mono text-xs text-foreground">getheaders</code>{" "}
-              requests.
+              {liveElapsedSeconds !== null
+                ? `Active for ${liveElapsedSeconds}s. `
+                : null}
+              The workflow advances with repeated{" "}
+              <code className="font-mono text-xs text-foreground">getheaders</code> requests and
+              reports each processed batch back to the UI.
             </p>
+            {lastBlockHeight ? (
+              <p className="mt-2">
+                Holding the last successful snapshot at height{" "}
+                <code className="font-mono text-xs text-foreground">{lastBlockHeight.height}</code>{" "}
+                while the current scan runs.
+              </p>
+            ) : null}
             <a
               className="mt-2 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline"
               href="https://btcinformation.org/en/developer-guide#headers-first"
@@ -66,29 +113,116 @@ export function HeadersPage({
           </div>
         ) : null}
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-              Chain Height
-            </p>
-            <Badge>{isLoadingLastBlockHeight ? "Updating" : "Ready"}</Badge>
-          </div>
-          {lastBlockHeight ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                Chain Height
+              </p>
+              <Badge>{isLoadingLastBlockHeight ? "Updating" : "Ready"}</Badge>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[20px] border border-border/80 bg-background/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Status
+                </p>
+                <p className="mt-3 font-mono text-lg text-foreground">
+                  {statusLabel}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {isLoadingLastBlockHeight && liveElapsedSeconds !== null
+                    ? `${liveElapsedSeconds}s into the current request.`
+                    : "Ready to query the peer again."}
+                </p>
+              </div>
+
+              <div className="rounded-[20px] border border-border/80 bg-background/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Last observed height
+                </p>
+                <p className="mt-3 font-mono text-2xl text-foreground">
+                  {observedHeight ?? "n/a"}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {observedRounds !== null
+                    ? `Observed after ${observedRounds} rounds.`
+                    : "No successful chain-height snapshot yet."}
+                </p>
+              </div>
+            </div>
+
             <DataList
               items={[
-                { label: "Last block height", value: lastBlockHeight.height },
-                { label: "Best block hash", value: lastBlockHeight.bestBlockHash ?? "n/a" },
-                { label: "Rounds", value: lastBlockHeight.rounds },
-                { label: "Elapsed (ms)", value: lastBlockHeight.elapsedMs },
+                { label: "Phase", value: statusLabel },
+                { label: "Headers scanned", value: observedHeight ?? "n/a" },
+                { label: "Rounds completed", value: observedRounds ?? "n/a" },
+                { label: "Last batch", value: lastBatchCount ?? "n/a" },
               ]}
             />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Fetch the current chain height for this peer.
-            </p>
-          )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                Tip Snapshot
+              </p>
+              <Badge variant="muted">
+                {observedHash ? "Hash available" : "Waiting"}
+              </Badge>
+            </div>
+
+            {lastBlockHeight || lastBlockHeightProgress ? (
+              <div className="space-y-4">
+                <div className="rounded-[20px] border border-border/80 bg-background/80 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Best block hash
+                  </p>
+                  <p className="mt-3 break-all font-mono text-sm text-foreground">
+                    {observedHash ?? "n/a"}
+                  </p>
+                </div>
+
+                <DataList
+                  items={[
+                    { label: "Last block height", value: observedHeight ?? "n/a" },
+                    { label: "Rounds", value: observedRounds ?? "n/a" },
+                    {
+                      label: "Elapsed (ms)",
+                      value:
+                        lastBlockHeightProgress?.elapsedMs ??
+                        lastBlockHeight?.elapsedMs ??
+                        "n/a",
+                    },
+                  ]}
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Fetch the current chain height for this peer.
+              </p>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function describeChainHeightPhase(
+  phase: LastBlockHeightProgress["phase"] | undefined,
+  isLoadingLastBlockHeight: boolean,
+): string {
+  switch (phase) {
+    case "connecting":
+      return "Connecting to peer";
+    case "handshaking":
+      return "Negotiating handshake";
+    case "requesting_headers":
+      return "Scanning headers";
+    case "completed":
+      return "Completed";
+    default:
+      return isLoadingLastBlockHeight ? "Starting scan" : "Standing by";
+  }
 }

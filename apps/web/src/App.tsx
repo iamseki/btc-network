@@ -22,6 +22,7 @@ import type {
   BlockDownloadResult,
   BlockSummary,
   HandshakeResult,
+  LastBlockHeightProgress,
   LastBlockHeightResult,
   PingResult,
   UiLogEvent,
@@ -60,6 +61,8 @@ export function App() {
   const [isGettingAddr, setIsGettingAddr] = useState(false);
 
   const [lastBlockHeight, setLastBlockHeight] = useState<LastBlockHeightResult | null>(null);
+  const [lastBlockHeightProgress, setLastBlockHeightProgress] =
+    useState<LastBlockHeightProgress | null>(null);
   const [isLoadingLastBlockHeight, setIsLoadingLastBlockHeight] = useState(false);
 
   const [blockHash, setBlockHash] = useState(sampleBlockHash);
@@ -101,11 +104,13 @@ export function App() {
 
   async function handleGetLastBlockHeight() {
     setIsLoadingLastBlockHeight(true);
-    setLastBlockHeight(null);
+    setLastBlockHeightProgress(null);
     pushEvent("info", `Fetching last block height from ${node}`);
 
     try {
-      const result = await client.getLastBlockHeight(node);
+      const result = await client.getLastBlockHeight(node, (progress) => {
+        setLastBlockHeightProgress(progress);
+      });
       setLastBlockHeight(result);
       pushEvent(
         "info",
@@ -113,6 +118,7 @@ export function App() {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      setLastBlockHeightProgress(null);
       pushEvent("error", `Last block height failed: ${message}`);
     } finally {
       setIsLoadingLastBlockHeight(false);
@@ -291,6 +297,7 @@ export function App() {
               <HeadersPage
                 node={node}
                 lastBlockHeight={lastBlockHeight}
+                lastBlockHeightProgress={lastBlockHeightProgress}
                 isLoadingLastBlockHeight={isLoadingLastBlockHeight}
                 onGetLastBlockHeight={handleGetLastBlockHeight}
               />

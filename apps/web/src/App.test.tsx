@@ -65,11 +65,25 @@ describe("App sidebar shell", () => {
   });
 
   it("requests the last block height from the headers page", async () => {
-    mockGetLastBlockHeight.mockResolvedValue({
-      height: 938408,
-      rounds: 470,
-      elapsedMs: 545450,
-      bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
+    mockGetLastBlockHeight.mockImplementation(async (_node, onProgress) => {
+      onProgress?.({
+        operationId: "test-op",
+        node: "seed.bitcoin.sipa.be:8333",
+        phase: "requesting_headers",
+        roundsCompleted: 470,
+        headersSeen: 938408,
+        lastBatchCount: 408,
+        bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
+        elapsedMs: 545450,
+      });
+
+      return {
+        node: "seed.bitcoin.sipa.be:8333",
+        height: 938408,
+        rounds: 470,
+        elapsedMs: 545450,
+        bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
+      };
     });
 
     render(<App />);
@@ -77,9 +91,14 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Chain Height" }));
     fireEvent.click(screen.getByRole("button", { name: /Fetch Last Block Height/i }));
 
-    expect(mockGetLastBlockHeight).toHaveBeenCalledWith("seed.bitcoin.sipa.be:8333");
+    expect(mockGetLastBlockHeight).toHaveBeenCalledWith(
+      "seed.bitcoin.sipa.be:8333",
+      expect.any(Function),
+    );
     expect(await screen.findByText("Last block height")).toBeTruthy();
-    expect(await screen.findByText("938408")).toBeTruthy();
+    expect(await screen.findByText("Last observed height")).toBeTruthy();
+    expect(await screen.findByText("Best block hash")).toBeTruthy();
+    expect(await screen.findByText("Headers scanned")).toBeTruthy();
   });
 
   it("fetches peer addresses from the peer tools page", async () => {

@@ -5,6 +5,7 @@ import type {
   BlockSummary,
   ConnectionRequest,
   HandshakeResult,
+  LastBlockHeightProgress,
   LastBlockHeightResult,
   PingResult,
   UiLogEvent,
@@ -58,13 +59,43 @@ export const webClient: BtcAppClient = {
     });
   },
 
-  getLastBlockHeight(_node: string): Promise<LastBlockHeightResult> {
-    return delay({
+  async getLastBlockHeight(
+    node: string,
+    onProgress?: (progress: LastBlockHeightProgress) => void,
+  ): Promise<LastBlockHeightResult> {
+    const operationId = "web-placeholder-chain-height";
+
+    onProgress?.({
+      operationId,
+      node,
+      phase: "connecting",
+      roundsCompleted: 0,
+      headersSeen: 0,
+      lastBatchCount: 0,
+      bestBlockHash: null,
+      elapsedMs: 0,
+    });
+
+    await delay(null);
+
+    onProgress?.({
+      operationId,
+      node,
+      phase: "requesting_headers",
+      roundsCompleted: 470,
+      headersSeen: 938408,
+      lastBatchCount: 408,
+      bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
+      elapsedMs: 545450,
+    });
+
+    return {
+      node,
       height: 938408,
       rounds: 470,
       elapsedMs: 545450,
       bestBlockHash: "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
-    });
+    };
   },
 
   getBlock(_node: string, hash: string): Promise<BlockSummary> {

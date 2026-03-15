@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { webClient } from "./web-client";
 
@@ -21,13 +21,17 @@ describe("webClient", () => {
   });
 
   it("returns a placeholder last block height summary", async () => {
-    const result = await webClient.getLastBlockHeight("seed.bitcoin.sipa.be:8333");
+    const onProgress = vi.fn();
+    const result = await webClient.getLastBlockHeight("seed.bitcoin.sipa.be:8333", onProgress);
 
     expect(result.height).toBe(938408);
     expect(result.bestBlockHash).toBe(
       "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
     );
     expect(result.rounds).toBeGreaterThan(0);
+    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onProgress.mock.calls[0]?.[0].phase).toBe("connecting");
+    expect(onProgress.mock.calls[1]?.[0].phase).toBe("requesting_headers");
   });
 
   it("returns a placeholder block summary for the requested hash", async () => {
