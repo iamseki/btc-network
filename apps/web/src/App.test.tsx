@@ -68,7 +68,7 @@ describe("App sidebar shell", () => {
     mockGetLastBlockHeight.mockImplementation(async (_node, onProgress) => {
       onProgress?.({
         operationId: "test-op",
-        node: "seed.bitcoin.sipa.be:8333",
+        node: "seed.bitnodes.io:8333",
         phase: "requesting_headers",
         roundsCompleted: 470,
         headersSeen: 938408,
@@ -78,7 +78,7 @@ describe("App sidebar shell", () => {
       });
 
       return {
-        node: "seed.bitcoin.sipa.be:8333",
+        node: "seed.bitnodes.io:8333",
         height: 938408,
         rounds: 470,
         elapsedMs: 545450,
@@ -92,7 +92,7 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: /Fetch Last Block Height/i }));
 
     expect(mockGetLastBlockHeight).toHaveBeenCalledWith(
-      "seed.bitcoin.sipa.be:8333",
+      "seed.bitnodes.io:8333",
       expect.any(Function),
     );
     expect(await screen.findByText("Last block height")).toBeTruthy();
@@ -103,7 +103,7 @@ describe("App sidebar shell", () => {
 
   it("fetches peer addresses from the peer tools page", async () => {
     mockGetAddr.mockResolvedValue({
-      node: "seed.bitcoin.sipa.be:8333",
+      node: "seed.bitnodes.io:8333",
       addresses: [
         { address: "127.0.0.1", port: 8333, network: "ipv4" },
         { address: "::1", port: 8333, network: "ipv6" },
@@ -115,7 +115,7 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Peer Tools" }));
     fireEvent.click(screen.getByRole("button", { name: /Fetch Peer Addresses/i }));
 
-    expect(mockGetAddr).toHaveBeenCalledWith("seed.bitcoin.sipa.be:8333");
+    expect(mockGetAddr).toHaveBeenCalledWith("seed.bitnodes.io:8333");
     expect(await screen.findByText("127.0.0.1")).toBeTruthy();
     expect(await screen.findByText("::1")).toBeTruthy();
   });
@@ -134,7 +134,7 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: /Fetch Block/i }));
 
     expect(mockGetBlock).toHaveBeenCalledWith(
-      "seed.bitcoin.sipa.be:8333",
+      "seed.bitnodes.io:8333",
       "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
     );
     expect(await screen.findByText("Serialized size")).toBeTruthy();
@@ -154,7 +154,7 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: /Download Block/i }));
 
     expect(mockDownloadBlock).toHaveBeenCalledWith(
-      "seed.bitcoin.sipa.be:8333",
+      "seed.bitnodes.io:8333",
       "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
     );
     expect(await screen.findByText("blk-00000000-8ce26f.dat")).toBeTruthy();

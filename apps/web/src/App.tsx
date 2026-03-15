@@ -28,7 +28,7 @@ import type {
   UiLogEvent,
 } from "./lib/api/types";
 
-const defaultNode = "seed.bitcoin.sipa.be:8333";
+const defaultNode = "seed.bitnodes.io:8333";
 const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
 
