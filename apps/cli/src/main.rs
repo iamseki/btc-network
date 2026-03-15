@@ -3,8 +3,8 @@ use std::error::Error;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+use btc_network_observability as observability;
 use btc_network::client::peer as peer_client;
-use btc_network::observability;
 use btc_network::session::Session;
 use btc_network::wire::{self, Command, Message};
 use tracing::{debug, info};

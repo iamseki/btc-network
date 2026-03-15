@@ -1,5 +1,5 @@
 use btc_network::crawler::{Crawler, CrawlerConfig};
-use btc_network::observability;
+use btc_network_observability as observability;
 use clap::Parser;
 use std::error::Error;
 use std::time::Duration;

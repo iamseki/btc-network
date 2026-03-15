@@ -1,5 +1,5 @@
-use btc_network::observability;
 use btc_network::wire;
+use btc_network_observability as observability;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 use tracing::{info, warn};

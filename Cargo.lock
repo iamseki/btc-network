@@ -224,7 +224,6 @@ dependencies = [
  "sha2",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -232,6 +231,7 @@ name = "btc-network-cli"
 version = "0.1.0"
 dependencies = [
  "btc-network",
+ "btc-network-observability",
  "clap",
  "hex",
  "tracing",
@@ -242,6 +242,7 @@ name = "btc-network-crawler"
 version = "0.1.0"
 dependencies = [
  "btc-network",
+ "btc-network-observability",
  "clap",
  "tokio",
  "tracing",
@@ -252,9 +253,11 @@ name = "btc-network-desktop"
 version = "0.1.0"
 dependencies = [
  "btc-network",
+ "btc-network-observability",
  "serde",
  "tauri",
  "tauri-build",
+ "tracing",
 ]
 
 [[package]]
@@ -262,7 +265,15 @@ name = "btc-network-listener"
 version = "0.1.0"
 dependencies = [
  "btc-network",
+ "btc-network-observability",
  "tracing",
+]
+
+[[package]]
+name = "btc-network-observability"
+version = "0.1.0"
+dependencies = [
+ "tracing-subscriber",
 ]
 
 [[package]]

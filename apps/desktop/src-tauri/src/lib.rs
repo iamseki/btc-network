@@ -1,8 +1,12 @@
 mod commands;
+mod error;
 mod models;
+mod validation;
 
 /// Boots the desktop shell and exposes the narrow Tauri command surface used by the UI.
 pub fn run() {
+    btc_network_observability::init_tracing();
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             commands::handshake,

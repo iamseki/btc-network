@@ -5,6 +5,7 @@ members = [
     "apps/listener",
     "apps/desktop/src-tauri",
     "crates/btc-network",
+    "crates/btc-network-observability",
 ]
 default-members = [
     "apps/cli",
@@ -12,5 +13,6 @@ default-members = [
     "apps/listener",
     "apps/desktop/src-tauri",
     "crates/btc-network",
+    "crates/btc-network-observability",
 ]
 resolver = "3"

@@ -13,5 +13,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 btc-network = { path = "../../../crates/btc-network" }
+btc-network-observability = { path = "../../../crates/btc-network-observability" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
+tracing = "0.1"

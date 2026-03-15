@@ -1,32 +1,52 @@
 use btc_network::client::peer;
 use tauri::Emitter;
+use tracing::{error, info, warn};
 
+use crate::error::DesktopError;
 use crate::models::{
     BlockDownloadResponse, BlockRequest, BlockSummaryResponse, ConnectionRequest,
     HandshakeResponse, LastBlockHeightProgressResponse, LastBlockHeightResponse,
     PeerAddressesResponse, PingResponse, ProgressConnectionRequest,
 };
+use crate::validation::{validate_block_hash, validate_node, validate_operation_id};
 
 const CHAIN_HEIGHT_PROGRESS_EVENT: &str = "chain-height-progress";
 
-async fn run_blocking<T, F>(task: F) -> Result<T, String>
+async fn run_blocking<T, F>(command_name: &'static str, task: F) -> Result<T, DesktopError>
 where
     T: Send + 'static,
-    F: FnOnce() -> Result<T, String> + Send + 'static,
+    F: FnOnce() -> Result<T, DesktopError> + Send + 'static,
 {
+    info!(command = command_name, "spawning blocking desktop workflow");
     tauri::async_runtime::spawn_blocking(task)
         .await
-        .map_err(|err| err.to_string())?
+        .map_err(|err| {
+            error!(command = command_name, %err, "blocking desktop workflow failed to join");
+            DesktopError::internal("desktop command worker failed")
+        })?
 }
 
 async fn run_get_last_block_height<E>(
     request: ProgressConnectionRequest,
     emit_progress: E,
-) -> Result<LastBlockHeightResponse, String>
+) -> Result<LastBlockHeightResponse, DesktopError>
 where
     E: Fn(LastBlockHeightProgressResponse) + Send + 'static,
 {
-    let summary = run_blocking(move || {
+    validate_node(&request.node)?;
+    validate_operation_id(&request.operation_id)?;
+
+    let node = request.node.clone();
+    let operation_id = request.operation_id.clone();
+
+    info!(
+        command = "get_last_block_height",
+        node = %node,
+        operation_id = %operation_id,
+        "starting desktop command"
+    );
+
+    let summary = run_blocking("get_last_block_height", move || {
         let operation_id = request.operation_id.clone();
         peer::get_last_block_height_node_with_progress(&request.node, |progress| {
             emit_progress(LastBlockHeightProgressResponse::from_progress(
@@ -34,29 +54,54 @@ where
                 progress,
             ));
         })
-        .map_err(|err| err.to_string())
+        .map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
+
+    info!(
+        command = "get_last_block_height",
+        node = %node,
+        height = summary.height,
+        rounds = summary.rounds,
+        "completed desktop command"
+    );
 
     Ok(summary.into())
 }
 #[tauri::command]
-pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, String> {
-    let summary = run_blocking(move || {
-        peer::handshake_node(&request.node).map_err(|err| err.to_string())
+pub async fn handshake(request: ConnectionRequest) -> Result<HandshakeResponse, DesktopError> {
+    validate_node(&request.node)?;
+    info!(command = "handshake", node = %request.node, "starting desktop command");
+
+    let node = request.node.clone();
+    let summary = run_blocking("handshake", move || {
+        peer::handshake_node(&request.node).map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
+
+    info!(
+        command = "handshake",
+        node = %node,
+        protocol_version = summary.protocol_version,
+        "completed desktop command"
+    );
 
     Ok(summary.into())
 }
 
 /// Runs the shared Rust ping workflow through the desktop command boundary.
 #[tauri::command]
-pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
-    let summary = run_blocking(move || {
-        peer::ping_node(&request.node).map_err(|err| err.to_string())
+pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, DesktopError> {
+    validate_node(&request.node)?;
+    info!(command = "ping", node = %request.node, "starting desktop command");
+
+    let node = request.node.clone();
+    let summary = run_blocking("ping", move || {
+        peer::ping_node(&request.node).map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
+
+    info!(command = "ping", node = %node, "completed desktop command");
 
     Ok(summary.into())
 }
@@ -65,9 +110,15 @@ pub async fn ping(request: ConnectionRequest) -> Result<PingResponse, String> {
 pub async fn get_last_block_height(
     app: tauri::AppHandle,
     request: ProgressConnectionRequest,
-) -> Result<LastBlockHeightResponse, String> {
+) -> Result<LastBlockHeightResponse, DesktopError> {
     run_get_last_block_height(request, move |payload| {
-        let _ = app.emit(CHAIN_HEIGHT_PROGRESS_EVENT, payload);
+        if let Err(err) = app.emit(CHAIN_HEIGHT_PROGRESS_EVENT, payload) {
+            warn!(
+                command = "get_last_block_height",
+                %err,
+                "failed to emit chain height progress event"
+            );
+        }
     })
     .await
 }
@@ -75,31 +126,88 @@ pub async fn get_last_block_height(
 #[tauri::command]
 pub async fn get_peer_addresses(
     request: ConnectionRequest,
-) -> Result<PeerAddressesResponse, String> {
-    let summary = run_blocking(move || {
-        peer::get_peer_addresses_node(&request.node).map_err(|err| err.to_string())
+) -> Result<PeerAddressesResponse, DesktopError> {
+    validate_node(&request.node)?;
+    info!(
+        command = "get_peer_addresses",
+        node = %request.node,
+        "starting desktop command"
+    );
+
+    let node = request.node.clone();
+    let summary = run_blocking("get_peer_addresses", move || {
+        peer::get_peer_addresses_node(&request.node)
+            .map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
+
+    info!(
+        command = "get_peer_addresses",
+        node = %node,
+        address_count = summary.addresses.len(),
+        "completed desktop command"
+    );
 
     Ok(summary.into())
 }
 
 #[tauri::command]
-pub async fn get_block_summary(request: BlockRequest) -> Result<BlockSummaryResponse, String> {
-    let summary = run_blocking(move || {
-        peer::get_block_summary_node(&request.node, &request.hash).map_err(|err| err.to_string())
+pub async fn get_block_summary(request: BlockRequest) -> Result<BlockSummaryResponse, DesktopError> {
+    validate_node(&request.node)?;
+    validate_block_hash(&request.hash)?;
+    info!(
+        command = "get_block_summary",
+        node = %request.node,
+        hash = %request.hash,
+        "starting desktop command"
+    );
+
+    let node = request.node.clone();
+    let hash = request.hash.clone();
+    let summary = run_blocking("get_block_summary", move || {
+        peer::get_block_summary_node(&request.node, &request.hash)
+            .map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
+
+    info!(
+        command = "get_block_summary",
+        node = %node,
+        hash = %hash,
+        tx_count = summary.tx_count,
+        serialized_size = summary.serialized_size,
+        "completed desktop command"
+    );
 
     Ok(summary.into())
 }
 
 #[tauri::command]
-pub async fn download_block(request: BlockRequest) -> Result<BlockDownloadResponse, String> {
-    let summary = run_blocking(move || {
-        peer::download_block_node(&request.node, &request.hash, None).map_err(|err| err.to_string())
+pub async fn download_block(request: BlockRequest) -> Result<BlockDownloadResponse, DesktopError> {
+    validate_node(&request.node)?;
+    validate_block_hash(&request.hash)?;
+    info!(
+        command = "download_block",
+        node = %request.node,
+        hash = %request.hash,
+        "starting desktop command"
+    );
+
+    let node = request.node.clone();
+    let hash = request.hash.clone();
+    let summary = run_blocking("download_block", move || {
+        peer::download_block_node(&request.node, &request.hash, None)
+            .map_err(|err| DesktopError::internal(err.to_string()))
     })
     .await?;
+
+    info!(
+        command = "download_block",
+        node = %node,
+        hash = %hash,
+        raw_bytes = summary.raw_bytes,
+        "completed desktop command"
+    );
 
     Ok(summary.into())
 }
@@ -470,5 +578,39 @@ mod tests {
 
         std::fs::remove_file(&result.output_path).expect("remove temp block file");
         server.join().expect("join");
+    }
+
+    #[test]
+    fn handshake_rejects_invalid_node_before_spawning_work() {
+        let err =
+            tauri::async_runtime::block_on(handshake(ConnectionRequest { node: "".to_owned() }))
+                .expect_err("invalid node");
+
+        assert_eq!(err.code, "invalid_request");
+    }
+
+    #[test]
+    fn get_block_summary_rejects_invalid_hash_before_spawning_work() {
+        let err = tauri::async_runtime::block_on(get_block_summary(BlockRequest {
+            node: "127.0.0.1:8333".to_owned(),
+            hash: "bad-hash".to_owned(),
+        }))
+        .expect_err("invalid hash");
+
+        assert_eq!(err.code, "invalid_request");
+    }
+
+    #[test]
+    fn get_last_block_height_rejects_invalid_operation_id_before_spawning_work() {
+        let err = tauri::async_runtime::block_on(run_get_last_block_height(
+            ProgressConnectionRequest {
+                node: "127.0.0.1:8333".to_owned(),
+                operation_id: "bad id".to_owned(),
+            },
+            |_| {},
+        ))
+        .expect_err("invalid operation id");
+
+        assert_eq!(err.code, "invalid_request");
     }
 }

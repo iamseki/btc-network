@@ -6,6 +6,7 @@ license = "Apache-2.0"
 
 [dependencies]
 btc-network = { path = "../../crates/btc-network" }
+btc-network-observability = { path = "../../crates/btc-network-observability" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
