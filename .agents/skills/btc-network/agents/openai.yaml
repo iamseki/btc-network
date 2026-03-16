@@ -1,0 +1,6 @@
+interface:
+  display_name: "Btc Network"
+  short_description: "Repo-specific patterns and workflows for btc-network"
+  default_prompt: "Use the btc-network repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
