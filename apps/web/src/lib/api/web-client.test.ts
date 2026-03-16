@@ -3,45 +3,49 @@ import { describe, expect, it, vi } from "vitest";
 import { webClient } from "./web-client";
 
 describe("webClient", () => {
-  it("returns a placeholder handshake response", async () => {
-    const result = await webClient.handshake({ node: "seed.bitcoin.sipa.be:8333" });
+  it("returns a deterministic mock handshake response for the requested node", async () => {
+    const result = await webClient.handshake({ node: "seed.bitnodes.io:8333" });
 
-    expect(result.node).toBe("seed.bitcoin.sipa.be:8333");
+    expect(result.node).toBe("seed.bitnodes.io:8333");
     expect(result.protocolVersion).toBe(70016);
-    expect(result.serviceNames).toEqual(["NONE"]);
+    expect(result.serviceNames.length).toBeGreaterThan(0);
+    expect(result.userAgent).toMatch(/^\/btc-network:web-mock-/);
+    expect(result.startHeight).toBeGreaterThan(0);
   });
 
-  it("returns placeholder peer addresses", async () => {
-    const result = await webClient.getAddr("seed.bitcoin.sipa.be:8333");
+  it("returns deterministic mock peer addresses", async () => {
+    const result = await webClient.getAddr("seed.bitnodes.io:8333");
 
-    expect(result.node).toBe("seed.bitcoin.sipa.be:8333");
-    expect(result.addresses).toEqual([
-      { address: "127.0.0.1", port: 8333, network: "ipv4" },
-      { address: "::1", port: 8333, network: "ipv6" },
-    ]);
+    expect(result.node).toBe("seed.bitnodes.io:8333");
+    expect(result.addresses).toHaveLength(3);
+    expect(result.addresses[0]?.network).toBe("ipv4");
+    expect(result.addresses[1]?.network).toBe("ipv6");
+    expect(result.addresses[2]?.network).toBe("torv3");
   });
 
-  it("returns a placeholder last block height summary", async () => {
+  it("emits a realistic progress lifecycle for last block height", async () => {
     const onProgress = vi.fn();
-    const result = await webClient.getLastBlockHeight("seed.bitcoin.sipa.be:8333", onProgress);
+    const result = await webClient.getLastBlockHeight("seed.bitnodes.io:8333", onProgress);
 
-    expect(result.height).toBe(938408);
-    expect(result.bestBlockHash).toBe(
-      "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde",
-    );
+    expect(result.height).toBeGreaterThan(0);
+    expect(result.bestBlockHash).toMatch(/^[0-9a-f]{64}$/);
     expect(result.rounds).toBeGreaterThan(0);
-    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onProgress).toHaveBeenCalledTimes(4);
     expect(onProgress.mock.calls[0]?.[0].phase).toBe("connecting");
-    expect(onProgress.mock.calls[1]?.[0].phase).toBe("requesting_headers");
+    expect(onProgress.mock.calls[1]?.[0].phase).toBe("handshaking");
+    expect(onProgress.mock.calls[2]?.[0].phase).toBe("requesting_headers");
+    expect(onProgress.mock.calls[3]?.[0].phase).toBe("completed");
+    expect(onProgress.mock.calls[3]?.[0].bestBlockHash).toBe(result.bestBlockHash);
   });
 
-  it("returns a placeholder block summary for the requested hash", async () => {
+  it("returns a deterministic block summary for the requested hash", async () => {
     const hash =
       "00000000000000000000772e80a1e5c0df1bc935b5f5c2cad5533234e068afde";
-    const result = await webClient.getBlock("seed.bitcoin.sipa.be:8333", hash);
+    const result = await webClient.getBlock("seed.bitnodes.io:8333", hash);
 
     expect(result.hash).toBe(hash);
-    expect(result.txCount).toBe(1);
+    expect(result.txCount).toBeGreaterThan(0);
+    expect(result.serializedSize).toBeGreaterThan(284);
     expect(result.coinbaseTxDetected).toBe(true);
   });
 
@@ -51,6 +55,7 @@ describe("webClient", () => {
     const result = await webClient.downloadBlock({ node: "node", hash });
 
     expect(result.outputPath).toBe("downloads/blk-00000000-8ce26f.dat");
+    expect(result.rawBytes).toBeGreaterThan(284);
   });
 
   it("returns a suggested host download path for block downloads", async () => {
@@ -60,5 +65,16 @@ describe("webClient", () => {
     const result = await webClient.getSuggestedBlockDownloadPath(hash);
 
     expect(result).toBe("downloads/blk-00000000-8ce26f.dat");
+  });
+
+  it("records mock API activity in recent events", async () => {
+    await webClient.handshake({ node: "seed.bitnodes.io:8333" });
+    await webClient.ping("seed.bitnodes.io:8333");
+
+    const events = await webClient.getRecentEvents();
+
+    expect(events[0]?.message).toContain("Mock ping round-trip completed");
+    expect(events[1]?.message).toContain("Mock handshake completed");
+    expect(events.some((event) => event.message.includes("placeholder mode"))).toBe(true);
   });
 });
