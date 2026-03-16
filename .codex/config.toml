@@ -1,5 +1,9 @@
 # There is a complete example of each value in: https://developers.openai.com/codex/config-sample
 
+# config to experiment and let the agent be more autonomous
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
 web_search = "cached"
 personality = "pragmatic"
 
