@@ -18,10 +18,14 @@ The frontend should remain portable enough that the same UI can later run as a n
 
 ## Current Status
 
-The first real desktop-backed flow is implemented:
+The current real desktop-backed flows are implemented:
 
 - `handshake`
 - `ping`
+- `get_peer_addresses`
+- `get_last_block_height`
+- `get_block_summary`
+- `download_block`
 
 These commands are exposed from `src-tauri/src/commands.rs` and call the shared Rust client workflow layer in `crates/btc-network/src/client/peer.rs`.
 
@@ -67,10 +71,10 @@ The workspace root `Cargo.lock` is the single lockfile that should be kept in ve
 
 ## Dev Permissions
 
-During `tauri dev`, the frontend is loaded from the Vite dev server (`http://localhost:5173`). The default capability therefore allows the local dev origins explicitly, so desktop commands like `handshake` and `ping` work in development as well as in the bundled local app context.
+During `tauri dev`, the frontend is loaded from the Vite dev server (`http://localhost:5173`). The default capability therefore allows the local dev origins explicitly, so desktop commands work in development as well as in the bundled local app context.
 
 Application command permissions follow the Tauri v2 explicit pattern:
 
 - `build.rs` registers the app commands in the Tauri app manifest
-- Tauri autogenerates `allow-handshake` and `allow-ping`
+- Tauri autogenerates `allow-handshake`, `allow-ping`, `allow-get-peer-addresses`, `allow-get-last-block-height`, `allow-get-block-summary`, and `allow-download-block`
 - the desktop capability grants those exact permission identifiers

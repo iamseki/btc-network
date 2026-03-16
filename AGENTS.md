@@ -385,12 +385,12 @@ make build
 make test
 make crawler
 make listener
-make cli ARGS="--node seed.bitcoin.sipa.be:8333 ping"
-make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-addr"
-make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-headers"
-make cli ARGS="--node seed.bitcoin.sipa.be:8333 last-block-header"
-make cli ARGS="--node seed.bitcoin.sipa.be:8333 get-block --hash <block-hash>"
-make cli ARGS="--node seed.bitcoin.sipa.be:8333 download-block --hash <block-hash>"
+make cli ARGS="--node seed.bitnodes.io:8333 ping"
+make cli ARGS="--node seed.bitnodes.io:8333 get-addr"
+make cli ARGS="--node seed.bitnodes.io:8333 get-headers"
+make cli ARGS="--node seed.bitnodes.io:8333 last-block-header"
+make cli ARGS="--node seed.bitnodes.io:8333 get-block --hash <block-hash>"
+make cli ARGS="--node seed.bitnodes.io:8333 download-block --hash <block-hash>"
 make security-tools-install
 make security-rust
 make security-web

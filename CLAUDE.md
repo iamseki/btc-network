@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Research-focused Bitcoin P2P client in Rust. Goal is protocol correctness and architectural clarity, not a wallet, miner, or full node.
 
+Start with `docs/architecture-decisions.md` for the compact version of settled repository decisions.
+
 ## Maintenance Rule
 
 Prefer maintainable code over speculative architecture.
@@ -25,11 +27,11 @@ Layers (strict separation — each must not cross into the next):
 
 | Task | Start here |
 |------|-----------|
-| Frontend shell/page | `docs/frontend-architecture.md`, `apps/web/src/App.tsx`, target component |
-| Frontend API/runtime | `apps/web/src/lib/api/client.ts`, `types.ts`, relevant adapter |
-| Desktop bridge | `apps/desktop/src-tauri/src/commands.rs`, `crates/btc-network/src/client/peer.rs` |
-| Shared Rust protocol | `crates/btc-network/src/lib.rs`, target module + its tests |
-| CI/security | `Makefile`, `.github/workflows/ci.yml`, `deny.toml`, `audit.toml` |
+| Frontend shell/page | `docs/architecture-decisions.md`, `docs/frontend-architecture.md`, `apps/web/src/App.tsx`, target component |
+| Frontend API/runtime | `docs/architecture-decisions.md`, `apps/web/src/lib/api/client.ts`, `types.ts`, relevant adapter |
+| Desktop bridge | `docs/architecture-decisions.md`, `apps/desktop/src-tauri/src/commands.rs`, `crates/btc-network/src/client/peer.rs` |
+| Shared Rust protocol | `docs/architecture-decisions.md`, `crates/btc-network/src/lib.rs`, target module + its tests |
+| CI/security | `docs/architecture-decisions.md`, `Makefile`, `.github/workflows/ci.yml`, `deny.toml`, `audit.toml` |
 
 Do not read crawler, wire, or CLI files for frontend-only tasks, and do not read `apps/web/` for wire parser work.
 

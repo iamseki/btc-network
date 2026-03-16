@@ -8,7 +8,7 @@ The project is organized around clear boundaries between transport, wire decodin
 
 - [Architecture decisions](docs/architecture-decisions.md)
 - [Frontend architecture](docs/frontend-architecture.md)
-- [First design doc](docs/design_docs/001_btc-network.md)
+- [Design docs index](docs/design_docs/README.md)
 
 ## Repository Shape
 
@@ -29,6 +29,7 @@ The project is organized around clear boundaries between transport, wire decodin
 - block summary
 - block download
 - desktop-backed UI flows for handshake, ping, addresses, chain height, block summary, and block download
+- session log, handshake service-name summaries, and chain-height progress in the current UI
 
 ## Development
 
