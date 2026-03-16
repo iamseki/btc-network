@@ -1,0 +1,5 @@
+ total_chunks | number_compressed_chunks | before_compression_table_bytes | before_compression_index_bytes | before_compression_toast_bytes | before_compression_total_bytes | after_compression_table_bytes | after_compression_index_bytes | after_compression_toast_bytes | after_compression_total_bytes | node_name 
+--------------+--------------------------+--------------------------------+--------------------------------+--------------------------------+--------------------------------+-------------------------------+-------------------------------+-------------------------------+-------------------------------+-----------
+            2 |                        2 |                      190930944 |                      146382848 |                          16384 |                      337330176 |                        720896 |                        172032 |                      35004416 |                      35897344 | 
+(1 row)
+

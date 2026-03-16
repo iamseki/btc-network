@@ -1,0 +1,5 @@
+ timescaledb_size 
+------------------
+ 181 MB
+(1 row)
+

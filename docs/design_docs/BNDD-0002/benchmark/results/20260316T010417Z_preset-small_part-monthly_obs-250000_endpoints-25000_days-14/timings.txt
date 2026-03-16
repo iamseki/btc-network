@@ -1,0 +1,9 @@
+timescaledb_schema=110ms
+clickhouse_schema=84ms
+timescaledb_load=1860ms
+clickhouse_load=198ms
+timescaledb_columnstore_convert=1064ms
+timescaledb_vacuum_full=255ms
+timescaledb_analyze=68ms
+timescaledb_queries=775ms
+clickhouse_queries=154ms

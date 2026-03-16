@@ -1,0 +1,40 @@
+services:
+  timescaledb:
+    image: ${TIMESCALE_IMAGE:-timescale/timescaledb:2.25.2-pg18}
+    container_name: btc-network-timescaledb-bench
+    environment:
+      POSTGRES_DB: btc_bench
+      POSTGRES_USER: btc
+      POSTGRES_PASSWORD: btc
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U btc -d btc_bench"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+
+  clickhouse:
+    image: ${CLICKHOUSE_IMAGE:-clickhouse/clickhouse-server:latest}
+    container_name: btc-network-clickhouse-bench
+    environment:
+      CLICKHOUSE_DB: btc_bench
+      CLICKHOUSE_USER: btc
+      CLICKHOUSE_PASSWORD: btc
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "58123:8123"
+      - "59000:9000"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "btc", "--password", "btc", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+
+volumes:
+  timescaledb_data:
+  clickhouse_data:
