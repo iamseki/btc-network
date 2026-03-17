@@ -78,6 +78,9 @@ export function App() {
   const currentPageIcon = pageIcons[selectedPage];
   const runtimeLabel = client.constructor.name || "web-client";
   const isMobileSidebarOpen = !sidebarCollapsed;
+  const desktopShellClass = sidebarCollapsed
+    ? "md:grid-cols-[72px_minmax(0,1fr)]"
+    : "md:grid-cols-[252px_minmax(0,1fr)]";
 
   function pushEvent(level: "info" | "warn" | "error", message: string) {
     setEvents((current) =>
@@ -222,7 +225,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="relative min-h-screen md:grid md:w-full md:grid-cols-[72px_minmax(0,1fr)]">
+      <div className={`relative min-h-screen md:grid md:w-full ${desktopShellClass}`}>
         {isMobileSidebarOpen ? (
           <button
             type="button"

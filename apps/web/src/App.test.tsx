@@ -83,6 +83,17 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
   });
 
+  it("expands the desktop shell width when the sidebar is opened", () => {
+    const { container } = render(<App />);
+
+    const shell = container.firstElementChild?.firstElementChild;
+    expect(shell?.className).toContain("md:grid-cols-[72px_minmax(0,1fr)]");
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+
+    expect(shell?.className).toContain("md:grid-cols-[252px_minmax(0,1fr)]");
+  });
+
   it("opens and closes the mobile navigation drawer", () => {
     setViewportWidth(390);
     render(<App />);
@@ -238,7 +249,7 @@ describe("App sidebar shell", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "Run Handshake" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
 
     expect(
       await screen.findAllByText(
@@ -271,7 +282,7 @@ describe("App sidebar shell", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "Peer Tools" }));
-    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
 
     expect(
       screen.getAllByText(/Frontend loaded\. Desktop mode exposes real handshake/),
@@ -281,8 +292,8 @@ describe("App sidebar shell", () => {
   it("clears the session log from the global panel", () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
-    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear session log" }));
 
     expect(screen.getByText("No events captured for this session yet.")).toBeTruthy();
   });
