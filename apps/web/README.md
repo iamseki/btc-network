@@ -52,8 +52,7 @@ Current pragmatic DNS/domain default setup:
 1. keep `btcnetwork.info` registered at Hostinger
 2. point the web app domain to Cloudflare Pages with a manual DNS update in Hostinger (Copy the Cloudflare nameservers to where you bought your domain, put these nameserver on there)
 3. Create Cloud Flare Page, maybe you will need to upload the dist manually.
-4. Add a custom domain in cloud flare page console
-Manual DNS cutover checklist:
+4. Add a custom domain in cloud flare page console -- both: www.btcnetwork.info and btcnetwork.info
 5. Wait for propagation and confirm the domain becomes active in Cloudflare Pages.
 
 

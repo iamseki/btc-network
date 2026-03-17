@@ -64,5 +64,5 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: >-
             pages deploy dist
-            --project-name=btcnetwork
+            --project-name=btcnetwork-web
             --branch=main
