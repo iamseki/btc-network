@@ -77,6 +77,7 @@ export function App() {
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
   const runtimeLabel = client.constructor.name || "web-client";
+  const isMobileSidebarOpen = !sidebarCollapsed;
 
   function pushEvent(level: "info" | "warn" | "error", message: string) {
     setEvents((current) =>
@@ -221,14 +222,21 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div
-        className={`grid min-h-screen w-full ${
-          sidebarCollapsed
-            ? "grid-cols-[72px_minmax(0,1fr)]"
-            : "grid-cols-[72px_minmax(0,1fr)] md:grid-cols-[240px_minmax(0,1fr)]"
-        }`}
-      >
-        <Sidebar className="min-h-screen">
+      <div className="relative min-h-screen md:grid md:w-full md:grid-cols-[72px_minmax(0,1fr)]">
+        {isMobileSidebarOpen ? (
+          <button
+            type="button"
+            aria-label="Close navigation overlay"
+            className="fixed inset-0 z-10 bg-background/65 backdrop-blur-sm md:hidden"
+            onClick={() => setSidebarCollapsed(true)}
+          />
+        ) : null}
+
+        <Sidebar
+          className={`fixed inset-y-0 left-0 z-20 w-[252px] transition-transform duration-200 ease-out ${
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          } shadow-[0_24px_48px_rgba(10,10,10,0.45)] md:relative md:w-auto md:translate-x-0 md:shadow-none`}
+        >
           <SidebarContent className="space-y-3 py-2">
             <SidebarGroup label={undefined}>
               <div
@@ -261,7 +269,12 @@ export function App() {
                       collapsed={sidebarCollapsed}
                       title={entry.title}
                       tooltip={entry.title}
-                      onClick={() => setSelectedPage(entry.id)}
+                      onClick={() => {
+                        setSelectedPage(entry.id);
+                        if (window.innerWidth < 768) {
+                          setSidebarCollapsed(true);
+                        }
+                      }}
                     />
                   );
                 })}
@@ -274,31 +287,39 @@ export function App() {
           </SidebarFooter>
         </Sidebar>
 
-        <main className="flex min-w-0 flex-col bg-background">
-          <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="rounded-md border border-border bg-muted/60 p-2 text-muted-foreground">
-                {(() => {
-                  const PageIcon = currentPageIcon;
-                  return <PageIcon className="h-4 w-4" />;
-                })()}
+        <main className="flex min-h-screen min-w-0 flex-col bg-background md:col-start-2">
+          <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-3 backdrop-blur md:px-4">
+            <div className="flex flex-col gap-3 md:h-14 md:flex-row md:items-center">
+              <div className="flex min-w-0 items-center gap-3">
+                <SidebarTrigger
+                  collapsed={sidebarCollapsed}
+                  className="shrink-0 md:hidden"
+                  aria-label={sidebarCollapsed ? "Open navigation" : "Close navigation"}
+                  onClick={() => setSidebarCollapsed((current) => !current)}
+                />
+                <div className="rounded-md border border-border bg-muted/60 p-2 text-muted-foreground">
+                  {(() => {
+                    const PageIcon = currentPageIcon;
+                    return <PageIcon className="h-4 w-4" />;
+                  })()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Overview
+                  </p>
+                  <p className="truncate text-sm text-foreground">{page.title}</p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Overview
-                </p>
-                <p className="truncate text-sm text-foreground">{page.title}</p>
-              </div>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground">
-                {node}
+              <div className="md:ml-auto">
+                <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground break-all md:max-w-[24rem]">
+                  {node}
+                </div>
               </div>
             </div>
           </header>
 
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="grid flex-1 gap-6 p-4 lg:p-6">
+            <div className="grid flex-1 gap-4 p-3 md:gap-6 md:p-4 lg:p-6">
               {selectedPage === "connection" ? (
                 <ConnectionPage
                   node={node}

@@ -52,7 +52,7 @@ export function ConnectionPage({
             value={node}
             onChange={(event) => onNodeChange(event.target.value)}
           />
-          <Button type="submit" disabled={isRunning}>
+          <Button type="submit" disabled={isRunning} className="w-full sm:w-auto">
             {isRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
             {isRunning ? "Handshaking..." : "Run Handshake"}
           </Button>

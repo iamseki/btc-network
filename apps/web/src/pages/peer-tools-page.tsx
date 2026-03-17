@@ -37,18 +37,26 @@ export function PeerToolsPage({
           description="Use the current single-peer actions without burying the protocol under generic dashboard chrome."
           actions={
             <>
-              <Button type="button" onClick={() => void onPing()} disabled={isPinging}>
+              <Button
+                type="button"
+                onClick={() => void onPing()}
+                disabled={isPinging}
+                className="w-full sm:w-auto"
+                aria-label={`Ping ${node}`}
+              >
                 {isPinging ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                {isPinging ? "Pinging..." : `Ping ${node}`}
+                {isPinging ? "Pinging..." : "Ping Peer"}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => void onGetAddr?.()}
                 disabled={isGettingAddr}
+                className="w-full whitespace-normal text-center leading-tight sm:w-auto"
+                aria-label={`Fetch Peer Addresses ${node}`}
               >
                 {isGettingAddr ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                {isGettingAddr ? "Fetching peers..." : `Fetch Peer Addresses ${node}`}
+                {isGettingAddr ? "Fetching peers..." : "Fetch Peer Addresses"}
               </Button>
             </>
           }

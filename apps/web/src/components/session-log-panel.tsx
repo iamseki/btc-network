@@ -27,12 +27,12 @@ export function SessionLogPanel({
   const latestEvent = events[0] ?? null;
 
   return (
-    <section className="border-t border-border bg-card/92 shadow-[0_-10px_30px_rgba(0,0,0,0.25)]">
-      <div className="px-4 py-3 lg:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <section className="border-t border-border bg-card/92 shadow-[0_-10px_30px_rgba(0,0,0,0.25)] md:sticky md:bottom-0 md:z-10">
+      <div className="px-3 py-3 md:px-4 lg:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
-            className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-[6px] border border-border/80 bg-background/70 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
+            className="flex min-w-0 w-full cursor-pointer items-center gap-3 rounded-[6px] border border-border/80 bg-background/70 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
             aria-expanded={isOpen}
             aria-controls="session-log-panel"
             onClick={onToggle}
@@ -48,11 +48,25 @@ export function SessionLogPanel({
                 {latestEvent ? latestEvent.message : "No events captured for this session yet."}
               </p>
             </div>
-            <Badge variant="muted">{events.length} events</Badge>
+            <div className="hidden items-center gap-2 sm:flex">
+              <Badge variant="muted">{events.length} events</Badge>
+              {latestEvent ? (
+                <Badge
+                  variant={levelTone[latestEvent.level]}
+                  className={cn(
+                    latestEvent.level === "error" && "border-red-500/40 text-red-300",
+                    latestEvent.level === "warn" && "border-amber-500/40 text-amber-300",
+                  )}
+                >
+                  {latestEvent.level}
+                </Badge>
+              ) : null}
+            </div>
             {latestEvent ? (
               <Badge
                 variant={levelTone[latestEvent.level]}
                 className={cn(
+                  "sm:hidden",
                   latestEvent.level === "error" && "border-red-500/40 text-red-300",
                   latestEvent.level === "warn" && "border-amber-500/40 text-amber-300",
                 )}
@@ -67,8 +81,14 @@ export function SessionLogPanel({
             )}
           </button>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <Button type="button" size="sm" variant="ghost" onClick={onClear} disabled={events.length === 0}>
+          <div className="ml-auto flex items-center justify-end gap-2 self-end sm:self-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onClear}
+              disabled={events.length === 0}
+            >
               <Trash2 className="h-4 w-4" />
               Clear
             </Button>
@@ -82,7 +102,7 @@ export function SessionLogPanel({
         {isOpen ? (
           <div
             id="session-log-panel"
-            className="panel-scrollbar mt-3 max-h-[22rem] overflow-y-auto rounded-[8px] border border-border/80 bg-background/85 p-3"
+            className="panel-scrollbar mt-3 max-h-[50vh] overflow-y-auto rounded-[8px] border border-border/80 bg-background/85 p-3 md:max-h-[22rem]"
           >
             <ul className="grid gap-3">
               {events.map((event) => (

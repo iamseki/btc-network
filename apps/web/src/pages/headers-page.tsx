@@ -67,6 +67,7 @@ export function HeadersPage({
             type="button"
             disabled={isLoadingLastBlockHeight}
             onClick={onGetLastBlockHeight}
+            className="w-full sm:w-auto"
           >
             {isLoadingLastBlockHeight ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
             {isLoadingLastBlockHeight ? "Fetching..." : "Fetch Last Block Height"}

@@ -64,12 +64,14 @@ export function BlocksPage({
               value={blockHash}
               onChange={(event) => onBlockHashChange?.(event.target.value)}
             />
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={isLoadingBlock}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Button type="submit" disabled={isLoadingBlock} className="w-full sm:w-auto">
                 {isLoadingBlock ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                 {isLoadingBlock ? "Loading..." : "Fetch Block"}
               </Button>
-              <Badge variant="muted">{node}</Badge>
+              <Badge variant="muted" className="max-w-full break-all">
+                {node}
+              </Badge>
             </div>
           </div>
 
@@ -92,6 +94,7 @@ export function BlocksPage({
               variant="secondary"
               disabled={isDownloadingBlock}
               onClick={() => void onDownloadBlock?.()}
+              className="w-full whitespace-normal text-center leading-tight sm:w-auto"
             >
               {isDownloadingBlock ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
               {isDownloadingBlock ? "Downloading..." : "Download to Host Path"}

@@ -13,6 +13,7 @@ const mockGetBlock = vi.fn();
 const mockDownloadBlock = vi.fn();
 const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
+const originalInnerWidth = window.innerWidth;
 
 vi.mock("./lib/api", () => ({
   getAppClient: () => ({
@@ -43,10 +44,23 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: originalInnerWidth,
+  });
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
 });
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+}
 
 describe("App sidebar shell", () => {
   it("renders collapsed by default", () => {
@@ -67,6 +81,40 @@ describe("App sidebar shell", () => {
 
     expect(screen.getByText("Menu")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+  });
+
+  it("opens and closes the mobile navigation drawer", () => {
+    setViewportWidth(390);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+
+    expect(screen.getByText("Menu")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close navigation overlay" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close navigation overlay" }));
+
+    expect(screen.queryByText("Menu")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close navigation overlay" })).toBeNull();
+  });
+
+  it("closes the mobile drawer after selecting a page", () => {
+    setViewportWidth(390);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chain Height" }));
+
+    expect(screen.getByRole("heading", { name: "Chain Height" })).toBeTruthy();
+    expect(screen.queryByText("Menu")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close navigation overlay" })).toBeNull();
+  });
+
+  it("keeps separate trigger semantics for mobile and desktop navigation controls", () => {
+    render(<App />);
+
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open navigation" })).toBeTruthy();
   });
 
   it("switches the visible page from the sidebar", () => {
