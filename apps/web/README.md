@@ -43,18 +43,30 @@ Current state:
 
 Phase 1 production deploys target `Cloudflare Pages` through the repository GitHub Actions workflow at [deploy-web-pages.yml](/home/chseki/projects/personal/btc-network/.github/workflows/deploy-web-pages.yml).
 
-We set the action and the following secrets:
+Deployment gating:
+
+- the deploy workflow runs only after the repository `CI` workflow succeeds on `main`
+- this means deploys wait for both test and dependency-security checks in `CI`
+
+Required GitHub repository configuration:
+
 - secret `CLOUDFLARE_API_TOKEN`
 - secret `CLOUDFLARE_ACCOUNT_ID`
+- variable `CLOUDFLARE_PAGES_PROJECT_NAME`
 
-Current pragmatic DNS/domain default setup:
+Current pragmatic DNS/domain default:
 
-1. keep `btcnetwork.info` registered at Hostinger
-2. point the web app domain to Cloudflare Pages with a manual DNS update in Hostinger (Copy the Cloudflare nameservers to where you bought your domain, put these nameserver on there)
-3. Create Cloud Flare Page, maybe you will need to upload the dist manually.
-4. Add a custom domain in cloud flare page console -- both: www.btcnetwork.info and btcnetwork.info
-5. Wait for propagation and confirm the domain becomes active in Cloudflare Pages.
+- keep `btcnetwork.info` registered at Hostinger
+- create a Cloudflare Pages project using `Direct Upload`
+- deploy the built `dist/` artifact automatically from GitHub Actions
+- point the web app domain to Cloudflare Pages with manual DNS record changes in Hostinger
+- reserve `api.btcnetwork.info` for the future API
 
+Important:
+
+- this setup does **not** require moving the domain registrar
+- this setup does **not** require changing nameservers to Cloudflare
+- this repo’s workflow uses automated direct upload from GitHub Actions, not manual `dist/` uploads in the UI
 
 Next implementation priorities:
 

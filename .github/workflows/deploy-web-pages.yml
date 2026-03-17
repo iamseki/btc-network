@@ -1,11 +1,10 @@
 name: Deploy Web To Cloudflare Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: ["main"]
-    paths:
-      - "apps/web/**"
-      - ".github/workflows/deploy-web-pages.yml"
   workflow_dispatch:
 
 concurrency:
@@ -13,12 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-web:
+  build-web:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -29,9 +31,6 @@ jobs:
 
       - name: Install web dependencies
         run: npm ci --prefix apps/web
-
-      - name: Run web tests
-        run: npm run test --prefix apps/web
 
       - name: Build web app
         run: npm run build --prefix apps/web
@@ -45,7 +44,7 @@ jobs:
 
   deploy-web:
     runs-on: ubuntu-latest
-    needs: verify-web
+    needs: build-web
 
     permissions:
       contents: read
@@ -64,5 +63,5 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: >-
             pages deploy dist
-            --project-name=btcnetwork-web
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
             --branch=main

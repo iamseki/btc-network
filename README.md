@@ -99,9 +99,9 @@ Repository setup:
 
 The deploy workflow is [deploy-web-pages.yml](/home/chseki/projects/personal/btc-network/.github/workflows/deploy-web-pages.yml). It:
 
-- runs web tests
+- waits for the `CI` workflow to finish successfully on `main`
 - builds `apps/web`
-- deploys the `dist/` artifact to Cloudflare Pages on pushes to `main`
+- deploys the `dist/` artifact to Cloudflare Pages
 
 DNS/domain cutover remains manual for the first phase:
 
