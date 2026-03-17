@@ -9,6 +9,7 @@ Opinionated rules for `BNDD` documents in this repository.
 - Update the main doc when the decision changes; do not leave the benchmark or assets as the only source of truth.
 - Add a `Contents` section for any doc that is more than a short note.
 - If a BNDD has code, scripts, diagrams, or benchmark files, keep them under that BNDD directory instead of the top-level `design_docs/`.
+- Keep the status in this index aligned with the `Status` field in the BNDD header table.
 
 ## Status
 

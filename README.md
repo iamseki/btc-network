@@ -7,6 +7,7 @@ The project is organized around clear boundaries between transport, wire decodin
 ## Start Here
 
 - [Docs index](docs/README.md)
+- [Deployment guide](docs/deployment.md)
 - [Design docs index](docs/design_docs/README.md)
 
 ## Repository Shape
@@ -89,46 +90,7 @@ make web-dev
 
 Phase 1 production deploys use `GitHub Actions` plus `Cloudflare Pages`.
 
-Repository setup:
-
-- create a Cloudflare Pages project for `apps/web`
-- add GitHub repository secret `CLOUDFLARE_API_TOKEN`
-- add GitHub repository secret `CLOUDFLARE_ACCOUNT_ID`
-- add GitHub repository variable `CLOUDFLARE_PAGES_PROJECT_NAME`
-
-The deploy workflow is [deploy-web-pages.yml](/home/chseki/projects/personal/btc-network/.github/workflows/deploy-web-pages.yml). It:
-
-- waits for the `CI` workflow to finish successfully on `main`
-- builds `apps/web`
-- deploys the `dist/` artifact to Cloudflare Pages
-
-DNS/domain cutover remains manual for the first phase:
-
-- keep the `btcnetwork.info` registrar at Hostinger
-- add `btcnetwork.info` as a custom domain in Cloudflare Pages
-- update the required DNS records in Hostinger to point the domain at Cloudflare Pages
-- reserve `api.btcnetwork.info` for the future API
-
-This keeps the CI/CD path automated without making Phase 1 depend on Hostinger DNS automation.
-
-Manual setup steps:
-
-1. In Cloudflare, create or open the Pages project named in `CLOUDFLARE_PAGES_PROJECT_NAME`.
-2. In the Pages project, open `Custom domains`.
-3. Add `btcnetwork.info` as the production custom domain.
-4. Copy the DNS target values Cloudflare Pages shows for the apex domain and, if prompted, the `www` hostname.
-5. In Hostinger hPanel, open the DNS zone for `btcnetwork.info`.
-6. Remove or update any existing `@` or `www` records that would conflict with the Pages records.
-7. Create the exact DNS records Cloudflare Pages requested in Hostinger.
-8. Save the Hostinger DNS changes and wait for propagation.
-9. Return to Cloudflare Pages and confirm the custom domain becomes active and HTTPS is issued.
-10. Keep `api.btcnetwork.info` unused for now so it remains available for the future API cutover.
-
-Practical notes:
-
-- Use the DNS values shown inside Cloudflare Pages as the source of truth instead of hardcoding record values in repo docs.
-- If Hostinger already has a parking page or default records for `@` or `www`, remove those before adding the Pages records.
-- If you want `www.btcnetwork.info` to work, add it as an extra custom domain in Pages and mirror the DNS records Pages asks for.
+See [docs/deployment.md](docs/deployment.md) for the current production setup, required GitHub and Cloudflare configuration, and the manual Hostinger DNS steps.
 
 ## Notes
 

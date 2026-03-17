@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Research-focused Bitcoin P2P client in Rust. Goal is protocol correctness and architectural clarity, not a wallet, miner, or full node.
 
 Start with `docs/agents/architecture-decisions.md` for the compact version of settled repository decisions.
+For the broader documentation map, see `docs/README.md`.
 
 ## Maintenance Rule
 

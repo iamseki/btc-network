@@ -48,19 +48,7 @@ Deployment gating:
 - the deploy workflow runs only after the repository `CI` workflow succeeds on `main`
 - this means deploys wait for both test and dependency-security checks in `CI`
 
-Required GitHub repository configuration:
-
-- secret `CLOUDFLARE_API_TOKEN`
-- secret `CLOUDFLARE_ACCOUNT_ID`
-- variable `CLOUDFLARE_PAGES_PROJECT_NAME`
-
-Current pragmatic DNS/domain default:
-
-- keep `btcnetwork.info` registered at Hostinger
-- create a Cloudflare Pages project using `Direct Upload`
-- deploy the built `dist/` artifact automatically from GitHub Actions
-- point the web app domain to Cloudflare Pages with manual DNS record changes in Hostinger
-- reserve `api.btcnetwork.info` for the future API
+Repository setup and manual Hostinger DNS steps live in [docs/deployment.md](/home/chseki/projects/personal/btc-network/docs/deployment.md).
 
 Important:
 
