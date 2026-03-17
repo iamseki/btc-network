@@ -6,8 +6,7 @@ The project is organized around clear boundaries between transport, wire decodin
 
 ## Start Here
 
-- [Architecture decisions](docs/architecture-decisions.md)
-- [Frontend architecture](docs/frontend-architecture.md)
+- [Docs index](docs/README.md)
 - [Design docs index](docs/design_docs/README.md)
 
 ## Repository Shape

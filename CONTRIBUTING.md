@@ -22,8 +22,9 @@ Start here if you want to understand where a change belongs and what to run befo
 
 See also:
 
-- `docs/architecture-decisions.md`
-- `docs/frontend-architecture.md`
+- `docs/README.md`
+- `docs/agents/architecture-decisions.md`
+- `docs/agents/frontend-architecture.md`
 
 ## Pick the Right Layer
 

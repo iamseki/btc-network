@@ -2,7 +2,7 @@
 
 Guidance for coding agents working in this repository.
 
-Start with `docs/architecture-decisions.md` for the compact version of settled repo decisions.
+Start with `docs/agents/architecture-decisions.md` for the compact version of settled repo decisions.
 
 ## Project Summary
 
@@ -46,35 +46,35 @@ Pick the smallest relevant set.
 
 Frontend shell or page task:
 
-- `docs/architecture-decisions.md`
-- `docs/frontend-architecture.md`
+- `docs/agents/architecture-decisions.md`
+- `docs/agents/frontend-architecture.md`
 - `apps/web/src/App.tsx`
 - the specific page or component being changed
 
 Frontend API/runtime task:
 
-- `docs/architecture-decisions.md`
+- `docs/agents/architecture-decisions.md`
 - `apps/web/src/lib/api/client.ts`
 - `apps/web/src/lib/api/types.ts`
 - the relevant adapter (`tauri-client.ts` or `web-client.ts`)
 
 Shared Rust protocol/session task:
 
-- `docs/architecture-decisions.md`
+- `docs/agents/architecture-decisions.md`
 - `crates/btc-network/src/lib.rs`
 - the target module under `crates/btc-network/src/`
 - the tests next to that module
 
 Desktop bridge task:
 
-- `docs/architecture-decisions.md`
+- `docs/agents/architecture-decisions.md`
 - `apps/desktop/src-tauri/src/commands.rs`
 - `crates/btc-network/src/client/peer.rs`
 - the relevant frontend adapter file
 
 CI or security task:
 
-- `docs/architecture-decisions.md`
+- `docs/agents/architecture-decisions.md`
 - `Makefile`
 - `.github/workflows/ci.yml`
 - `audit.toml`
@@ -173,7 +173,7 @@ Binaries must not:
 - apps/cli/src/main.rs — interactive CLI
 - apps/crawler/src/main.rs — DNS seed crawler
 - apps/listener/src/main.rs — long-running listener
-- docs/crawler-first-design.png — first crawler architecture draft
+- docs/design_docs/BNDD-0001/crawler-first-design.png — first crawler architecture draft
 
 ## Task Map
 
@@ -281,7 +281,7 @@ Current real desktop-backed flows:
 
 For most frontend tasks, start with this minimal context:
 
-- `docs/frontend-architecture.md`
+- `docs/agents/frontend-architecture.md`
 - `apps/web/src/App.tsx`
 - `apps/web/src/lib/api/client.ts`
 - `apps/web/src/lib/api/types.ts`
