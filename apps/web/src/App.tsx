@@ -1,4 +1,4 @@
-import { Blocks, Network, Radio, Waypoints } from "lucide-react";
+import { Blocks, Coffee, Network, Radio, Waypoints } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
@@ -10,7 +10,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarNavButton,
-  SidebarProfile,
   SidebarTrigger,
 } from "./components/ui/sidebar";
 import { BlocksPage } from "./pages/blocks-page";
@@ -32,6 +31,7 @@ import type {
 const defaultNode = "seed.bitnodes.io:8333";
 const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim();
 
 export function App() {
   const [selectedPage, setSelectedPage] = useState<AppPageId>("connection");
@@ -76,7 +76,6 @@ export function App() {
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
-  const runtimeLabel = client.constructor.name || "web-client";
   const isMobileSidebarOpen = !sidebarCollapsed;
   const desktopShellClass = sidebarCollapsed
     ? "md:grid-cols-[72px_minmax(0,1fr)]"
@@ -286,7 +285,34 @@ export function App() {
           </SidebarContent>
 
           <SidebarFooter>
-            <SidebarProfile collapsed={sidebarCollapsed} name="Operator Zero" role={runtimeLabel} />
+            {supportUrl ? (
+              <a
+                href={supportUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={
+                  sidebarCollapsed
+                    ? "flex h-10 items-center justify-center rounded-lg border border-border/80 bg-background/40 text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted hover:text-foreground"
+                    : "flex items-center gap-3 rounded-lg border border-border/80 bg-background/40 px-3 py-3 text-left text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted hover:text-foreground"
+                }
+                aria-label="Support Project"
+                title="Support ongoing work on Bitcoin P2P analytics, network health, decentralization, and attack risk research."
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/60 text-primary">
+                  <Coffee className="h-4 w-4" />
+                </span>
+                {sidebarCollapsed ? null : (
+                  <span className="min-w-0">
+                    <span className="block font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
+                      Support Project
+                    </span>
+                    <span className="block text-xs leading-5 text-muted-foreground">
+                      Help fund analytics, research, and public infrastructure.
+                    </span>
+                  </span>
+                )}
+              </a>
+            ) : null}
           </SidebarFooter>
         </Sidebar>
 

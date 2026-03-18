@@ -33,12 +33,19 @@ Add these repository values before the first deploy:
 - secret `CLOUDFLARE_API_TOKEN`
 - secret `CLOUDFLARE_ACCOUNT_ID`
 - variable `CLOUDFLARE_PAGES_PROJECT_NAME`
+- variable `VITE_SUPPORT_URL` if you want the support link shown in the web UI
 
 Use a Cloudflare API token with:
 
 - `Account` -> `Cloudflare Pages` -> `Edit`
 
 Scope it to the target Cloudflare account only.
+
+For frontend environment values such as `VITE_SUPPORT_URL`, remember:
+
+- Vite injects `VITE_*` values at build time
+- this repository builds the frontend in GitHub Actions before deploying to Cloudflare Pages
+- because of that, `VITE_SUPPORT_URL` should be set in GitHub repository variables, not only in Cloudflare Pages
 
 ## Cloudflare Pages Setup
 

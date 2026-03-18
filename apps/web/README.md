@@ -39,6 +39,16 @@ Current state:
 - `npm run test --prefix apps/web`
 - `npm run build --prefix apps/web`
 
+Optional environment:
+
+- `VITE_SUPPORT_URL` — Buy Me a Coffee or other support link shown in the sidebar footer
+
+Important:
+
+- Vite reads `VITE_*` values at build time, not after the page has already loaded
+- local development: set `VITE_SUPPORT_URL` in your shell or a local Vite env file before `npm run dev`
+- production deploys: set `VITE_SUPPORT_URL` as a GitHub repository variable so the GitHub Actions build injects it into the static site
+
 ## Production deploy
 
 Phase 1 production deploys target `Cloudflare Pages` through the repository GitHub Actions workflow at [deploy-web-pages.yml](/home/chseki/projects/personal/btc-network/.github/workflows/deploy-web-pages.yml).
@@ -47,6 +57,7 @@ Deployment gating:
 
 - the deploy workflow runs only after the repository `CI` workflow succeeds on `main`
 - this means deploys wait for both test and dependency-security checks in `CI`
+- the workflow injects `vars.VITE_SUPPORT_URL` into the build so the support link is present in production when configured
 
 Repository setup and manual Hostinger DNS steps live in [docs/deployment.md](/home/chseki/projects/personal/btc-network/docs/deployment.md).
 
