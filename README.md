@@ -88,7 +88,7 @@ make web-dev
 
 ## Deploying Web
 
-Phase 1 production deploys use `GitHub Actions` plus `Cloudflare Pages`.
+Phase 1 production deploys use the repository `CI/CD` GitHub Actions workflow plus `Cloudflare Pages`.
 
 See [docs/deployment.md](docs/deployment.md) for the current production setup, required GitHub and Cloudflare configuration, and the manual Hostinger DNS steps.
 

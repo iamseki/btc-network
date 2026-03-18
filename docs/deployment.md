@@ -16,15 +16,18 @@ This setup keeps the deploy path automated while leaving the first DNS cutover m
 
 ## CI/CD Flow
 
-The production workflow is [deploy-web-pages.yml](/home/chseki/projects/personal/btc-network/.github/workflows/deploy-web-pages.yml).
+The production workflow is [ci.yml](/home/chseki/projects/personal/btc-network/.github/workflows/ci.yml).
 
 It:
 
-- waits for the repository `CI` workflow to succeed on `main`
+- runs the normal build/test and dependency-security jobs
+- runs `deploy-web` only after those jobs succeed
+- deploys only on pushes to `main`
+- deploys only when the push changes files under `apps/web/**`
 - builds `apps/web`
 - deploys the built `dist/` artifact to Cloudflare Pages
 
-This means production deploys are gated by the existing repository test and dependency-security checks.
+This keeps the deploy visible in the same GitHub commit checks as the rest of the pipeline while still gating production on the existing repository test and dependency-security checks.
 
 ## GitHub Repository Setup
 

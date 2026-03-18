@@ -51,12 +51,13 @@ Important:
 
 ## Production deploy
 
-Phase 1 production deploys target `Cloudflare Pages` through the repository GitHub Actions workflow at [deploy-web-pages.yml](/home/chseki/projects/personal/btc-network/.github/workflows/deploy-web-pages.yml).
+Phase 1 production deploys target `Cloudflare Pages` through the repository GitHub Actions workflow at [ci.yml](/home/chseki/projects/personal/btc-network/.github/workflows/ci.yml).
 
 Deployment gating:
 
-- the deploy workflow runs only after the repository `CI` workflow succeeds on `main`
-- this means deploys wait for both test and dependency-security checks in `CI`
+- the `deploy-web` job runs only on pushes to `main`
+- it depends on both the build/test and dependency-security jobs succeeding first
+- it runs only when the push includes changes under `apps/web/**`
 - the workflow injects `vars.VITE_SUPPORT_URL` into the build so the support link is present in production when configured
 
 Repository setup and manual Hostinger DNS steps live in [docs/deployment.md](/home/chseki/projects/personal/btc-network/docs/deployment.md).
