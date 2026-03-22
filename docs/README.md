@@ -8,6 +8,7 @@ Start here if you need repository documentation and do not yet know which docume
 
 - [Contributing](../CONTRIBUTING.md)
 - [Deployment](./deployment.md)
+- [Archived observability note](./observability.md)
 - [Fundamentals](./fundamentals.md)
 - [Design Docs](./design_docs/README.md)
 
@@ -32,6 +33,9 @@ Start here if you need repository documentation and do not yet know which docume
 - `Deployment or CI task`
   - [Deployment](./deployment.md)
   - [Design Docs](./design_docs/README.md)
+- `Archived observability experiment`
+  - [Archived observability note](./observability.md)
+  - [Design Docs](./design_docs/README.md)
 - `Design-doc task`
   - [Design Docs](./design_docs/README.md)
 
@@ -42,6 +46,8 @@ Start here if you need repository documentation and do not yet know which docume
   - [Frontend Architecture](./agents/frontend-architecture.md)
 - `deployment and operations`
   - [Deployment](./deployment.md)
+- `archived observability experiment`
+  - [Archived observability note](./observability.md)
 - `design history and decisions`
   - [Design Docs](./design_docs/README.md)
 - `background context`
@@ -52,4 +58,5 @@ Start here if you need repository documentation and do not yet know which docume
 - `docs/agents/` is optimized for agent and implementation guidance.
 - `docs/design_docs/` is the canonical home for BNDD (bitcoin network design doc) decision records.
 - `docs/deployment.md` is the human-oriented guide for the current Cloudflare Pages and Hostinger setup.
+- `docs/observability.md` is the archive note for the rejected local agent observability experiment.
 - `CONTRIBUTING.md` remains the short human-oriented contribution guide at the repository root.

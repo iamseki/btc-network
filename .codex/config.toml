@@ -1,6 +1,7 @@
 # There is a complete example of each value in: https://developers.openai.com/codex/config-sample
 
 # config to experiment and let the agent be more autonomous
+## IMPORTANT: CODEX vs code extension does not allow local configs so this configuration should be placed in $HOME~/.codex/config.toml to take effect for the extension
 approval_policy = "never"
 sandbox_mode = "workspace-write"
 
@@ -13,3 +14,10 @@ max_threads = 16
 
 [analytics]
 enabled = false
+
+#[otel]
+#environment = "dev"
+#log_user_prompt = false
+#exporter = { otlp-http = { endpoint = "http://127.0.0.1:4318/v1/logs", protocol = "binary" } }
+#metrics_exporter = { otlp-http = { endpoint = "http://127.0.0.1:4318/v1/metrics", protocol = "binary" } }
+#trace_exporter = { otlp-http = { endpoint = "http://127.0.0.1:4318/v1/traces", protocol = "binary" } }

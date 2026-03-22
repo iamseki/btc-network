@@ -21,3 +21,4 @@ apps/desktop/src-tauri/target
 artifacts
 
 .env.sh
+docs/design_docs/BNDD-0004/observability/.env
