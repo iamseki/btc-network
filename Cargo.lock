@@ -255,6 +255,7 @@ dependencies = [
  "btc-network",
  "btc-network-observability",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tracing",

@@ -86,6 +86,13 @@ impl Session {
 
         self.recv_until(|msg, session| match msg {
             Message::Pong(payload) => {
+                if payload.len() != 8 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "pong payload must be exactly 8 bytes",
+                    )
+                    .into());
+                }
                 let returned = u64::from_le_bytes(payload[..8].try_into()?);
                 Ok(Some(returned))
             }
@@ -306,6 +313,38 @@ mod tests {
         assert_eq!(raw.command, Command::Verack);
         assert!(raw.payload.is_empty());
 
+        server.join().expect("join server");
+    }
+
+    #[test]
+    fn ping_rejects_short_pong_payload() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+            peer.set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set peer read timeout");
+
+            let ping = read_message(&mut peer).expect("read ping");
+            assert_eq!(ping.command, Command::Ping);
+
+            send_message(&mut peer, Command::Pong, &[0u8; 4]).expect("send short pong");
+        });
+
+        let stream = TcpStream::connect(addr).expect("connect");
+        let mut session = Session::new(stream);
+        let err = session
+            .ping(0xAABBCCDDEEFF0011)
+            .expect_err("short pong should fail");
+
+        assert!(
+            err.to_string()
+                .contains("pong payload must be exactly 8 bytes"),
+            "unexpected error: {err}"
+        );
         server.join().expect("join server");
     }
 }

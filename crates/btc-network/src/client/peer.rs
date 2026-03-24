@@ -1,13 +1,13 @@
 use rand::Rng;
 use std::error::Error;
 use std::fs::File;
-use std::io::Write;
+use std::io::{self, Write};
 use std::net::IpAddr;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
 use crate::session::Session;
-use crate::wire::message::{AddrV2Addr, Block, Decode, VersionMessage};
+use crate::wire::message::{AddrV2Addr, Block, BlockHeader, Decode, VersionMessage};
 use crate::wire::{self, Command, Message};
 
 /// App-facing summary of the peer metadata collected during the Bitcoin handshake.
@@ -181,6 +181,7 @@ where
             break;
         }
 
+        validate_headers_batch(current_locator, &headers)?;
         total_headers += count;
 
         let last = headers.last().expect("headers not empty");
@@ -409,13 +410,20 @@ pub fn ping_session(node: &str, session: &mut Session) -> Result<PingSummary, Bo
 }
 
 fn connect(node: &str, timeout: Duration) -> Result<Session, Box<dyn Error>> {
-    let addr = node
-        .to_socket_addrs()?
-        .next()
-        .ok_or("could not resolve address")?;
+    let mut last_error: Option<io::Error> = None;
 
-    let stream = TcpStream::connect_timeout(&addr, timeout)?;
-    Ok(Session::new(stream))
+    for addr in node.to_socket_addrs()? {
+        match TcpStream::connect_timeout(&addr, timeout) {
+            Ok(stream) => return Ok(Session::new(stream)),
+            Err(err) => last_error = Some(err),
+        }
+    }
+
+    Err(last_error
+        .unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::AddrNotAvailable, "could not resolve address")
+        })
+        .into())
 }
 
 fn map_handshake(node: &str, version: VersionMessage) -> HandshakeSummary {
@@ -464,7 +472,9 @@ fn format_addrv2(addr: &AddrV2Addr) -> String {
 fn display_ip(ip: IpAddr) -> String {
     match ip {
         IpAddr::V4(ip) => ip.to_string(),
-        IpAddr::V6(ip) => ip.to_ipv4_mapped().map_or_else(|| ip.to_string(), |ip| ip.to_string()),
+        IpAddr::V6(ip) => ip
+            .to_ipv4_mapped()
+            .map_or_else(|| ip.to_string(), |ip| ip.to_string()),
     }
 }
 
@@ -491,6 +501,54 @@ fn parse_requested_block_hash(hash_hex: &str) -> Result<[u8; 32], Box<dyn Error>
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&hash);
     Ok(arr)
+}
+
+/// Validates that a `headers` response is a contiguous continuation of the
+/// locator used in the preceding `getheaders` request.
+///
+/// `get_last_block_height_session_with_progress` advances its scan by using the
+/// last header in each batch as the next locator. That only produces a correct
+/// height/tip summary if:
+///
+/// - the first returned header directly follows the requested locator
+/// - each subsequent header links to the hash of the previous header
+///
+/// Wire decoding already guarantees that the payload is structurally a
+/// `headers` message. This helper enforces the stronger client-side invariant
+/// that the batch is the exact chain segment we asked to continue from.
+///
+/// An empty batch is valid and signals that the peer has no more headers to
+/// return for the current locator.
+fn validate_headers_batch(
+    expected_prev: [u8; 32],
+    headers: &[BlockHeader],
+) -> Result<(), Box<dyn Error>> {
+    let Some(first) = headers.first() else {
+        return Ok(());
+    };
+
+    if first.prev_blockhash != expected_prev {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "headers batch does not connect to requested locator",
+        )
+        .into());
+    }
+
+    let mut previous_hash = first.hash();
+    for header in headers.iter().skip(1) {
+        if header.prev_blockhash != previous_hash {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "headers batch is not internally connected",
+            )
+            .into());
+        }
+
+        previous_hash = header.hash();
+    }
+
+    Ok(())
 }
 
 fn default_block_filename(hash_hex: &str) -> String {
@@ -558,6 +616,23 @@ mod tests {
             bits: 0x1d00ffff,
             nonce,
         }
+    }
+
+    fn header_chain(
+        start_prev: [u8; 32],
+        nonces: &[u32],
+    ) -> Vec<crate::wire::message::BlockHeader> {
+        let mut previous_hash = start_prev;
+
+        nonces
+            .iter()
+            .map(|&nonce| {
+                let mut header = sample_block_header(nonce);
+                header.prev_blockhash = previous_hash;
+                previous_hash = header.hash();
+                header
+            })
+            .collect()
     }
 
     fn header_bytes(header: &crate::wire::message::BlockHeader) -> Vec<u8> {
@@ -776,8 +851,7 @@ mod tests {
             let request = read_message(&mut peer).expect("read getaddr");
             assert_eq!(request.command, Command::GetAddr);
 
-            send_message(&mut peer, Command::Addr, &addr_payload_two_entries())
-                .expect("send addr");
+            send_message(&mut peer, Command::Addr, &addr_payload_two_entries()).expect("send addr");
         });
 
         let mut session = Session::new(TcpStream::connect(addr).expect("connect"));
@@ -810,7 +884,7 @@ mod tests {
             return;
         };
         let addr = listener.local_addr().expect("listener addr");
-        let headers = vec![sample_block_header(42), sample_block_header(84)];
+        let headers = header_chain(wire::constants::GENESIS_BLOCK_HASH_MAINNET, &[42, 84]);
         let mut expected_hash = headers.last().expect("last header").hash();
         expected_hash.reverse();
         let expected_hash = hex::encode(expected_hash);
@@ -832,7 +906,10 @@ mod tests {
         assert_eq!(summary.node, addr.to_string());
         assert_eq!(summary.height, 2);
         assert_eq!(summary.rounds, 1);
-        assert_eq!(summary.best_block_hash.as_deref(), Some(expected_hash.as_str()));
+        assert_eq!(
+            summary.best_block_hash.as_deref(),
+            Some(expected_hash.as_str())
+        );
 
         server.join().expect("join");
     }
@@ -843,8 +920,12 @@ mod tests {
             return;
         };
         let addr = listener.local_addr().expect("listener addr");
-        let first_batch = vec![sample_block_header(42); 2000];
-        let second_batch = vec![sample_block_header(84), sample_block_header(126)];
+        let first_batch = header_chain(
+            wire::constants::GENESIS_BLOCK_HASH_MAINNET,
+            &(1..=2000).collect::<Vec<_>>(),
+        );
+        let first_tip = first_batch.last().expect("first batch tip").hash();
+        let second_batch = header_chain(first_tip, &[2001, 2002]);
         let mut expected_hash = second_batch.last().expect("last header").hash();
         expected_hash.reverse();
         let expected_hash = hex::encode(expected_hash);
@@ -875,7 +956,10 @@ mod tests {
 
         assert_eq!(summary.height, 2002);
         assert_eq!(summary.rounds, 2);
-        assert_eq!(summary.best_block_hash.as_deref(), Some(expected_hash.as_str()));
+        assert_eq!(
+            summary.best_block_hash.as_deref(),
+            Some(expected_hash.as_str())
+        );
         assert_eq!(progress.len(), 3);
         assert_eq!(progress[0].phase, LastBlockHeightPhase::RequestingHeaders);
         assert_eq!(progress[0].rounds_completed, 1);
@@ -885,9 +969,43 @@ mod tests {
         assert_eq!(progress[1].rounds_completed, 2);
         assert_eq!(progress[1].headers_seen, 2002);
         assert_eq!(progress[1].last_batch_count, 2);
-        assert_eq!(progress[1].best_block_hash.as_deref(), Some(expected_hash.as_str()));
+        assert_eq!(
+            progress[1].best_block_hash.as_deref(),
+            Some(expected_hash.as_str())
+        );
         assert_eq!(progress[2].phase, LastBlockHeightPhase::Completed);
         assert_eq!(progress[2].headers_seen, 2002);
+
+        server.join().expect("join");
+    }
+
+    #[test]
+    fn get_last_block_height_session_rejects_disconnected_headers_batch() {
+        let Some(listener) = bind_listener_or_skip() else {
+            return;
+        };
+        let addr = listener.local_addr().expect("listener addr");
+        let headers = vec![sample_block_header(42)];
+
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().expect("accept client");
+
+            let request = read_message(&mut peer).expect("read getheaders");
+            assert_eq!(request.command, Command::GetHeaders);
+
+            send_message(&mut peer, Command::Headers, &headers_payload(&headers))
+                .expect("send headers");
+        });
+
+        let mut session = Session::new(TcpStream::connect(addr).expect("connect"));
+        let err = get_last_block_height_session(&addr.to_string(), &mut session)
+            .expect_err("invalid headers");
+
+        assert!(
+            err.to_string()
+                .contains("headers batch does not connect to requested locator"),
+            "unexpected error: {err}"
+        );
 
         server.join().expect("join");
     }
@@ -962,11 +1080,11 @@ mod tests {
         assert_eq!(summary.raw_bytes, payload.len());
 
         let written = fs::read(&output_path).expect("read blk record");
-        assert_eq!(&written[..4], &wire::constants::MAIN_NET_MAGIC.to_le_bytes());
         assert_eq!(
-            &written[4..8],
-            &(payload.len() as u32).to_le_bytes()
+            &written[..4],
+            &wire::constants::MAIN_NET_MAGIC.to_le_bytes()
         );
+        assert_eq!(&written[4..8], &(payload.len() as u32).to_le_bytes());
         assert_eq!(&written[8..], payload.as_slice());
 
         fs::remove_file(&output_path).expect("cleanup blk record");
@@ -976,7 +1094,10 @@ mod tests {
     #[test]
     fn parse_requested_block_hash_rejects_non_32_byte_hashes() {
         let err = parse_requested_block_hash("abcd").expect_err("short hash should fail");
-        assert_eq!(err.to_string(), "block hash must be 32 bytes (64 hex chars)");
+        assert_eq!(
+            err.to_string(),
+            "block hash must be 32 bytes (64 hex chars)"
+        );
     }
 
     #[test]

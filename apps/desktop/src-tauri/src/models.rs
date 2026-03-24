@@ -16,6 +16,7 @@ pub struct ProgressConnectionRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BlockRequest {
     pub node: String,
     pub hash: String,
@@ -222,6 +223,7 @@ impl From<peer::BlockDownloadSummary> for BlockDownloadResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn last_block_height_progress_response_maps_shared_progress() {
@@ -248,5 +250,17 @@ mod tests {
         assert_eq!(response.last_batch_count, 2000);
         assert_eq!(response.best_block_hash.as_deref(), Some("abc123"));
         assert_eq!(response.elapsed_ms, 1500);
+    }
+
+    #[test]
+    fn block_request_accepts_camel_case_output_path() {
+        let request: BlockRequest = serde_json::from_value(json!({
+            "node": "seed.bitcoin.sipa.be:8333",
+            "hash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+            "outputPath": "/tmp/block.dat"
+        }))
+        .expect("deserialize block request");
+
+        assert_eq!(request.output_path.as_deref(), Some("/tmp/block.dat"));
     }
 }

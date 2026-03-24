@@ -1447,6 +1447,8 @@ mod tests {
 
     /// Builds a full Bitcoin message frame (header + payload).
     fn build_frame(cmd_str: &[u8], payload: &[u8]) -> Vec<u8> {
+        use sha2::{Digest, Sha256};
+
         const MAINNET_MAGIC: [u8; 4] = [0xF9, 0xBE, 0xB4, 0xD9];
 
         let mut bytes = vec![];
@@ -1462,8 +1464,8 @@ mod tests {
         // length
         bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
 
-        // checksum (still not validated)
-        bytes.extend_from_slice(&[0u8; 4]);
+        let checksum = Sha256::digest(Sha256::digest(payload));
+        bytes.extend_from_slice(&checksum[..4]);
 
         // payload
         bytes.extend_from_slice(payload);

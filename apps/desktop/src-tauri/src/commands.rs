@@ -152,7 +152,9 @@ pub async fn get_peer_addresses(
 }
 
 #[tauri::command]
-pub async fn get_block_summary(request: BlockRequest) -> Result<BlockSummaryResponse, DesktopError> {
+pub async fn get_block_summary(
+    request: BlockRequest,
+) -> Result<BlockSummaryResponse, DesktopError> {
     validate_node(&request.node)?;
     validate_block_hash(&request.hash)?;
     info!(
@@ -415,7 +417,7 @@ mod tests {
 
             let header = BlockHeader {
                 version: 1,
-                prev_blockhash: [0u8; 32],
+                prev_blockhash: btc_network::wire::constants::GENESIS_BLOCK_HASH_MAINNET,
                 merkle_root: [0x11; 32],
                 time: 1_700_000_000,
                 bits: 0x1d00ffff,
@@ -484,8 +486,12 @@ mod tests {
 
             let getaddr = read_message(&mut peer).expect("read getaddr");
             assert_eq!(getaddr.command, Command::GetAddr);
-            send_message(&mut peer, Command::AddrV2, &encode_addrv2_ipv4([127, 0, 0, 1], 8333))
-                .expect("send addrv2");
+            send_message(
+                &mut peer,
+                Command::AddrV2,
+                &encode_addrv2_ipv4([127, 0, 0, 1], 8333),
+            )
+            .expect("send addrv2");
         });
 
         let result = tauri::async_runtime::block_on(get_peer_addresses(ConnectionRequest {
@@ -644,9 +650,10 @@ mod tests {
 
     #[test]
     fn handshake_rejects_invalid_node_before_spawning_work() {
-        let err =
-            tauri::async_runtime::block_on(handshake(ConnectionRequest { node: "".to_owned() }))
-                .expect_err("invalid node");
+        let err = tauri::async_runtime::block_on(handshake(ConnectionRequest {
+            node: "".to_owned(),
+        }))
+        .expect_err("invalid node");
 
         assert_eq!(err.code, "invalid_request");
     }

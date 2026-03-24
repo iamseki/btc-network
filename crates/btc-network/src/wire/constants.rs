@@ -98,5 +98,5 @@ pub const MAINNET_DNS_SEEDS: &[&str] = &[
     "dnsseed.emzy.de:8333",
     "seed.bitcoin.wiz.biz:8333",
     "seed.mainnet.achownodes.xyz:8333",
-    "seed.bitnodes.io:8333"
+    "seed.bitnodes.io:8333",
 ];

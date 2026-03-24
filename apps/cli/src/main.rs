@@ -4,9 +4,9 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 use btc_network::client::peer;
-use btc_network_observability::init_tracing;
 use btc_network::session::Session;
 use btc_network::wire::{self, Command, Message};
+use btc_network_observability::init_tracing;
 use tracing::{debug, info};
 
 #[derive(Parser)]
@@ -177,8 +177,13 @@ mod tests {
 
     #[test]
     fn cli_parses_get_headers_command() {
-        let cli = Cli::try_parse_from(["btc-cli", "--node", "seed.bitcoin.sipa.be:8333", "get-headers"])
-            .expect("parse get-headers");
+        let cli = Cli::try_parse_from([
+            "btc-cli",
+            "--node",
+            "seed.bitcoin.sipa.be:8333",
+            "get-headers",
+        ])
+        .expect("parse get-headers");
 
         assert!(matches!(cli.command, Commands::GetHeaders));
         assert_eq!(cli.node, "seed.bitcoin.sipa.be:8333");

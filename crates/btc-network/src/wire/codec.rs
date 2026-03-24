@@ -2,16 +2,15 @@ use crate::wire::constants::MAIN_NET_MAGIC;
 use crate::wire::message::{Command, RawMessage};
 use std::io::{self, Read, Write};
 
+const MAX_PAYLOAD_SIZE: u32 = 32 * 1024 * 1024;
+
 /// Reads a raw Bitcoin P2P message frame from any [`Read`] source.
 ///
 /// This function:
 /// 1. Reads the 24-byte Bitcoin message header
 /// 2. Extracts magic, command, length and checksum
-/// 3. Reads the payload according to the length field
-///
-/// It does **not** validate:
-/// - Network magic
-/// - Checksum correctness
+/// 3. Validates network magic, payload length, and checksum
+/// 4. Reads the payload according to the length field
 ///
 /// # Example
 ///
@@ -20,22 +19,9 @@ use std::io::{self, Read, Write};
 /// use btc_network::wire::{self};
 /// use btc_network::wire::message::{Command};
 ///
-/// // Build a minimal fake "verack" frame:
+/// // Build a minimal valid "verack" frame.
 /// let mut bytes = vec![];
-///
-/// // Magic (mainnet)
-/// bytes.extend_from_slice(&[0xF9, 0xBE, 0xB4, 0xD9]);
-///
-/// // Command "verack" padded to 12 bytes
-/// let mut cmd = [0u8; 12];
-/// cmd[..6].copy_from_slice(b"verack");
-/// bytes.extend_from_slice(&cmd);
-///
-/// // Payload length = 0
-/// bytes.extend_from_slice(&0u32.to_le_bytes());
-///
-/// // Checksum (not validated here)
-/// bytes.extend_from_slice(&[0u8; 4]);
+/// wire::codec::send_message(&mut bytes, Command::Verack, &[]).unwrap();
 ///
 /// let mut cursor = Cursor::new(bytes);
 ///
@@ -44,6 +30,8 @@ use std::io::{self, Read, Write};
 /// assert!(raw.payload.is_empty());
 /// ```
 pub fn read_message<R: Read>(reader: &mut R) -> io::Result<RawMessage> {
+    use sha2::{Digest, Sha256};
+
     let mut header = [0u8; 24];
     reader.read_exact(&mut header)?;
 
@@ -63,12 +51,34 @@ pub fn read_message<R: Read>(reader: &mut R) -> io::Result<RawMessage> {
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length field"))?,
     );
 
+    if magic != MAIN_NET_MAGIC.to_le_bytes() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unexpected network magic",
+        ));
+    }
+
+    if length > MAX_PAYLOAD_SIZE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "payload exceeds Bitcoin message size limit",
+        ));
+    }
+
     let checksum: [u8; 4] = header[20..24]
         .try_into()
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid checksum field"))?;
 
     let mut payload = vec![0u8; length as usize];
     reader.read_exact(&mut payload)?;
+
+    let expected_checksum = Sha256::digest(Sha256::digest(&payload));
+    if checksum != expected_checksum[..4] {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid payload checksum",
+        ));
+    }
 
     Ok(RawMessage {
         magic,
@@ -161,8 +171,10 @@ mod tests {
         // length
         bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
 
-        // checksum (still not validated)
-        bytes.extend_from_slice(&[0u8; 4]);
+        use sha2::{Digest, Sha256};
+
+        let checksum = Sha256::digest(Sha256::digest(payload));
+        bytes.extend_from_slice(&checksum[..4]);
 
         // payload
         bytes.extend_from_slice(payload);
@@ -225,5 +237,35 @@ mod tests {
         let raw = read_message(&mut cursor).unwrap();
         assert_eq!(raw.command, Command::Unknown);
         assert_eq!(raw.payload, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn read_message_rejects_unexpected_magic() {
+        let mut frame = build_frame(b"verack", &[]);
+        frame[..4].copy_from_slice(&[0x0b, 0x11, 0x09, 0x07]);
+
+        let err = read_message(&mut Cursor::new(frame)).expect_err("invalid magic");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn read_message_rejects_invalid_checksum() {
+        let mut frame = build_frame(b"verack", &[]);
+        frame[20..24].copy_from_slice(&[1, 2, 3, 4]);
+
+        let err = read_message(&mut Cursor::new(frame)).expect_err("invalid checksum");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn read_message_rejects_payloads_over_limit_before_allocating() {
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&MAIN_NET_MAGIC.to_le_bytes());
+        frame.extend_from_slice(&Command::Verack.as_bytes());
+        frame.extend_from_slice(&(MAX_PAYLOAD_SIZE + 1).to_le_bytes());
+        frame.extend_from_slice(&[0u8; 4]);
+
+        let err = read_message(&mut Cursor::new(frame)).expect_err("oversized payload");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 }
