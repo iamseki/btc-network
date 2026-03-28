@@ -11,6 +11,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Validate pull request title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|chore|refactor|test|ci|build)(\([A-Za-z0-9._/-]+\))?: .+'
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "::error title=Invalid PR title::Pull request titles must match '<type>(<scope>): <summary>' or '<type>: <summary>'."
+            echo "Allowed types: feat, fix, docs, chore, refactor, test, ci, build."
+            echo "Example: docs(BNDD-0005): add implementation plan"
+            exit 1
+          fi
+
   web-changes:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
