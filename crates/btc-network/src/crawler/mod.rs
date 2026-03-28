@@ -1,5 +1,7 @@
+mod domain;
 mod lifecycle;
 mod node;
+mod ports;
 mod types;
 mod worker;
 
@@ -15,6 +17,13 @@ use tracing::{info, warn};
 use lifecycle::run_lifecycle;
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 use types::{CrawlState, CrawlerStats};
+pub use domain::{
+    BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
+    CrawlRunId, CrawlRunMetrics, FailureClassification, HandshakeStatus, IpEnrichment,
+    IpEnrichmentStatus, ObservationConfidence, ObservationId, PersistedNodeObservation,
+    RawNodeObservation, StartCrawlRequest, StopCrawlRequest,
+};
+pub use ports::{CrawlerRepository, CrawlerRepositoryError, IpEnrichmentProvider, RepositoryFuture};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};
 use worker::{run_worker, seed_initial_nodes};
 

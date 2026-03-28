@@ -28,18 +28,20 @@ Use this table to keep rollout state in the repository so a new agent can recove
 Status values:
 - `pending`
 - `in_progress`
+- `reviewing`
 - `merged`
 - `blocked`
 
 Update rules:
 - update `last_updated` whenever the phase state changes materially
 - use `branch_or_pr` for the active branch name, PR number, or merge commit when helpful
+- move a phase to `reviewing` when implementation is on an open PR
 - move a phase to `merged` only when the work is on `main`
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: Shared Domain Model | `pending` | `2026-03-28` | `` | `` |
-| Phase 2: Shared Traits and Test Doubles | `pending` | `2026-03-28` | `` | `` |
+| Phase 1: Shared Domain Model | `reviewing` | `2026-03-28` | `PR #6` | `Domain types and pure observation helpers implemented and awaiting review.` |
+| Phase 2: Shared Traits and Test Doubles | `reviewing` | `2026-03-28` | `PR #6` | `Repository and enrichment traits plus test doubles implemented and awaiting review.` |
 | Phase 3: Coordinator and Runtime Pipeline Refactor | `pending` | `2026-03-28` | `` | `` |
 | Phase 4: ClickHouse Crate and Migrations | `pending` | `2026-03-28` | `` | `` |
 | Phase 5: MMDB Enrichment Adapter | `pending` | `2026-03-28` | `` | `` |
@@ -48,8 +50,8 @@ Update rules:
 
 ## Immediate Next Slice
 
-- Start with Phase 1
-- Do not begin adapter or app wiring work before the shared model and pure helpers are stable
+- Finish review and merge for Phase 1 and Phase 2
+- Move to Phase 3 only after the shared model and trait contracts are stable on `main`
 
 ## Explicit Agent Constraints
 

@@ -4,7 +4,7 @@ use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
 
 /// Runtime configuration for the crawler orchestration loop.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CrawlerConfig {
     /// Maximum number of worker tasks polling and processing nodes concurrently.
     pub max_concurrency: usize,
