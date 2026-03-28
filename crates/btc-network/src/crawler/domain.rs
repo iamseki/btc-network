@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
-use super::types::CrawlerConfig;
+use super::types::{CrawlerConfig, NodeState};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CrawlRunId(String);
@@ -79,7 +79,7 @@ impl From<&str> for BatchId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CrawlPhase {
     Bootstrap,
     Crawling,
@@ -88,7 +88,7 @@ pub enum CrawlPhase {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CrawlNetwork {
     Ipv4,
     Ipv6,
@@ -106,7 +106,7 @@ impl CrawlNetwork {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CrawlEndpoint {
     pub canonical: String,
     pub host: String,
@@ -155,7 +155,13 @@ impl CrawlEndpoint {
     }
 
     pub fn supports_ip_enrichment(&self) -> bool {
-        self.network.supports_ip_enrichment() && self.ip_addr.is_some()
+        self.network.supports_ip_enrichment()
+            && self.ip_addr.is_some_and(is_routable_for_enrichment)
+    }
+
+    pub fn socket_addr(&self) -> Option<SocketAddr> {
+        self.ip_addr
+            .map(|ip_addr| SocketAddr::new(ip_addr, self.port))
     }
 }
 
@@ -163,6 +169,37 @@ impl From<SocketAddr> for CrawlEndpoint {
     fn from(value: SocketAddr) -> Self {
         Self::from_socket_addr(value)
     }
+}
+
+fn is_routable_for_enrichment(ip_addr: IpAddr) -> bool {
+    match ip_addr {
+        IpAddr::V4(ip) => is_routable_ipv4(ip),
+        IpAddr::V6(ip) => is_routable_ipv6(ip),
+    }
+}
+
+fn is_routable_ipv4(ip: Ipv4Addr) -> bool {
+    let [a, b, _, _] = ip.octets();
+
+    !ip.is_private()
+        && !ip.is_loopback()
+        && !ip.is_link_local()
+        && !ip.is_broadcast()
+        && !ip.is_documentation()
+        && !ip.is_multicast()
+        && !ip.is_unspecified()
+        && !(a == 100 && (64..=127).contains(&b))
+}
+
+fn is_routable_ipv6(ip: Ipv6Addr) -> bool {
+    let segments = ip.segments();
+
+    !ip.is_loopback()
+        && !ip.is_multicast()
+        && !ip.is_unspecified()
+        && !ip.is_unique_local()
+        && !ip.is_unicast_link_local()
+        && !(segments[0] == 0x2001 && segments[1] == 0x0db8)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,6 +307,55 @@ pub struct RawNodeObservation {
 }
 
 impl RawNodeObservation {
+    pub fn from_success(
+        observed_at: DateTime<Utc>,
+        crawl_run_id: CrawlRunId,
+        endpoint: CrawlEndpoint,
+        state: &NodeState,
+        discovered_count: usize,
+        latency: Duration,
+    ) -> Self {
+        Self {
+            observed_at,
+            crawl_run_id,
+            endpoint,
+            handshake_status: HandshakeStatus::Succeeded,
+            confidence: ObservationConfidence::Verified,
+            protocol_version: Some(state.version),
+            services: Some(state.services),
+            user_agent: Some(state.user_agent.clone()),
+            start_height: Some(state.start_height),
+            relay: state.relay,
+            discovered_count,
+            latency: Some(latency),
+            failure_classification: None,
+        }
+    }
+
+    pub fn from_failure(
+        observed_at: DateTime<Utc>,
+        crawl_run_id: CrawlRunId,
+        endpoint: CrawlEndpoint,
+        classification: FailureClassification,
+        latency: Duration,
+    ) -> Self {
+        Self {
+            observed_at,
+            crawl_run_id,
+            endpoint,
+            handshake_status: HandshakeStatus::Failed,
+            confidence: ObservationConfidence::Failed,
+            protocol_version: None,
+            services: None,
+            user_agent: None,
+            start_height: None,
+            relay: None,
+            discovered_count: 0,
+            latency: Some(latency),
+            failure_classification: Some(classification),
+        }
+    }
+
     pub fn supports_ip_enrichment(&self) -> bool {
         self.endpoint.supports_ip_enrichment()
     }
@@ -369,27 +455,30 @@ mod tests {
     #[test]
     fn endpoint_from_ipv4_socket_addr_is_enrichment_eligible() {
         let endpoint = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(203, 0, 113, 7),
+            Ipv4Addr::new(1, 1, 1, 7),
             8333,
         )));
 
         assert_eq!(endpoint.network, CrawlNetwork::Ipv4);
-        assert_eq!(endpoint.canonical, "203.0.113.7:8333");
-        assert_eq!(endpoint.ip_addr, Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7))));
+        assert_eq!(endpoint.canonical, "1.1.1.7:8333");
+        assert_eq!(
+            endpoint.ip_addr,
+            Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7)))
+        );
         assert!(endpoint.supports_ip_enrichment());
     }
 
     #[test]
     fn endpoint_from_ipv6_socket_addr_uses_bracketed_canonical_form() {
         let endpoint = CrawlEndpoint::from_socket_addr(SocketAddr::V6(SocketAddrV6::new(
-            Ipv6Addr::LOCALHOST,
+            "2606:4700:4700::1111".parse().expect("public ipv6"),
             8333,
             0,
             0,
         )));
 
         assert_eq!(endpoint.network, CrawlNetwork::Ipv6);
-        assert_eq!(endpoint.canonical, "[::1]:8333");
+        assert_eq!(endpoint.canonical, "[2606:4700:4700::1111]:8333");
         assert!(endpoint.supports_ip_enrichment());
     }
 
@@ -399,6 +488,34 @@ mod tests {
         let observation = sample_raw_observation(endpoint);
 
         assert!(!observation.supports_ip_enrichment());
+    }
+
+    #[test]
+    fn cjdns_endpoint_is_not_enrichment_eligible_even_with_ipv6_address() {
+        let endpoint = CrawlEndpoint::new(
+            "fc00::1",
+            8333,
+            CrawlNetwork::Cjdns,
+            Some(IpAddr::V6(Ipv6Addr::LOCALHOST)),
+        );
+
+        assert!(!endpoint.supports_ip_enrichment());
+        assert_eq!(
+            endpoint.socket_addr(),
+            Some(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 8333))
+        );
+    }
+
+    #[test]
+    fn non_routable_ipv4_endpoint_is_not_enrichment_eligible() {
+        let endpoint = CrawlEndpoint::new(
+            "10.0.0.2",
+            8333,
+            CrawlNetwork::Ipv4,
+            Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))),
+        );
+
+        assert!(!endpoint.supports_ip_enrichment());
     }
 
     #[test]

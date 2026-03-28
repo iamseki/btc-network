@@ -138,7 +138,8 @@ mod tests {
         fn get_run_checkpoint<'a>(
             &'a self,
             run_id: &'a CrawlRunId,
-        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+        {
             Box::pin(async move {
                 let checkpoint = self
                     .checkpoints
@@ -170,10 +171,10 @@ mod tests {
             observed_at: Utc::now(),
             crawl_run_id: CrawlRunId::new("run-1"),
             endpoint: CrawlEndpoint::new(
-                "203.0.113.7",
+                "1.1.1.7",
                 8333,
                 CrawlNetwork::Ipv4,
-                Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7))),
+                Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7))),
             ),
             handshake_status: HandshakeStatus::Succeeded,
             confidence: ObservationConfidence::Verified,
@@ -220,7 +221,7 @@ mod tests {
                 Some(64512),
                 Some("Example ASN".to_string()),
                 Some("US".to_string()),
-                Some("203.0.113.0/24".to_string()),
+                Some("1.1.1.0/24".to_string()),
             ),
         };
 
