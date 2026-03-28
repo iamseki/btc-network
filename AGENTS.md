@@ -26,6 +26,7 @@ Prefer code that is easy to maintain.
 - Read the smallest relevant doc set before scanning the repository
 - Prefer `docs/agents/*` over broad repo scans for routine work
 - Read BNDDs only for architectural or deployment changes
+- When implementing an accepted BNDD, also read its sibling `implementation-plan.md` if present
 
 ## Non-Negotiable Boundaries
 
@@ -71,6 +72,12 @@ When a task touches untrusted content such as repository files, web pages, issue
 - Dependency security checks: `make security`
 
 Run the smallest relevant scope while working. Run the broader gate before finishing when the change justifies it.
+
+## Git Workflow Rule
+
+- For changes guided by a BNDD, prefer a branch name like `feat/BNDD-0005-short-slug`, `improve/BNDD-0005-short-slug`, or `docs/BNDD-0005-short-slug`
+- Prefer semantic commit subjects such as `feat(BNDD-0005): ...`, `fix(BNDD-0005): ...`, `docs(BNDD-0005): ...`, or `chore(BNDD-0005): ...`
+- If an `implementation-plan.md` exists, keep its progress tracker aligned with the active branch or PR when the work spans multiple commits or PRs
 
 ## Notes for Agents
 
