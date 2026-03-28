@@ -42,7 +42,7 @@ Update rules:
 | --- | --- | --- | --- | --- |
 | Phase 1: Shared Domain Model | `merged` | `2026-03-28` | `main` | `Domain types and pure observation helpers are merged.` |
 | Phase 2: Shared Traits and Test Doubles | `merged` | `2026-03-28` | `main` | `Repository and enrichment traits plus test doubles are merged.` |
-| Phase 3: Coordinator and Runtime Pipeline Refactor | `in_progress` | `2026-03-28` | `feat/BNDD-0005-phase-3` | `Coordinator flow, phase checkpoints, writer pipeline, and overlay/routability fixes are in progress.` |
+| Phase 3: Coordinator and Runtime Pipeline Refactor | `reviewing` | `2026-03-28` | `PR #7` | `Coordinator flow, phase checkpoints, writer pipeline, and overlay/routability fixes are implemented and awaiting review.` |
 | Phase 4: ClickHouse Crate and Migrations | `pending` | `2026-03-28` | `` | `` |
 | Phase 5: MMDB Enrichment Adapter | `pending` | `2026-03-28` | `` | `` |
 | Phase 6: App Wiring | `pending` | `2026-03-28` | `` | `` |
