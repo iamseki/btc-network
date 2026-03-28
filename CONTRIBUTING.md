@@ -121,6 +121,33 @@ Useful commands:
 - Keep documentation updated when architecture or workflow decisions move
 - Prefer small, boundary-respecting changes over convenience shortcuts
 
+## Branches, Commits, and PRs
+
+Prefer clear semantic naming so branch names, commit subjects, and PR titles line up.
+
+Branch names:
+
+- general docs or workflow changes: `docs/short-slug`
+- BNDD-driven work: `feat/BNDD-0005-short-slug`, `improve/BNDD-0005-short-slug`, or `docs/BNDD-0005-short-slug`
+- if a preferred branch name was already used, create a new suffixed branch instead of reusing it
+
+Commit subjects:
+
+- use semantic subjects such as `feat: ...`, `fix: ...`, `docs: ...`, `chore: ...`, `refactor: ...`, `test: ...`, `ci: ...`, or `build: ...`
+- use a BNDD scope when helpful, for example `docs(BNDD-0005): add implementation plan`
+
+Pull request titles:
+
+- must match `<type>(<scope>): <summary>` or `<type>: <summary>`
+- allowed types are `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, and `build`
+- example: `docs(BNDD-0005): add implementation plan`
+
+Pull request body:
+
+- use `## Summary`
+- use `## Changes`
+- use `## Why` only when it adds useful context beyond the summary and changes
+
 ## What Not To Do
 
 - Do not add protocol parsing logic to the CLI

@@ -7,6 +7,7 @@ The project is organized around clear boundaries between transport, wire decodin
 ## Start Here
 
 - [Docs index](docs/README.md)
+- [Contributing guide](CONTRIBUTING.md)
 - [Deployment guide](docs/deployment.md)
 - [Design docs index](docs/design_docs/README.md)
 
