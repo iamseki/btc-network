@@ -76,6 +76,7 @@ Run the smallest relevant scope while working. Run the broader gate before finis
 ## Git Workflow Rule
 
 - For changes guided by a BNDD, prefer a branch name like `feat/BNDD-0005-short-slug`, `improve/BNDD-0005-short-slug`, or `docs/BNDD-0005-short-slug`
+- If the preferred BNDD branch name already exists, especially after an earlier merge, create a new suffixed branch such as `improve/BNDD-0005-agent-routing` instead of reusing the old name
 - Prefer semantic commit subjects such as `feat(BNDD-0005): ...`, `fix(BNDD-0005): ...`, `docs(BNDD-0005): ...`, or `chore(BNDD-0005): ...`
 - If an `implementation-plan.md` exists, keep its progress tracker aligned with the active branch or PR when the work spans multiple commits or PRs
 
