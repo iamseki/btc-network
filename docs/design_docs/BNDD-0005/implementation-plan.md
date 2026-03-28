@@ -38,8 +38,8 @@ Update rules:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: Shared Domain Model | `pending` | `2026-03-28` | `` | `` |
-| Phase 2: Shared Traits and Test Doubles | `pending` | `2026-03-28` | `` | `` |
+| Phase 1: Shared Domain Model | `in_progress` | `2026-03-28` | `feat/BNDD-0005-phase-1-2` | `Domain types and pure observation helpers implemented on branch; awaiting merge.` |
+| Phase 2: Shared Traits and Test Doubles | `in_progress` | `2026-03-28` | `feat/BNDD-0005-phase-1-2` | `Repository and enrichment traits plus test doubles implemented on branch; awaiting merge.` |
 | Phase 3: Coordinator and Runtime Pipeline Refactor | `pending` | `2026-03-28` | `` | `` |
 | Phase 4: ClickHouse Crate and Migrations | `pending` | `2026-03-28` | `` | `` |
 | Phase 5: MMDB Enrichment Adapter | `pending` | `2026-03-28` | `` | `` |
@@ -48,8 +48,8 @@ Update rules:
 
 ## Immediate Next Slice
 
-- Start with Phase 1
-- Do not begin adapter or app wiring work before the shared model and pure helpers are stable
+- Finish review and merge for Phase 1 and Phase 2
+- Move to Phase 3 only after the shared model and trait contracts are stable on `main`
 
 ## Explicit Agent Constraints
 
