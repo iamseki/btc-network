@@ -28,6 +28,11 @@ ignore = [
   "RUSTSEC-2025-0081",
   "RUSTSEC-2025-0098",
   "RUSTSEC-2025-0100",
+  # The official ClickHouse Rust client currently pulls in `paste` transitively through
+  # `polonius-the-crab` and `higher-kinded-types`. We do not depend on `paste` directly,
+  # and the current BNDD-0005 Phase 4 adapter keeps the official ClickHouse client choice.
+  # Revisit this ignore when the upstream clickhouse dependency graph changes.
+  "RUSTSEC-2024-0436",
 ]
 
 [bans]

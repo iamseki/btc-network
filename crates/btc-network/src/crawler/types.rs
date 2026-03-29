@@ -113,3 +113,6 @@ pub(crate) struct NodeVisitFailure {
     pub(crate) classification: FailureClassification,
     pub(crate) message: String,
 }
+
+pub(crate) type NodeVisitError = Box<NodeVisitFailure>;
+pub(crate) type NodeVisitResult = Result<NodeVisit, NodeVisitError>;

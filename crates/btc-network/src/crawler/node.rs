@@ -6,65 +6,60 @@ use std::time::Instant;
 use tracing::{info, warn};
 
 use super::domain::{CrawlEndpoint, CrawlNetwork, FailureClassification};
-use super::types::{CrawlerConfig, NodeState, NodeVisit, NodeVisitFailure};
+use super::types::{CrawlerConfig, NodeState, NodeVisit, NodeVisitFailure, NodeVisitResult};
 
 pub(crate) trait NodeProcessor: Send + Sync {
-    fn process(
-        &self,
-        endpoint: CrawlEndpoint,
-        config: CrawlerConfig,
-    ) -> Result<NodeVisit, NodeVisitFailure>;
+    fn process(&self, endpoint: CrawlEndpoint, config: CrawlerConfig) -> NodeVisitResult;
 }
 
 pub(crate) struct DefaultNodeProcessor;
 
 impl NodeProcessor for DefaultNodeProcessor {
-    fn process(
-        &self,
-        endpoint: CrawlEndpoint,
-        config: CrawlerConfig,
-    ) -> Result<NodeVisit, NodeVisitFailure> {
+    fn process(&self, endpoint: CrawlEndpoint, config: CrawlerConfig) -> NodeVisitResult {
         process_node(endpoint, config)
     }
 }
 
-pub(crate) fn process_node(
-    endpoint: CrawlEndpoint,
-    config: CrawlerConfig,
-) -> Result<NodeVisit, NodeVisitFailure> {
+pub(crate) fn process_node(endpoint: CrawlEndpoint, config: CrawlerConfig) -> NodeVisitResult {
     let total_started = Instant::now();
-    let connect_addr = endpoint.socket_addr().ok_or_else(|| NodeVisitFailure {
-        node: endpoint.clone(),
-        latency: total_started.elapsed(),
-        classification: FailureClassification::Connect,
-        message: format!("endpoint {} is not connectable", endpoint.canonical),
+    let connect_addr = endpoint.socket_addr().ok_or_else(|| {
+        Box::new(NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: total_started.elapsed(),
+            classification: FailureClassification::Connect,
+            message: format!("endpoint {} is not connectable", endpoint.canonical),
+        })
     })?;
     let connect_started = Instant::now();
     let stream =
         TcpStream::connect_timeout(&connect_addr, config.connect_timeout).map_err(|e| {
-            NodeVisitFailure {
+            Box::new(NodeVisitFailure {
                 node: endpoint.clone(),
                 latency: total_started.elapsed(),
                 classification: FailureClassification::Connect,
                 message: format!("connect {connect_addr}: {e}"),
-            }
+            })
         })?;
     let connect_elapsed = connect_started.elapsed();
     stream
         .set_read_timeout(Some(config.io_timeout))
-        .map_err(|e| NodeVisitFailure {
-            node: endpoint.clone(),
-            latency: total_started.elapsed(),
-            classification: FailureClassification::Io,
-            message: format!("set read timeout: {e}"),
+        .map_err(|e| {
+            Box::new(NodeVisitFailure {
+                node: endpoint.clone(),
+                latency: total_started.elapsed(),
+                classification: FailureClassification::Io,
+                message: format!("set read timeout: {e}"),
+            })
         })?;
     stream
         .set_write_timeout(Some(config.io_timeout))
-        .map_err(|e| NodeVisitFailure {
-            node: endpoint.clone(),
-            latency: total_started.elapsed(),
-            classification: FailureClassification::Io,
-            message: format!("set write timeout: {e}"),
+        .map_err(|e| {
+            Box::new(NodeVisitFailure {
+                node: endpoint.clone(),
+                latency: total_started.elapsed(),
+                classification: FailureClassification::Io,
+                message: format!("set write timeout: {e}"),
+            })
         })?;
 
     let mut session = Session::new(stream);
@@ -73,20 +68,24 @@ pub(crate) fn process_node(
     };
 
     let handshake_started = Instant::now();
-    let version = client.handshake().map_err(|message| NodeVisitFailure {
-        node: endpoint.clone(),
-        latency: total_started.elapsed(),
-        classification: FailureClassification::Handshake,
-        message,
+    let version = client.handshake().map_err(|message| {
+        Box::new(NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: total_started.elapsed(),
+            classification: FailureClassification::Handshake,
+            message,
+        })
     })?;
     let handshake_elapsed = handshake_started.elapsed();
 
     let get_addr_started = Instant::now();
-    let discovered = client.get_addresses().map_err(|message| NodeVisitFailure {
-        node: endpoint.clone(),
-        latency: total_started.elapsed(),
-        classification: FailureClassification::PeerDiscovery,
-        message,
+    let discovered = client.get_addresses().map_err(|message| {
+        Box::new(NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: total_started.elapsed(),
+            classification: FailureClassification::PeerDiscovery,
+            message,
+        })
     })?;
     let get_addr_elapsed = get_addr_started.elapsed();
 

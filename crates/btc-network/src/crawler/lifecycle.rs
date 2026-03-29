@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
@@ -9,6 +9,18 @@ use tracing::{info, warn};
 use super::domain::{CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics};
 use super::ports::{CrawlerRepository, CrawlerRepositoryError};
 use super::types::{CrawlState, CrawlerStats};
+
+pub(crate) struct CheckpointEmitterContext {
+    pub(crate) repository: Arc<dyn CrawlerRepository>,
+    pub(crate) run_id: CrawlRunId,
+    pub(crate) phase: Arc<Mutex<CrawlPhase>>,
+    pub(crate) state: Arc<Mutex<CrawlState>>,
+    pub(crate) stats: Arc<CrawlerStats>,
+    pub(crate) checkpoint_sequence: Arc<AtomicU64>,
+    pub(crate) stop: Arc<AtomicBool>,
+    pub(crate) started_at: DateTime<Utc>,
+    pub(crate) tick_every: Duration,
+}
 
 pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
@@ -47,15 +59,19 @@ pub(crate) async fn run_lifecycle(
 }
 
 pub(crate) async fn run_checkpoint_emitter(
-    repository: Arc<dyn CrawlerRepository>,
-    run_id: CrawlRunId,
-    phase: Arc<Mutex<CrawlPhase>>,
-    state: Arc<Mutex<CrawlState>>,
-    stats: Arc<CrawlerStats>,
-    stop: Arc<AtomicBool>,
-    started_at: DateTime<Utc>,
-    tick_every: Duration,
+    context: CheckpointEmitterContext,
 ) -> Result<(), CrawlerRepositoryError> {
+    let CheckpointEmitterContext {
+        repository,
+        run_id,
+        phase,
+        state,
+        stats,
+        checkpoint_sequence,
+        stop,
+        started_at,
+        tick_every,
+    } = context;
     let mut ticker = tokio::time::interval(tick_every);
 
     loop {
@@ -66,8 +82,15 @@ pub(crate) async fn run_checkpoint_emitter(
         }
 
         let phase = *phase.lock().await;
-        let checkpoint =
-            snapshot_checkpoint(run_id.clone(), phase, &state, &stats, started_at).await;
+        let checkpoint = snapshot_checkpoint(
+            run_id.clone(),
+            phase,
+            &state,
+            &stats,
+            &checkpoint_sequence,
+            started_at,
+        )
+        .await;
         if let Err(err) = repository.insert_run_checkpoint(checkpoint).await {
             warn!("[crawler] failed to write checkpoint: {err}");
             stop.store(true, Ordering::Relaxed);
@@ -81,6 +104,7 @@ pub(crate) async fn snapshot_checkpoint(
     phase: CrawlPhase,
     state: &Arc<Mutex<CrawlState>>,
     stats: &Arc<CrawlerStats>,
+    checkpoint_sequence: &Arc<AtomicU64>,
     started_at: DateTime<Utc>,
 ) -> CrawlRunCheckpoint {
     let guard = state.lock().await;
@@ -89,6 +113,7 @@ pub(crate) async fn snapshot_checkpoint(
         run_id,
         phase,
         checkpointed_at: Utc::now(),
+        checkpoint_sequence: next_checkpoint_sequence(checkpoint_sequence),
         started_at,
         stop_reason: None,
         failure_reason: None,
@@ -107,6 +132,10 @@ pub(crate) async fn snapshot_checkpoint(
         resume_state: None,
         caller: None,
     }
+}
+
+fn next_checkpoint_sequence(checkpoint_sequence: &AtomicU64) -> u64 {
+    checkpoint_sequence.fetch_add(1, Ordering::Relaxed) + 1
 }
 
 #[cfg(test)]
@@ -200,6 +229,7 @@ mod tests {
             CrawlPhase::Crawling,
             &state,
             &stats,
+            &Arc::new(AtomicU64::new(0)),
             Utc::now(),
         )
         .await;
@@ -208,6 +238,36 @@ mod tests {
         assert_eq!(checkpoint.metrics.in_flight_work, 2);
         assert_eq!(checkpoint.metrics.persisted_observation_rows, 3);
         assert_eq!(checkpoint.metrics.writer_backlog, 4);
+        assert_eq!(checkpoint.checkpoint_sequence, 1);
+    }
+
+    #[tokio::test]
+    async fn snapshot_checkpoint_increments_sequence_monotonically() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let checkpoint_sequence = Arc::new(AtomicU64::new(0));
+
+        let first = snapshot_checkpoint(
+            CrawlRunId::new("run-1"),
+            CrawlPhase::Bootstrap,
+            &state,
+            &stats,
+            &checkpoint_sequence,
+            Utc::now(),
+        )
+        .await;
+        let second = snapshot_checkpoint(
+            CrawlRunId::new("run-1"),
+            CrawlPhase::Crawling,
+            &state,
+            &stats,
+            &checkpoint_sequence,
+            Utc::now(),
+        )
+        .await;
+
+        assert_eq!(first.checkpoint_sequence, 1);
+        assert_eq!(second.checkpoint_sequence, 2);
     }
 
     #[derive(Default)]
@@ -294,16 +354,17 @@ mod tests {
         let phase = Arc::new(Mutex::new(CrawlPhase::Crawling));
         let stop = Arc::new(AtomicBool::new(false));
 
-        let handle = tokio::spawn(run_checkpoint_emitter(
-            repository_trait,
-            CrawlRunId::new("run-1"),
-            Arc::clone(&phase),
-            Arc::clone(&state),
-            Arc::clone(&stats),
-            Arc::clone(&stop),
-            Utc::now(),
-            Duration::from_millis(5),
-        ));
+        let handle = tokio::spawn(run_checkpoint_emitter(CheckpointEmitterContext {
+            repository: repository_trait,
+            run_id: CrawlRunId::new("run-1"),
+            phase: Arc::clone(&phase),
+            state: Arc::clone(&state),
+            stats: Arc::clone(&stats),
+            checkpoint_sequence: Arc::new(AtomicU64::new(0)),
+            stop: Arc::clone(&stop),
+            started_at: Utc::now(),
+            tick_every: Duration::from_millis(5),
+        }));
 
         tokio::time::sleep(Duration::from_millis(15)).await;
         stop.store(true, Ordering::Relaxed);
@@ -395,16 +456,17 @@ mod tests {
         let phase = Arc::new(Mutex::new(CrawlPhase::Crawling));
         let stop = Arc::new(AtomicBool::new(false));
 
-        let err = run_checkpoint_emitter(
+        let err = run_checkpoint_emitter(CheckpointEmitterContext {
             repository,
-            CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::new("run-1"),
             phase,
             state,
             stats,
-            Arc::clone(&stop),
-            Utc::now(),
-            Duration::from_millis(5),
-        )
+            checkpoint_sequence: Arc::new(AtomicU64::new(0)),
+            stop: Arc::clone(&stop),
+            started_at: Utc::now(),
+            tick_every: Duration::from_millis(5),
+        })
         .await
         .expect_err("checkpoint emitter should return repository errors");
 

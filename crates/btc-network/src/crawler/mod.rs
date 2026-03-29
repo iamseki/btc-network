@@ -7,7 +7,7 @@ mod worker;
 
 use std::error::Error;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex as StdMutex, OnceLock};
 use std::time::Instant;
 
@@ -22,7 +22,9 @@ pub use domain::{
     IpEnrichmentStatus, ObservationConfidence, ObservationId, PersistedNodeObservation,
     RawNodeObservation, StartCrawlRequest, StopCrawlRequest,
 };
-use lifecycle::{run_checkpoint_emitter, run_lifecycle, snapshot_checkpoint};
+use lifecycle::{
+    CheckpointEmitterContext, run_checkpoint_emitter, run_lifecycle, snapshot_checkpoint,
+};
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 pub use ports::{
     CrawlerRepository, CrawlerRepositoryError, IpEnrichmentProvider, RepositoryFuture,
@@ -90,18 +92,15 @@ impl Crawler {
         ));
 
         let active_run_guard = claim_active_run(active_run_slot(), run_id.clone())?;
-        let result = self
-            .run_active_request(
-                run_id,
-                request,
-                processor,
-                started_at,
-                started_at_utc,
-                active_run_guard,
-            )
-            .await;
-
-        result
+        self.run_active_request(
+            run_id,
+            request,
+            processor,
+            started_at,
+            started_at_utc,
+            active_run_guard,
+        )
+        .await
     }
 
     async fn run_active_request(
@@ -115,8 +114,18 @@ impl Crawler {
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stats = Arc::new(CrawlerStats::default());
+        let checkpoint_sequence = Arc::new(AtomicU64::new(0));
         let stop = Arc::new(AtomicBool::new(false));
         let phase = Arc::new(Mutex::new(CrawlPhase::Bootstrap));
+
+        let checkpoint_context = CheckpointWriteContext {
+            repository: Arc::clone(&self.repository),
+            run_id: run_id.clone(),
+            state: Arc::clone(&state),
+            stats: Arc::clone(&stats),
+            checkpoint_sequence: Arc::clone(&checkpoint_sequence),
+            started_at: started_at_utc,
+        };
 
         let (queue_tx, queue_rx) = mpsc::unbounded_channel::<CrawlEndpoint>();
         let queue_rx = Arc::new(Mutex::new(queue_rx));
@@ -131,33 +140,13 @@ impl Crawler {
             request.config.max_tracked_nodes,
         )
         .await;
-        write_checkpoint(
-            Arc::clone(&self.repository),
-            run_id.clone(),
-            CrawlPhase::Bootstrap,
-            &state,
-            &stats,
-            started_at_utc,
-            None,
-            None,
-        )
-        .await?;
+        write_checkpoint(&checkpoint_context, CrawlPhase::Bootstrap, None, None).await?;
 
         {
             let mut guard = phase.lock().await;
             *guard = CrawlPhase::Crawling;
         }
-        write_checkpoint(
-            Arc::clone(&self.repository),
-            run_id.clone(),
-            CrawlPhase::Crawling,
-            &state,
-            &stats,
-            started_at_utc,
-            None,
-            None,
-        )
-        .await?;
+        write_checkpoint(&checkpoint_context, CrawlPhase::Crawling, None, None).await?;
 
         let writer_handle = AbortOnDropHandle::new(tokio::spawn(run_observation_writer(
             Arc::clone(&self.repository),
@@ -174,14 +163,17 @@ impl Crawler {
             request.config.lifecycle_tick,
         )));
         let checkpoint_handle = AbortOnDropHandle::new(tokio::spawn(run_checkpoint_emitter(
-            Arc::clone(&self.repository),
-            run_id.clone(),
-            Arc::clone(&phase),
-            Arc::clone(&state),
-            Arc::clone(&stats),
-            Arc::clone(&stop),
-            started_at_utc,
-            request.config.lifecycle_tick,
+            CheckpointEmitterContext {
+                repository: Arc::clone(&self.repository),
+                run_id: run_id.clone(),
+                phase: Arc::clone(&phase),
+                state: Arc::clone(&state),
+                stats: Arc::clone(&stats),
+                checkpoint_sequence: Arc::clone(&checkpoint_sequence),
+                stop: Arc::clone(&stop),
+                started_at: started_at_utc,
+                tick_every: request.config.lifecycle_tick,
+            },
         )));
         let signal_handle =
             AbortOnDropHandle::new(tokio::spawn(run_signal_shutdown(Arc::clone(&stop))));
@@ -190,16 +182,18 @@ impl Crawler {
         let mut workers = Vec::with_capacity(worker_count);
         for _ in 0..worker_count {
             workers.push(AbortOnDropHandle::new(tokio::spawn(run_worker(
-                request.config,
-                run_id.clone(),
-                Arc::clone(&state),
-                Arc::clone(&stats),
-                Arc::clone(&stop),
-                Arc::clone(&queue_rx),
-                queue_tx.clone(),
-                observation_tx.clone(),
-                Arc::clone(&processor),
-                Arc::clone(&self.enrichment_provider),
+                worker::WorkerContext {
+                    config: request.config,
+                    run_id: run_id.clone(),
+                    state: Arc::clone(&state),
+                    stats: Arc::clone(&stats),
+                    stop: Arc::clone(&stop),
+                    queue_rx: Arc::clone(&queue_rx),
+                    queue_tx: queue_tx.clone(),
+                    observation_tx: observation_tx.clone(),
+                    processor: Arc::clone(&processor),
+                    enrichment_provider: Arc::clone(&self.enrichment_provider),
+                },
             ))));
         }
         drop(queue_tx);
@@ -228,12 +222,8 @@ impl Crawler {
             *guard = CrawlPhase::Draining;
         }
         write_checkpoint(
-            Arc::clone(&self.repository),
-            run_id.clone(),
+            &checkpoint_context,
             CrawlPhase::Draining,
-            &state,
-            &stats,
-            started_at_utc,
             Some("workers drained".to_string()),
             failure_reason.clone(),
         )
@@ -267,12 +257,11 @@ impl Crawler {
             *guard = final_phase;
         }
         write_checkpoint(
-            Arc::clone(&self.repository),
-            run_id,
+            &CheckpointWriteContext {
+                run_id,
+                ..checkpoint_context
+            },
             final_phase,
-            &state,
-            &stats,
-            started_at_utc,
             Some("crawl finished".to_string()),
             failure_reason.clone(),
         )
@@ -420,20 +409,33 @@ impl Drop for CrawlTaskSet {
     }
 }
 
-async fn write_checkpoint(
+struct CheckpointWriteContext {
     repository: Arc<dyn CrawlerRepository>,
     run_id: CrawlRunId,
-    phase: CrawlPhase,
-    state: &Arc<Mutex<CrawlState>>,
-    stats: &Arc<CrawlerStats>,
+    state: Arc<Mutex<CrawlState>>,
+    stats: Arc<CrawlerStats>,
+    checkpoint_sequence: Arc<AtomicU64>,
     started_at: DateTime<Utc>,
+}
+
+async fn write_checkpoint(
+    context: &CheckpointWriteContext,
+    phase: CrawlPhase,
     stop_reason: Option<String>,
     failure_reason: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut checkpoint = snapshot_checkpoint(run_id, phase, state, stats, started_at).await;
+    let mut checkpoint = snapshot_checkpoint(
+        context.run_id.clone(),
+        phase,
+        &context.state,
+        &context.stats,
+        &context.checkpoint_sequence,
+        context.started_at,
+    )
+    .await;
     checkpoint.stop_reason = stop_reason;
     checkpoint.failure_reason = failure_reason;
-    repository.insert_run_checkpoint(checkpoint).await?;
+    context.repository.insert_run_checkpoint(checkpoint).await?;
     Ok(())
 }
 
@@ -559,7 +561,7 @@ impl CrawlerRepository for NoopCrawlerRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crawler::types::{NodeVisit, NodeVisitFailure};
+    use crate::crawler::types::{NodeVisit, NodeVisitResult};
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::VecDeque;
@@ -640,11 +642,7 @@ mod tests {
     }
 
     impl NodeProcessor for StaticNodeProcessor {
-        fn process(
-            &self,
-            _endpoint: CrawlEndpoint,
-            _config: CrawlerConfig,
-        ) -> Result<NodeVisit, NodeVisitFailure> {
+        fn process(&self, _endpoint: CrawlEndpoint, _config: CrawlerConfig) -> NodeVisitResult {
             Ok(self.visit.clone())
         }
     }
@@ -773,11 +771,7 @@ mod tests {
     }
 
     impl NodeProcessor for SlowNodeProcessor {
-        fn process(
-            &self,
-            _endpoint: CrawlEndpoint,
-            _config: CrawlerConfig,
-        ) -> Result<NodeVisit, NodeVisitFailure> {
+        fn process(&self, _endpoint: CrawlEndpoint, _config: CrawlerConfig) -> NodeVisitResult {
             std::thread::sleep(self.delay);
             Ok(self.visit.clone())
         }

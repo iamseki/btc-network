@@ -35,6 +35,7 @@ pub trait IpEnrichmentProvider: Send + Sync {
     fn enrich(&self, endpoint: &CrawlEndpoint) -> IpEnrichment;
 }
 
+/// Storage contract for durable crawler observations, checkpoints, and read models.
 pub trait CrawlerRepository: Send + Sync {
     fn insert_observation<'a>(
         &'a self,
@@ -51,11 +52,19 @@ pub trait CrawlerRepository: Send + Sync {
         checkpoint: CrawlRunCheckpoint,
     ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>>;
 
+    /// Returns the latest durable checkpoint for a specific run.
+    ///
+    /// Implementations must use `checkpoint_sequence` as a deterministic tie-breaker
+    /// whenever two checkpoints share the same persisted timestamp.
     fn get_run_checkpoint<'a>(
         &'a self,
         run_id: &'a CrawlRunId,
     ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>;
 
+    /// Returns one latest checkpoint summary per run.
+    ///
+    /// Implementations must aggregate fields from the same winning checkpoint row and
+    /// use `checkpoint_sequence` as a deterministic tie-breaker for timestamp collisions.
     fn list_runs<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>>;
@@ -194,6 +203,7 @@ mod tests {
             run_id: CrawlRunId::new("run-1"),
             phase: CrawlPhase::Crawling,
             checkpointed_at: Utc::now(),
+            checkpoint_sequence: 1,
             started_at: Utc::now(),
             stop_reason: None,
             failure_reason: None,
