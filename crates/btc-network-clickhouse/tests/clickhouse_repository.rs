@@ -72,16 +72,22 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
     let second_report = runner.apply_all().await?;
     let applied = runner.applied_migrations().await?;
 
-    assert_eq!(first_report.applied_versions, vec!["0001", "0002"]);
+    assert_eq!(
+        first_report.applied_versions,
+        vec!["20260329000100", "20260329000200"]
+    );
     assert!(first_report.skipped_versions.is_empty());
     assert!(second_report.applied_versions.is_empty());
-    assert_eq!(second_report.skipped_versions, vec!["0001", "0002"]);
+    assert_eq!(
+        second_report.skipped_versions,
+        vec!["20260329000100", "20260329000200"]
+    );
     assert_eq!(
         applied
             .iter()
             .map(|row| row.version.as_str())
             .collect::<Vec<_>>(),
-        vec!["0001", "0002"]
+        vec!["20260329000100", "20260329000200"]
     );
 
     let tables = db

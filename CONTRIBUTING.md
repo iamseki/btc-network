@@ -115,6 +115,16 @@ Useful commands:
 - `npm run build --prefix apps/web` — frontend production build
 - `make security` — dependency security checks
 
+## ClickHouse Migrations
+
+When you add a ClickHouse schema change:
+
+- create a new file with `scripts/new-clickhouse-migration.sh <snake_case_slug>`
+- keep migrations forward-only
+- use the generated `YYYYMMDDHHMMSS_slug.sql` filename format
+- document required backfills or manual coordination steps in the migration file when the change is not purely online-safe
+- update `crates/btc-network-clickhouse/src/migrations.rs` to include the new checked-in file in `bundled_migrations()`
+
 ## Before Opening a PR
 
 - Run the relevant targeted tests for the area you changed

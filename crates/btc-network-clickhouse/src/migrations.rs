@@ -42,6 +42,26 @@ impl Migration {
         }
     }
 
+    fn from_filename(filename: &'static str, sql: &'static str) -> Self {
+        let (version, remainder) = filename
+            .split_once('_')
+            .expect("migration filename must start with a timestamp prefix");
+        let name = remainder
+            .strip_suffix(".sql")
+            .expect("migration filename must end with .sql");
+
+        assert!(
+            version.len() == 14 && version.chars().all(|ch| ch.is_ascii_digit()),
+            "migration filename must use YYYYMMDDHHMMSS_slug.sql"
+        );
+        assert!(
+            !name.is_empty(),
+            "migration filename must include a descriptive slug"
+        );
+
+        Self::new(version, name, sql)
+    }
+
     pub fn version(&self) -> &str {
         self.version
     }
@@ -285,17 +305,20 @@ fn quoted_identifier(value: &str) -> String {
     format!("`{}`", value.replace('`', "\\`"))
 }
 
+/// Returns the checked-in ClickHouse migrations in apply order.
+///
+/// Filenames must follow `YYYYMMDDHHMMSS_slug.sql` so the lexicographic version
+/// order matches migration application order and the creation time is obvious in
+/// the repository history.
 pub fn bundled_migrations() -> Vec<Migration> {
     vec![
-        Migration::new(
-            "0001",
-            "create_node_observations",
-            include_str!("../migrations/0001_create_node_observations.sql"),
+        Migration::from_filename(
+            "20260329000100_create_node_observations.sql",
+            include_str!("../migrations/20260329000100_create_node_observations.sql"),
         ),
-        Migration::new(
-            "0002",
-            "create_crawler_run_checkpoints",
-            include_str!("../migrations/0002_create_crawler_run_checkpoints.sql"),
+        Migration::from_filename(
+            "20260329000200_create_crawler_run_checkpoints.sql",
+            include_str!("../migrations/20260329000200_create_crawler_run_checkpoints.sql"),
         ),
     ]
 }
@@ -319,6 +342,21 @@ mod tests {
                 .iter()
                 .all(|migration| migration.checksum().len() == 64)
         );
+        assert!(migrations.iter().all(|migration| migration.version().len() == 14));
+        assert!(migrations
+            .iter()
+            .all(|migration| migration.version().chars().all(|ch| ch.is_ascii_digit())));
+    }
+
+    #[test]
+    fn migration_from_filename_parses_timestamp_prefix_and_slug() {
+        let migration = Migration::from_filename(
+            "20260329001000_add_example_table.sql",
+            "CREATE TABLE test (id UInt64) ENGINE = Memory",
+        );
+
+        assert_eq!(migration.version(), "20260329001000");
+        assert_eq!(migration.name(), "add_example_table");
     }
 
     #[tokio::test]
@@ -337,7 +375,10 @@ mod tests {
 
         let report = runner.apply_all().await.expect("apply migrations");
 
-        assert_eq!(report.applied_versions, vec!["0001", "0002"]);
+        assert_eq!(
+            report.applied_versions,
+            vec!["20260329000100", "20260329000200"]
+        );
         assert!(
             create_db
                 .query()
@@ -360,8 +401,8 @@ mod tests {
 
         let rows_1: Vec<AppliedMigration> = record_migration_1.collect().await;
         let rows_2: Vec<AppliedMigration> = record_migration_2.collect().await;
-        assert_eq!(rows_1[0].version, "0001");
-        assert_eq!(rows_2[0].version, "0002");
+        assert_eq!(rows_1[0].version, "20260329000100");
+        assert_eq!(rows_2[0].version, "20260329000200");
     }
 
     #[tokio::test]
@@ -373,7 +414,7 @@ mod tests {
         let create_db = mock.add(handlers::record_ddl());
         let create_ledger = mock.add(handlers::record_ddl());
         mock.add(handlers::provide(vec![AppliedMigration {
-            version: "0001".to_string(),
+            version: "20260329000100".to_string(),
             name: "create_node_observations".to_string(),
             checksum: "deadbeef".repeat(8),
             applied_at: Utc::now(),
