@@ -20,6 +20,10 @@ crawler-dev-up:
 	@mkdir -p .dev-data/clickhouse
 	@docker compose -f apps/crawler/docker-compose.yml up -d
 
+## Download or refresh local MMDB files for crawler development
+crawler-mmdb-update:
+	@bash scripts/update-crawler-mmdb.sh
+
 ## Stop local ClickHouse for crawler development
 crawler-dev-down:
 	@docker compose -f apps/crawler/docker-compose.yml down
@@ -144,6 +148,7 @@ help:
 	@echo "  make crawler ARGS=\"--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb\""
 	@echo "  make crawler-migrate ARGS=\"--clickhouse-url http://localhost:8123 --clickhouse-database btc_network\""
 	@echo "  make crawler-dev-up"
+	@echo "  make crawler-mmdb-update"
 	@echo "  make crawler-dev-down"
 	@echo "  make crawler-dev-logs"
 	@echo "  make crawler-debug"

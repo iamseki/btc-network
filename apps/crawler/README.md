@@ -16,6 +16,44 @@ Use these local development paths from the repository root:
 
 The MMDB files are not committed to this repository. Download or provision them locally and place them under `.dev-data/mmdb/`.
 
+## Download Or Refresh MMDB Files
+
+The preferred local source is the public [`sapics/ip-location-db`](https://github.com/sapics/ip-location-db) project, which BNDD-0001 already references for ASN and country MMDB data.
+
+This repository uses these npm packages from that source for local development:
+
+- `@ip-location-db/geolite2-asn-mmdb`
+- `@ip-location-db/geolite2-country-mmdb`
+
+From the repository root:
+
+```bash
+make crawler-mmdb-update
+```
+
+That command:
+
+- downloads the current package tarballs with `npm pack`
+- extracts `geolite2-asn.mmdb` and `geolite2-country.mmdb`
+- writes them to:
+  - `.dev-data/mmdb/GeoLite2-ASN.mmdb`
+  - `.dev-data/mmdb/GeoLite2-Country.mmdb`
+- stores the upstream README and GeoLite2 license files next to them
+
+The script uses `npm pack` instead of `npm install`, so it fetches the published tarballs without running package install scripts.
+
+### Keeping Them Up To Date
+
+The upstream `sapics/ip-location-db` project currently documents GeoLite2 country and ASN updates as twice weekly.
+
+For local development, the practical rule is:
+
+1. run `make crawler-mmdb-update` when setting up a new machine
+2. run it again before long crawler runs or when you want fresher enrichment data
+3. re-run it any time you want to refresh the local `.dev-data/mmdb/` copies in place
+
+The local development copies are disposable. The source of truth stays upstream, not in this repository.
+
 ## Start ClickHouse
 
 From the repository root:
@@ -86,7 +124,7 @@ The crawler will still run without MMDB files, but enrichment will be unavailabl
 
 ## Typical Local Flow
 
-1. Put the MMDB files under `.dev-data/mmdb/`.
+1. Run `make crawler-mmdb-update`.
 2. Run `make crawler-dev-up`.
 3. Run `make crawler-migrate`.
 4. Run `make crawler` with MMDB paths.
