@@ -6,6 +6,7 @@ members = [
     "apps/desktop/src-tauri",
     "crates/btc-network",
     "crates/btc-network-clickhouse",
+    "crates/btc-network-mmdb",
     "crates/btc-network-observability",
 ]
 default-members = [
@@ -15,6 +16,7 @@ default-members = [
     "apps/desktop/src-tauri",
     "crates/btc-network",
     "crates/btc-network-clickhouse",
+    "crates/btc-network-mmdb",
     "crates/btc-network-observability",
 ]
 resolver = "3"
