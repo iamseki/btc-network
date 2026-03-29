@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use super::domain::{CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics};
-use super::ports::CrawlerRepository;
+use super::ports::{CrawlerRepository, CrawlerRepositoryError};
 use super::types::{CrawlState, CrawlerStats};
 
 pub(crate) async fn run_lifecycle(
@@ -55,14 +55,14 @@ pub(crate) async fn run_checkpoint_emitter(
     stop: Arc<AtomicBool>,
     started_at: DateTime<Utc>,
     tick_every: Duration,
-) {
+) -> Result<(), CrawlerRepositoryError> {
     let mut ticker = tokio::time::interval(tick_every);
 
     loop {
         ticker.tick().await;
 
         if stop.load(Ordering::Relaxed) {
-            return;
+            return Ok(());
         }
 
         let phase = *phase.lock().await;
@@ -71,7 +71,7 @@ pub(crate) async fn run_checkpoint_emitter(
         if let Err(err) = repository.insert_run_checkpoint(checkpoint).await {
             warn!("[crawler] failed to write checkpoint: {err}");
             stop.store(true, Ordering::Relaxed);
-            return;
+            return Err(err);
         }
     }
 }
@@ -307,7 +307,10 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(15)).await;
         stop.store(true, Ordering::Relaxed);
-        handle.await.expect("checkpoint emitter join");
+        handle
+            .await
+            .expect("checkpoint emitter join")
+            .expect("checkpoint emitter should succeed");
 
         let runs = repository.list_runs().await.expect("list runs");
         assert!(!runs.is_empty());
@@ -315,5 +318,97 @@ mod tests {
             runs.iter()
                 .all(|checkpoint| checkpoint.phase == CrawlPhase::Crawling)
         );
+    }
+
+    #[derive(Default)]
+    struct FailingCheckpointRepository;
+
+    impl CrawlerRepository for FailingCheckpointRepository {
+        fn insert_observation<'a>(
+            &'a self,
+            _observation: crate::crawler::PersistedNodeObservation,
+        ) -> Pin<Box<dyn Future<Output = Result<(), CrawlerRepositoryError>> + Send + 'a>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn insert_observations_stream<'a>(
+            &'a self,
+            _observations: Vec<crate::crawler::PersistedNodeObservation>,
+        ) -> Pin<Box<dyn Future<Output = Result<(), CrawlerRepositoryError>> + Send + 'a>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn insert_run_checkpoint<'a>(
+            &'a self,
+            _checkpoint: CrawlRunCheckpoint,
+        ) -> Pin<Box<dyn Future<Output = Result<(), CrawlerRepositoryError>> + Send + 'a>> {
+            Box::pin(async { Err(CrawlerRepositoryError::new("checkpoint write failed")) })
+        }
+
+        fn get_run_checkpoint<'a>(
+            &'a self,
+            _run_id: &'a CrawlRunId,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn list_runs<'a>(
+            &'a self,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn count_nodes_by_asn<'a>(
+            &'a self,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            Vec<crate::crawler::CountNodesByAsnRow>,
+                            CrawlerRepositoryError,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn checkpoint_emitter_returns_error_when_checkpoint_write_fails() {
+        let repository: Arc<dyn CrawlerRepository> = Arc::new(FailingCheckpointRepository);
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let phase = Arc::new(Mutex::new(CrawlPhase::Crawling));
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let err = run_checkpoint_emitter(
+            repository,
+            CrawlRunId::new("run-1"),
+            phase,
+            state,
+            stats,
+            Arc::clone(&stop),
+            Utc::now(),
+            Duration::from_millis(5),
+        )
+        .await
+        .expect_err("checkpoint emitter should return repository errors");
+
+        assert_eq!(err.to_string(), "checkpoint write failed");
+        assert!(stop.load(Ordering::Relaxed));
     }
 }
