@@ -43,14 +43,14 @@ Update rules:
 | Phase 1: Shared Domain Model | `merged` | `2026-03-28` | `main` | `Domain types and pure observation helpers are merged.` |
 | Phase 2: Shared Traits and Test Doubles | `merged` | `2026-03-28` | `main` | `Repository and enrichment traits plus test doubles are merged.` |
 | Phase 3: Coordinator and Runtime Pipeline Refactor | `merged` | `2026-03-28` | `main` | `Coordinator flow, phase checkpoints, writer pipeline, overlay/routability fixes, and follow-up cancellation/checkpoint hardening are merged.` |
-| Phase 4: ClickHouse Crate and Migrations | `reviewing` | `2026-03-29` | `feat/BNDD-0005-phase-4-clickhouse` | `ClickHouse adapter crate, migration runner, checked-in SQL migrations, mock tests, and live Testcontainers-backed repository integration tests are on the Phase 4 branch.` |
+| Phase 4: ClickHouse Crate and Migrations | `reviewing` | `2026-03-29` | `PR #11` | `Phase 4 is reviewed on an open PR and now includes the ClickHouse adapter crate, checked-in migrations, live Testcontainers-backed integration tests, deterministic checkpoint ordering, migration workflow docs, internal module split by concern, and Rust cleanup follow-ups.` |
 | Phase 5: MMDB Enrichment Adapter | `pending` | `2026-03-28` | `` | `` |
 | Phase 6: App Wiring | `pending` | `2026-03-28` | `` | `` |
 | Phase 7: End-to-End Verification | `pending` | `2026-03-28` | `` | `` |
 
 ## Immediate Next Slice
 
-- Finish review and merge of the ClickHouse adapter crate and checked-in migrations
+- Merge the reviewed ClickHouse adapter work in PR `#11`
 - Start Phase 5 with the MMDB enrichment adapter after the storage adapter lands on `main`
 
 ## Explicit Agent Constraints
