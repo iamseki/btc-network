@@ -35,7 +35,7 @@ Important:
 - the existing initial migration files were backfilled with synthetic UTC timestamps to preserve stable ordering
 - keep migrations forward-only
 - document any required backfill or manual coordination in the migration file
-- add the new file to `bundled_migrations()` in [`src/migrations.rs`](./src/migrations.rs)
+- add the new file to `bundled_migrations()` in [`src/migrations/bundled.rs`](./src/migrations/bundled.rs)
 
 ## Apply Migrations
 

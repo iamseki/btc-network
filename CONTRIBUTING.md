@@ -123,7 +123,7 @@ When you add a ClickHouse schema change:
 - keep migrations forward-only
 - use the generated `YYYYMMDDHHMMSS_slug.sql` filename format
 - document required backfills or manual coordination steps in the migration file when the change is not purely online-safe
-- update `crates/btc-network-clickhouse/src/migrations.rs` to include the new checked-in file in `bundled_migrations()`
+- update `crates/btc-network-clickhouse/src/migrations/bundled.rs` to include the new checked-in file in `bundled_migrations()`
 
 ## Before Opening a PR
 
