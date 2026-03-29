@@ -71,6 +71,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         {
             let mut guard = state.lock().await;
             guard.pending_nodes.remove(&endpoint);
+            guard.in_flight_nodes.insert(endpoint.clone());
         }
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
@@ -111,6 +112,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 let mut guard = state.lock().await;
                 let state_lock_wait = state_lock_wait_started.elapsed();
                 let state_lock_hold_started = Instant::now();
+                guard.in_flight_nodes.remove(&endpoint);
                 let discovered = apply_visit_to_state(&mut guard, visit, config.max_tracked_nodes);
                 let state_lock_hold = state_lock_hold_started.elapsed();
                 drop(guard);
@@ -166,6 +168,12 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 {
                     return;
                 }
+
+                state
+                    .lock()
+                    .await
+                    .in_flight_nodes
+                    .remove(&endpoint);
 
                 if config.verbose {
                     info!(
@@ -582,6 +590,7 @@ mod tests {
         let guard = state.lock().await;
         assert!(guard.node_states.contains_key(&node));
         assert!(guard.pending_nodes.contains(&discovered));
+        assert!(!guard.in_flight_nodes.contains(&node));
     }
 
     #[tokio::test]

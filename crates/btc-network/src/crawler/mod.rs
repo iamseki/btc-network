@@ -369,6 +369,7 @@ impl Crawler {
         let lifecycle_handle = AbortOnDropHandle::new(tokio::spawn(run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            started_at,
             config.max_runtime,
             config.idle_timeout,
             config.lifecycle_tick,
@@ -1489,7 +1490,8 @@ mod tests {
         let resumed_node = public_endpoint(21);
         let mut restored_state = CrawlState::new();
         restored_state.seen_nodes.insert(resumed_node.clone());
-        restored_state.pending_nodes.insert(resumed_node.clone());
+        // Simulate a crash after dequeue but before the node visit completed.
+        restored_state.in_flight_nodes.insert(resumed_node.clone());
 
         let restored_state = Arc::new(Mutex::new(restored_state));
         let restored_stats = Arc::new(CrawlerStats::default());

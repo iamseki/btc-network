@@ -27,11 +27,11 @@ pub(crate) struct CheckpointEmitterContext {
 pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
     stop: Arc<AtomicBool>,
+    started_at: Instant,
     max_runtime: Duration,
     idle_timeout: Duration,
     tick_every: Duration,
 ) {
-    let started_at = Instant::now();
     let mut ticker = tokio::time::interval(tick_every);
 
     loop {
@@ -203,6 +203,7 @@ mod tests {
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Instant::now(),
             Duration::from_millis(20),
             Duration::from_secs(10),
             Duration::from_millis(5),
@@ -224,6 +225,7 @@ mod tests {
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Instant::now(),
             Duration::from_secs(10),
             Duration::from_millis(20),
             Duration::from_millis(5),
@@ -242,6 +244,7 @@ mod tests {
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Instant::now(),
             Duration::from_secs(10),
             Duration::from_secs(10),
             Duration::from_millis(5),
@@ -249,6 +252,24 @@ mod tests {
         .await;
 
         assert!(before.elapsed() < Duration::from_millis(100));
+        assert!(stop.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn lifecycle_uses_original_started_at_for_max_runtime() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+
+        run_lifecycle(
+            Arc::clone(&state),
+            Arc::clone(&stop),
+            Instant::now() - Duration::from_millis(50),
+            Duration::from_millis(20),
+            Duration::from_secs(10),
+            Duration::from_millis(5),
+        )
+        .await;
+
         assert!(stop.load(Ordering::Relaxed));
     }
 
@@ -296,6 +317,7 @@ mod tests {
         .expect("resume state should deserialize");
         assert_eq!(resume_state.seen_nodes.len(), 1);
         assert_eq!(resume_state.pending_nodes.len(), 1);
+        assert_eq!(resume_state.in_flight_nodes.len(), 0);
     }
 
     #[tokio::test]

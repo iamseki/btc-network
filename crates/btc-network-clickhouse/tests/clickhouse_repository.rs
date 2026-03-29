@@ -273,7 +273,7 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
     assert_eq!(latest.stop_reason.as_deref(), Some("stop requested"));
     assert_eq!(
         latest.resume_state.as_deref(),
-        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"node_states\":[]}")
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
     );
 
     let runs = repository.list_runs().await?;
@@ -282,7 +282,7 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
     assert_eq!(runs[0].phase, CrawlPhase::Draining);
     assert_eq!(
         runs[0].resume_state.as_deref(),
-        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"node_states\":[]}")
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
     );
 
     let mut counts = repository.count_nodes_by_asn().await?;
@@ -348,7 +348,7 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     assert_eq!(latest.stop_reason.as_deref(), Some("checkpoint tie"));
     assert_eq!(
         latest.resume_state.as_deref(),
-        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"node_states\":[]}")
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
     );
 
     let runs = repository.list_runs().await?;
@@ -361,7 +361,7 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     assert_eq!(run.stop_reason.as_deref(), Some("checkpoint tie"));
     assert_eq!(
         run.resume_state.as_deref(),
-        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"node_states\":[]}")
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
     );
     assert_eq!(run.metrics.unique_nodes, 6);
     assert_eq!(run.metrics.persisted_observation_rows, 8);
@@ -594,7 +594,10 @@ fn sample_checkpoint(
             persisted_observation_rows: 8,
             writer_backlog: 0,
         },
-        resume_state: Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"node_states\":[]}".to_string()),
+        resume_state: Some(
+            "{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}"
+                .to_string(),
+        ),
         caller: Some("integration-test".to_string()),
     }
 }

@@ -94,6 +94,7 @@ pub(crate) struct CrawlerStats {
 pub(crate) struct CrawlState {
     pub(crate) seen_nodes: HashSet<CrawlEndpoint>,
     pub(crate) pending_nodes: HashSet<CrawlEndpoint>,
+    pub(crate) in_flight_nodes: HashSet<CrawlEndpoint>,
     pub(crate) node_states: HashMap<CrawlEndpoint, NodeState>,
     pub(crate) last_new_node_at: Instant,
 }
@@ -103,6 +104,7 @@ impl CrawlState {
         Self {
             seen_nodes: HashSet::new(),
             pending_nodes: HashSet::new(),
+            in_flight_nodes: HashSet::new(),
             node_states: HashMap::new(),
             last_new_node_at: Instant::now(),
         }
@@ -114,6 +116,9 @@ impl CrawlState {
 
         let mut pending_nodes = self.pending_nodes.iter().cloned().collect::<Vec<_>>();
         pending_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
+
+        let mut in_flight_nodes = self.in_flight_nodes.iter().cloned().collect::<Vec<_>>();
+        in_flight_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
 
         let mut node_states = self
             .node_states
@@ -128,6 +133,7 @@ impl CrawlState {
         CrawlResumeState {
             seen_nodes,
             pending_nodes,
+            in_flight_nodes,
             node_states,
         }
     }
@@ -140,6 +146,11 @@ impl CrawlState {
         }
 
         for endpoint in resume_state.pending_nodes {
+            state.seen_nodes.insert(endpoint.clone());
+            state.pending_nodes.insert(endpoint);
+        }
+
+        for endpoint in resume_state.in_flight_nodes {
             state.seen_nodes.insert(endpoint.clone());
             state.pending_nodes.insert(endpoint);
         }
@@ -159,6 +170,7 @@ impl CrawlState {
 pub(crate) struct CrawlResumeState {
     pub(crate) seen_nodes: Vec<CrawlEndpoint>,
     pub(crate) pending_nodes: Vec<CrawlEndpoint>,
+    pub(crate) in_flight_nodes: Vec<CrawlEndpoint>,
     pub(crate) node_states: Vec<ResumeNodeState>,
 }
 
