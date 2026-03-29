@@ -32,6 +32,9 @@ struct CrawlArgs {
     #[arg(long, default_value_t = 1000)]
     max_concurrency: usize,
 
+    #[arg(long, default_value_t = 100_000)]
+    max_tracked_nodes: usize,
+
     #[arg(long, default_value_t = 60)]
     max_runtime_minutes: u64,
 
@@ -139,6 +142,7 @@ async fn run_clickhouse_migrations(args: MigrateClickhouseArgs) -> Result<(), Bo
 fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
     CrawlerConfig {
         max_concurrency: args.max_concurrency,
+        max_tracked_nodes: args.max_tracked_nodes,
         max_runtime: Duration::from_secs(args.max_runtime_minutes * 60),
         idle_timeout: Duration::from_secs(args.idle_timeout_minutes * 60),
         connect_timeout: Duration::from_secs(args.connect_timeout_secs),
@@ -186,6 +190,33 @@ fn build_enrichment_provider(
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn build_crawler_config_applies_max_tracked_nodes_override() {
+        let args = CrawlArgs {
+            max_concurrency: 1000,
+            max_tracked_nodes: 250_000,
+            max_runtime_minutes: 60,
+            idle_timeout_minutes: 5,
+            connect_timeout_secs: 30,
+            io_timeout_secs: 10,
+            verbose: false,
+            clickhouse: ClickHouseArgs {
+                clickhouse_url: "http://localhost:8123".to_string(),
+                clickhouse_database: "btc_network".to_string(),
+                clickhouse_user: None,
+                clickhouse_password: None,
+            },
+            mmdb: MmdbArgs {
+                mmdb_asn_path: None,
+                mmdb_country_path: None,
+            },
+        };
+
+        let config = build_crawler_config(&args);
+
+        assert_eq!(config.max_tracked_nodes, 250_000);
+    }
 
     #[test]
     fn clickhouse_config_applies_optional_auth() {

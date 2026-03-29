@@ -149,6 +149,15 @@ Optional ClickHouse overrides:
 - `--clickhouse-user`
 - `--clickhouse-password`
 
+Optional crawler tuning overrides:
+
+- `--max-concurrency`
+- `--max-tracked-nodes`
+- `--max-runtime-minutes`
+- `--idle-timeout-minutes`
+- `--connect-timeout-secs`
+- `--io-timeout-secs`
+
 The crawler will still run without MMDB files, but enrichment will be unavailable and ASN/country data will not be persisted.
 
 ## Inspect Data
