@@ -1,28 +1,43 @@
-use crate::session::Session;
+use crate::session::AsyncSession;
 use crate::wire;
-use crate::wire::message::{AddrV2Addr, VersionMessage};
+use crate::wire::message::AddrV2Addr;
+#[cfg(test)]
+use crate::wire::message::VersionMessage;
+use std::future::Future;
 use std::io;
-use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
-use std::thread;
+use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::pin::Pin;
 use std::time::{Duration, Instant};
+use tokio::net::TcpStream as AsyncTcpStream;
 use tracing::{info, warn};
 
 use super::domain::{CrawlEndpoint, CrawlNetwork, FailureClassification};
 use super::types::{CrawlerConfig, NodeState, NodeVisit, NodeVisitFailure, NodeVisitResult};
 
 pub(crate) trait NodeProcessor: Send + Sync {
-    fn process(&self, endpoint: CrawlEndpoint, config: CrawlerConfig) -> NodeVisitResult;
+    fn process<'a>(
+        &'a self,
+        endpoint: CrawlEndpoint,
+        config: CrawlerConfig,
+    ) -> Pin<Box<dyn Future<Output = NodeVisitResult> + Send + 'a>>;
 }
 
 pub(crate) struct DefaultNodeProcessor;
 
 impl NodeProcessor for DefaultNodeProcessor {
-    fn process(&self, endpoint: CrawlEndpoint, config: CrawlerConfig) -> NodeVisitResult {
-        process_node(endpoint, config)
+    fn process<'a>(
+        &'a self,
+        endpoint: CrawlEndpoint,
+        config: CrawlerConfig,
+    ) -> Pin<Box<dyn Future<Output = NodeVisitResult> + Send + 'a>> {
+        Box::pin(async move { process_node(endpoint, config).await })
     }
 }
 
-pub(crate) fn process_node(endpoint: CrawlEndpoint, config: CrawlerConfig) -> NodeVisitResult {
+pub(crate) async fn process_node(
+    endpoint: CrawlEndpoint,
+    config: CrawlerConfig,
+) -> NodeVisitResult {
     let total_started = Instant::now();
     let connect_addr = endpoint.socket_addr().ok_or_else(|| {
         Box::new(NodeVisitFailure {
@@ -33,54 +48,32 @@ pub(crate) fn process_node(endpoint: CrawlEndpoint, config: CrawlerConfig) -> No
         })
     })?;
     let connect_started = Instant::now();
-    let stream = connect_with_retries(&endpoint, connect_addr, config, total_started)?;
+    let stream = connect_with_retries(&endpoint, connect_addr, config, total_started).await?;
     let connect_elapsed = connect_started.elapsed();
-    stream
-        .set_read_timeout(Some(config.io_timeout))
-        .map_err(|e| {
-            Box::new(NodeVisitFailure {
-                node: endpoint.clone(),
-                latency: total_started.elapsed(),
-                classification: FailureClassification::Io,
-                message: format!("set read timeout: {e}"),
-            })
-        })?;
-    stream
-        .set_write_timeout(Some(config.io_timeout))
-        .map_err(|e| {
-            Box::new(NodeVisitFailure {
-                node: endpoint.clone(),
-                latency: total_started.elapsed(),
-                classification: FailureClassification::Io,
-                message: format!("set write timeout: {e}"),
-            })
-        })?;
-
-    let mut session = Session::new(stream);
-    let mut client = SessionNodeClient {
-        session: &mut session,
-    };
+    let mut session = AsyncSession::new(stream, config.io_timeout);
 
     let handshake_started = Instant::now();
-    let version = client.handshake().map_err(|message| {
+    let version = session.handshake().await.map_err(|message| {
         Box::new(NodeVisitFailure {
             node: endpoint.clone(),
             latency: total_started.elapsed(),
             classification: FailureClassification::Handshake,
-            message,
+            message: message.to_string(),
         })
     })?;
     let handshake_elapsed = handshake_started.elapsed();
 
     let get_addr_started = Instant::now();
-    let discovered = client.get_addresses().map_err(|message| {
-        Box::new(NodeVisitFailure {
-            node: endpoint.clone(),
-            latency: total_started.elapsed(),
-            classification: FailureClassification::PeerDiscovery,
-            message,
-        })
-    })?;
+    let discovered = request_peer_addresses(&mut session)
+        .await
+        .map_err(|message| {
+            Box::new(NodeVisitFailure {
+                node: endpoint.clone(),
+                latency: total_started.elapsed(),
+                classification: FailureClassification::PeerDiscovery,
+                message,
+            })
+        })?;
     let get_addr_elapsed = get_addr_started.elapsed();
 
     let visit = NodeVisit {
@@ -112,23 +105,36 @@ pub(crate) fn process_node(endpoint: CrawlEndpoint, config: CrawlerConfig) -> No
     Ok(visit)
 }
 
-fn connect_with_retries(
+async fn connect_with_retries(
     endpoint: &CrawlEndpoint,
     connect_addr: SocketAddr,
     config: CrawlerConfig,
     total_started: Instant,
-) -> Result<TcpStream, Box<NodeVisitFailure>> {
+) -> Result<AsyncTcpStream, Box<NodeVisitFailure>> {
     connect_with_retries_using(
         endpoint,
         connect_addr,
         config,
         total_started,
-        || TcpStream::connect_timeout(&connect_addr, config.connect_timeout),
-        thread::sleep,
+        || async move {
+            tokio::time::timeout(
+                config.connect_timeout,
+                AsyncTcpStream::connect(connect_addr),
+            )
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("connect timed out after {:?}", config.connect_timeout),
+                )
+            })?
+        },
+        tokio::time::sleep,
     )
+    .await
 }
 
-fn connect_with_retries_using<T, Connect, Sleep>(
+async fn connect_with_retries_using<T, Connect, ConnectFuture, Sleep, SleepFuture>(
     endpoint: &CrawlEndpoint,
     connect_target: impl ToString,
     config: CrawlerConfig,
@@ -137,15 +143,17 @@ fn connect_with_retries_using<T, Connect, Sleep>(
     mut sleep: Sleep,
 ) -> Result<T, Box<NodeVisitFailure>>
 where
-    Connect: FnMut() -> io::Result<T>,
-    Sleep: FnMut(Duration),
+    Connect: FnMut() -> ConnectFuture,
+    ConnectFuture: Future<Output = io::Result<T>>,
+    Sleep: FnMut(Duration) -> SleepFuture,
+    SleepFuture: Future<Output = ()>,
 {
     let connect_target = connect_target.to_string();
     let max_attempts = config.connect_max_attempts.max(1);
     let mut last_error = None;
 
     for attempt in 1..=max_attempts {
-        match connect() {
+        match connect().await {
             Ok(stream) => return Ok(stream),
             Err(error) => {
                 last_error = Some(error);
@@ -165,7 +173,7 @@ where
                     );
                 }
                 if !backoff.is_zero() {
-                    sleep(backoff);
+                    sleep(backoff).await;
                 }
             }
         }
@@ -196,43 +204,30 @@ fn connect_retry_delay(base: Duration, retry_number: usize) -> Duration {
     base.checked_mul(factor).unwrap_or(Duration::MAX)
 }
 
-pub(crate) trait NodeClient {
-    fn handshake(&mut self) -> Result<VersionMessage, String>;
-    fn get_addresses(&mut self) -> Result<Vec<CrawlEndpoint>, String>;
-}
-
-struct SessionNodeClient<'a> {
-    session: &'a mut Session,
-}
-
-impl NodeClient for SessionNodeClient<'_> {
-    fn handshake(&mut self) -> Result<VersionMessage, String> {
-        self.session.handshake().map_err(|e| e.to_string())
-    }
-
-    fn get_addresses(&mut self) -> Result<Vec<CrawlEndpoint>, String> {
-        request_peer_addresses(self.session)
-    }
-}
-
 #[cfg(test)]
-pub(crate) fn process_node_with_client<C: NodeClient>(
+pub(crate) async fn process_node_with_client<C: NodeClient>(
     endpoint: CrawlEndpoint,
     client: &mut C,
 ) -> Result<NodeVisit, NodeVisitFailure> {
     let started = Instant::now();
-    let version = client.handshake().map_err(|message| NodeVisitFailure {
-        node: endpoint.clone(),
-        latency: started.elapsed(),
-        classification: FailureClassification::Handshake,
-        message,
-    })?;
-    let discovered = client.get_addresses().map_err(|message| NodeVisitFailure {
-        node: endpoint.clone(),
-        latency: started.elapsed(),
-        classification: FailureClassification::PeerDiscovery,
-        message,
-    })?;
+    let version = client
+        .handshake()
+        .await
+        .map_err(|message| NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: started.elapsed(),
+            classification: FailureClassification::Handshake,
+            message,
+        })?;
+    let discovered = client
+        .get_addresses()
+        .await
+        .map_err(|message| NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: started.elapsed(),
+            classification: FailureClassification::PeerDiscovery,
+            message,
+        })?;
 
     Ok(NodeVisit {
         node: endpoint,
@@ -249,13 +244,14 @@ pub(crate) fn process_node_with_client<C: NodeClient>(
     })
 }
 
-fn request_peer_addresses(session: &mut Session) -> Result<Vec<CrawlEndpoint>, String> {
+async fn request_peer_addresses(session: &mut AsyncSession) -> Result<Vec<CrawlEndpoint>, String> {
     session
         .send(wire::Command::GetAddr, &[])
+        .await
         .map_err(|e| e.to_string())?;
 
     loop {
-        let msg = session.recv().map_err(|e| e.to_string())?;
+        let msg = session.recv().await.map_err(|e| e.to_string())?;
 
         match msg {
             wire::Message::AddrV2(entries) => {
@@ -278,11 +274,24 @@ fn request_peer_addresses(session: &mut Session) -> Result<Vec<CrawlEndpoint>, S
             wire::Message::Ping(payload) => {
                 session
                     .send(wire::Command::Pong, &payload)
+                    .await
                     .map_err(|e| e.to_string())?;
             }
             _ => {}
         }
     }
+}
+
+#[cfg(test)]
+type VersionFuture<'a> = Pin<Box<dyn Future<Output = Result<VersionMessage, String>> + Send + 'a>>;
+#[cfg(test)]
+type AddressFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<CrawlEndpoint>, String>> + Send + 'a>>;
+
+#[cfg(test)]
+pub(crate) trait NodeClient {
+    fn handshake(&mut self) -> VersionFuture<'_>;
+    fn get_addresses(&mut self) -> AddressFuture<'_>;
 }
 
 fn endpoint_from_addrv2(addr: &AddrV2Addr, port: u16) -> CrawlEndpoint {
@@ -347,6 +356,8 @@ mod tests {
     use super::*;
     use crate::wire::message::{NetAddr, Services};
     use std::net::{Ipv4Addr, SocketAddrV4};
+    use std::sync::Mutex as StdMutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     struct MockClient {
@@ -357,24 +368,29 @@ mod tests {
     }
 
     impl NodeClient for MockClient {
-        fn handshake(&mut self) -> Result<VersionMessage, String> {
+        fn handshake(&mut self) -> VersionFuture<'_> {
             self.calls.push("handshake");
-            if self.fail_handshake {
-                return Err("handshake failed".to_string());
-            }
-            self.version
-                .take()
-                .ok_or_else(|| "missing mock version".to_string())
+            let fail_handshake = self.fail_handshake;
+            let version = self.version.take();
+
+            Box::pin(async move {
+                if fail_handshake {
+                    return Err("handshake failed".to_string());
+                }
+
+                version.ok_or_else(|| "missing mock version".to_string())
+            })
         }
 
-        fn get_addresses(&mut self) -> Result<Vec<CrawlEndpoint>, String> {
+        fn get_addresses(&mut self) -> AddressFuture<'_> {
             self.calls.push("get_addresses");
-            Ok(self.addrs.clone())
+            let addrs = self.addrs.clone();
+            Box::pin(async move { Ok(addrs) })
         }
     }
 
-    #[test]
-    fn process_node_calls_handshake_then_get_addresses() {
+    #[tokio::test]
+    async fn process_node_calls_handshake_then_get_addresses() {
         let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(10, 0, 0, 2),
             8333,
@@ -390,7 +406,7 @@ mod tests {
             fail_handshake: false,
         };
 
-        let visit = process_node_with_client(node, &mut client).unwrap();
+        let visit = process_node_with_client(node, &mut client).await.unwrap();
 
         assert_eq!(client.calls, vec!["handshake", "get_addresses"]);
         assert_eq!(
@@ -405,8 +421,8 @@ mod tests {
         assert_eq!(visit.state.start_height, 938408);
     }
 
-    #[test]
-    fn process_node_stops_when_handshake_fails() {
+    #[tokio::test]
+    async fn process_node_stops_when_handshake_fails() {
         let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(10, 0, 0, 2),
             8333,
@@ -418,14 +434,16 @@ mod tests {
             fail_handshake: true,
         };
 
-        let err = process_node_with_client(node, &mut client).unwrap_err();
+        let err = process_node_with_client(node, &mut client)
+            .await
+            .unwrap_err();
         assert_eq!(err.message, "handshake failed");
         assert_eq!(err.classification, FailureClassification::Handshake);
         assert_eq!(client.calls, vec!["handshake"]);
     }
 
-    #[test]
-    fn connect_with_retries_retries_before_succeeding() {
+    #[tokio::test]
+    async fn connect_with_retries_retries_before_succeeding() {
         let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(1, 1, 1, 7),
             8333,
@@ -435,8 +453,8 @@ mod tests {
             connect_retry_backoff: Duration::from_millis(10),
             ..CrawlerConfig::default()
         };
-        let mut attempts = 0;
-        let mut backoffs = Vec::new();
+        let attempts = AtomicUsize::new(0);
+        let backoffs = StdMutex::new(Vec::new());
 
         let result = connect_with_retries_using(
             &node,
@@ -444,27 +462,33 @@ mod tests {
             config,
             Instant::now(),
             || {
-                attempts += 1;
-                if attempts < 3 {
-                    Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))
-                } else {
-                    Ok("connected")
+                let attempt = attempts.fetch_add(1, Ordering::Relaxed) + 1;
+                async move {
+                    if attempt < 3 {
+                        Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))
+                    } else {
+                        Ok("connected")
+                    }
                 }
             },
-            |delay| backoffs.push(delay),
+            |delay| {
+                backoffs.lock().expect("backoffs lock").push(delay);
+                std::future::ready(())
+            },
         )
+        .await
         .expect("third attempt should succeed");
 
         assert_eq!(result, "connected");
-        assert_eq!(attempts, 3);
+        assert_eq!(attempts.load(Ordering::Relaxed), 3);
         assert_eq!(
-            backoffs,
+            *backoffs.lock().expect("backoffs lock"),
             vec![Duration::from_millis(10), Duration::from_millis(20)]
         );
     }
 
-    #[test]
-    fn connect_with_retries_returns_connect_failure_after_max_attempts() {
+    #[tokio::test]
+    async fn connect_with_retries_returns_connect_failure_after_max_attempts() {
         let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(1, 1, 1, 8),
             8333,
@@ -474,8 +498,8 @@ mod tests {
             connect_retry_backoff: Duration::from_millis(5),
             ..CrawlerConfig::default()
         };
-        let mut attempts = 0;
-        let mut backoffs = Vec::new();
+        let attempts = AtomicUsize::new(0);
+        let backoffs = StdMutex::new(Vec::new());
 
         let err = connect_with_retries_using(
             &node,
@@ -483,15 +507,22 @@ mod tests {
             config,
             Instant::now(),
             || {
-                attempts += 1;
-                Err::<(), _>(io::Error::new(io::ErrorKind::TimedOut, "timed out"))
+                attempts.fetch_add(1, Ordering::Relaxed);
+                async { Err::<(), _>(io::Error::new(io::ErrorKind::ConnectionRefused, "refused")) }
             },
-            |delay| backoffs.push(delay),
+            |delay| {
+                backoffs.lock().expect("backoffs lock").push(delay);
+                std::future::ready(())
+            },
         )
+        .await
         .expect_err("connect should fail after max attempts");
 
-        assert_eq!(attempts, 2);
-        assert_eq!(backoffs, vec![Duration::from_millis(5)]);
+        assert_eq!(attempts.load(Ordering::Relaxed), 2);
+        assert_eq!(
+            *backoffs.lock().expect("backoffs lock"),
+            vec![Duration::from_millis(5)]
+        );
         assert_eq!(err.classification, FailureClassification::Connect);
         assert!(err.message.contains("failed after 2 attempts"));
     }

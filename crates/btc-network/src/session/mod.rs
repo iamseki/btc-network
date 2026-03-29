@@ -18,11 +18,14 @@ use std::error::Error;
 use std::io;
 use std::net::TcpStream;
 use std::time::Duration;
+use tokio::net::TcpStream as AsyncTcpStream;
+use tokio::time::timeout;
 use tracing::debug;
 
 use crate::wire::message::VersionMessage;
 use crate::wire::{
-    self, Command, Message, RawMessage, build_version_payload, read_message, send_message,
+    self, Command, Message, RawMessage, build_version_payload, read_message, read_message_async,
+    send_message, send_message_async,
 };
 
 pub struct Session {
@@ -131,6 +134,94 @@ impl Session {
     }
 }
 
+/// Async crawler-facing peer session over a Tokio TCP stream.
+pub struct AsyncSession {
+    stream: AsyncTcpStream,
+    io_timeout: Duration,
+}
+
+impl AsyncSession {
+    pub fn new(stream: AsyncTcpStream, io_timeout: Duration) -> Self {
+        Self { stream, io_timeout }
+    }
+
+    pub async fn handshake(&mut self) -> Result<VersionMessage, Box<dyn Error>> {
+        let payload = build_version_payload(wire::constants::PROTOCOL_VERSION, 0)?;
+        self.send(Command::Version, &payload).await?;
+
+        let mut version_msg: Option<VersionMessage> = None;
+        let mut got_verack = false;
+
+        while !(version_msg.is_some() && got_verack) {
+            let raw = self.recv_raw().await?;
+            let msg = Message::try_from(raw)?;
+
+            match msg {
+                Message::Version(v) => {
+                    if version_msg.is_none() {
+                        debug!("[handshake] got version msg: {:?}", v);
+                        self.send(Command::SendAddrV2, &[]).await?;
+                        self.send(Command::Verack, &[]).await?;
+                        version_msg = Some(v);
+                    }
+                }
+                Message::Verack => {
+                    got_verack = true;
+                }
+                Message::Ping(payload) => {
+                    self.send(Command::Pong, &payload).await?;
+                }
+                _ => {}
+            }
+        }
+
+        version_msg.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "peer did not send version").into()
+        })
+    }
+
+    pub async fn send(&mut self, command: Command, payload: &[u8]) -> Result<(), Box<dyn Error>> {
+        with_io_timeout(
+            self.io_timeout,
+            "write",
+            send_message_async(&mut self.stream, command, payload),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn recv(&mut self) -> Result<Message, Box<dyn Error>> {
+        let raw = self.recv_raw().await?;
+        Ok(Message::try_from(raw)?)
+    }
+
+    pub async fn recv_raw(&mut self) -> Result<RawMessage, Box<dyn Error>> {
+        let raw = with_io_timeout(
+            self.io_timeout,
+            "read",
+            read_message_async(&mut self.stream),
+        )
+        .await?;
+        Ok(raw)
+    }
+}
+
+async fn with_io_timeout<T, F>(
+    io_timeout: Duration,
+    operation: &str,
+    future: F,
+) -> Result<T, io::Error>
+where
+    F: std::future::Future<Output = io::Result<T>>,
+{
+    timeout(io_timeout, future).await.map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!("{operation} timed out after {io_timeout:?}"),
+        )
+    })?
+}
+
 #[cfg(test)]
 mod tests {
     use tracing::error;
@@ -139,6 +230,7 @@ mod tests {
     use std::io::ErrorKind;
     use std::net::TcpListener;
     use std::thread;
+    use tokio::net::TcpListener as AsyncTcpListener;
 
     fn bind_listener_or_skip() -> Option<TcpListener> {
         match TcpListener::bind("127.0.0.1:0") {
@@ -346,5 +438,48 @@ mod tests {
             "unexpected error: {err}"
         );
         server.join().expect("join server");
+    }
+
+    #[tokio::test]
+    async fn async_handshake_returns_peer_version_and_enforces_order() {
+        let listener = AsyncTcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+
+        let server = tokio::spawn(async move {
+            let (mut peer, _) = listener.accept().await.expect("accept client");
+
+            let first = read_message_async(&mut peer)
+                .await
+                .expect("read first message");
+            assert_eq!(first.command, Command::Version);
+
+            let peer_version =
+                build_version_payload(wire::constants::PROTOCOL_VERSION, 0x08).expect("version");
+            send_message_async(&mut peer, Command::Version, &peer_version)
+                .await
+                .expect("send version");
+
+            let second = read_message_async(&mut peer)
+                .await
+                .expect("read second message");
+            assert_eq!(second.command, Command::SendAddrV2);
+            let third = read_message_async(&mut peer)
+                .await
+                .expect("read third message");
+            assert_eq!(third.command, Command::Verack);
+
+            send_message_async(&mut peer, Command::Verack, &[])
+                .await
+                .expect("send verack");
+        });
+
+        let stream = AsyncTcpStream::connect(addr).await.expect("connect");
+        let mut session = AsyncSession::new(stream, Duration::from_secs(2));
+        let version = session.handshake().await.expect("handshake success");
+
+        assert_eq!(version.version, wire::constants::PROTOCOL_VERSION);
+        server.await.expect("join server");
     }
 }

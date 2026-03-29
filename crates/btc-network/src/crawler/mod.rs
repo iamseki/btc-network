@@ -9,7 +9,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex as StdMutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use tokio::sync::{Mutex, mpsc};
@@ -144,7 +144,14 @@ impl Crawler {
 
         {
             let mut guard = phase.lock().await;
+            let from_phase = *guard;
             *guard = CrawlPhase::Crawling;
+            info!(
+                run_id = %run_id.as_str(),
+                from_phase = ?from_phase,
+                to_phase = ?CrawlPhase::Crawling,
+                "[crawler] phase transition"
+            );
         }
         write_checkpoint(&checkpoint_context, CrawlPhase::Crawling, None, None).await?;
 
@@ -209,22 +216,43 @@ impl Crawler {
         );
 
         let mut failure_reason = None;
-        for mut handle in task_set.worker_handles.drain(..) {
-            if let Err(err) = handle.join().await {
-                warn!("[crawler] worker join error: {err}");
-                stop.store(true, Ordering::Relaxed);
-                record_failure(&mut failure_reason, format!("worker join error: {err}"));
-            }
+        let drained_workers = drain_workers_with_grace_period(
+            &mut task_set.worker_handles,
+            request.config.shutdown_grace_period,
+            &stop,
+            &mut failure_reason,
+        )
+        .await;
+
+        if !drained_workers {
+            warn!(
+                "[crawler] worker shutdown grace period elapsed after {:?}; aborting remaining workers",
+                request.config.shutdown_grace_period
+            );
         }
 
         {
             let mut guard = phase.lock().await;
+            let from_phase = *guard;
             *guard = CrawlPhase::Draining;
+            info!(
+                run_id = %checkpoint_context.run_id.as_str(),
+                from_phase = ?from_phase,
+                to_phase = ?CrawlPhase::Draining,
+                "[crawler] phase transition"
+            );
         }
         write_checkpoint(
             &checkpoint_context,
             CrawlPhase::Draining,
-            Some("workers drained".to_string()),
+            Some(if drained_workers {
+                "workers drained".to_string()
+            } else {
+                format!(
+                    "worker shutdown grace period elapsed after {:?}; forced abort",
+                    request.config.shutdown_grace_period
+                )
+            }),
             failure_reason.clone(),
         )
         .await?;
@@ -254,7 +282,14 @@ impl Crawler {
         };
         {
             let mut guard = phase.lock().await;
+            let from_phase = *guard;
             *guard = final_phase;
+            info!(
+                run_id = %checkpoint_context.run_id.as_str(),
+                from_phase = ?from_phase,
+                to_phase = ?final_phase,
+                "[crawler] phase transition"
+            );
         }
         write_checkpoint(
             &CheckpointWriteContext {
@@ -345,6 +380,56 @@ fn record_failure(failure_reason: &mut Option<String>, reason: String) {
     }
 }
 
+async fn drain_workers_with_grace_period(
+    worker_handles: &mut Vec<AbortOnDropHandle<()>>,
+    shutdown_grace_period: Duration,
+    stop: &Arc<AtomicBool>,
+    failure_reason: &mut Option<String>,
+) -> bool {
+    let mut shutdown_started = None;
+
+    while let Some(mut handle) = worker_handles.pop() {
+        while !handle.is_finished() {
+            if stop.load(Ordering::Relaxed) {
+                let started = shutdown_started.get_or_insert_with(Instant::now);
+                if started.elapsed() >= shutdown_grace_period {
+                    record_failure(
+                        failure_reason,
+                        format!(
+                            "worker shutdown grace period elapsed after {:?}",
+                            shutdown_grace_period
+                        ),
+                    );
+                    handle.abort();
+                    abort_remaining_workers(worker_handles);
+                    stop.store(true, Ordering::Relaxed);
+                    return false;
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        match handle.join().await {
+            Ok(()) => {}
+            Err(err) => {
+                warn!("[crawler] worker join error: {err}");
+                stop.store(true, Ordering::Relaxed);
+                record_failure(failure_reason, format!("worker join error: {err}"));
+            }
+        }
+    }
+
+    true
+}
+
+fn abort_remaining_workers(worker_handles: &mut Vec<AbortOnDropHandle<()>>) {
+    for handle in worker_handles.iter_mut() {
+        handle.abort();
+    }
+    worker_handles.clear();
+}
+
 struct AbortOnDropHandle<T> {
     handle: Option<JoinHandle<T>>,
 }
@@ -359,6 +444,12 @@ impl<T> AbortOnDropHandle<T> {
     async fn join(&mut self) -> Result<T, JoinError> {
         let handle = self.handle.take().expect("join handle present");
         handle.await
+    }
+
+    fn is_finished(&self) -> bool {
+        self.handle
+            .as_ref()
+            .is_none_or(tokio::task::JoinHandle::is_finished)
     }
 
     fn abort(&mut self) {
@@ -642,8 +733,14 @@ mod tests {
     }
 
     impl NodeProcessor for StaticNodeProcessor {
-        fn process(&self, _endpoint: CrawlEndpoint, _config: CrawlerConfig) -> NodeVisitResult {
-            Ok(self.visit.clone())
+        fn process<'a>(
+            &'a self,
+            _endpoint: CrawlEndpoint,
+            _config: CrawlerConfig,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = NodeVisitResult> + Send + 'a>>
+        {
+            let visit = self.visit.clone();
+            Box::pin(async move { Ok(visit) })
         }
     }
 
@@ -771,9 +868,18 @@ mod tests {
     }
 
     impl NodeProcessor for SlowNodeProcessor {
-        fn process(&self, _endpoint: CrawlEndpoint, _config: CrawlerConfig) -> NodeVisitResult {
-            std::thread::sleep(self.delay);
-            Ok(self.visit.clone())
+        fn process<'a>(
+            &'a self,
+            _endpoint: CrawlEndpoint,
+            _config: CrawlerConfig,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = NodeVisitResult> + Send + 'a>>
+        {
+            let visit = self.visit.clone();
+            let delay = self.delay;
+            Box::pin(async move {
+                tokio::time::sleep(delay).await;
+                Ok(visit)
+            })
         }
     }
 
@@ -888,6 +994,7 @@ mod tests {
                 connect_max_attempts: 1,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
+                shutdown_grace_period: Duration::from_secs(1),
                 verbose: false,
             },
             repository,
@@ -929,6 +1036,7 @@ mod tests {
                 connect_max_attempts: 1,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
+                shutdown_grace_period: Duration::from_millis(20),
                 verbose: false,
             },
             repository.clone(),
@@ -973,5 +1081,56 @@ mod tests {
         let guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
             .expect("slot should reopen only after cancellation cleanup");
         drop(guard);
+    }
+
+    #[tokio::test]
+    async fn shutdown_grace_period_aborts_stuck_workers() {
+        let _test_guard = active_run_test_lock().lock().await;
+        clear_active_run_slot(active_run_slot());
+
+        let crawler = Crawler::with_adapters(
+            CrawlerConfig {
+                max_concurrency: 1,
+                max_tracked_nodes: 16,
+                max_runtime: Duration::from_millis(10),
+                idle_timeout: Duration::from_secs(1),
+                lifecycle_tick: Duration::from_millis(5),
+                connect_timeout: Duration::from_millis(50),
+                connect_max_attempts: 1,
+                connect_retry_backoff: Duration::ZERO,
+                io_timeout: Duration::from_millis(50),
+                shutdown_grace_period: Duration::from_millis(20),
+                verbose: false,
+            },
+            Arc::new(NoopCrawlerRepository),
+            Arc::new(StaticEnrichmentProvider),
+        );
+        let seed = public_endpoint(11);
+        let processor: Arc<dyn NodeProcessor> = Arc::new(SlowNodeProcessor {
+            visit: static_visit(seed.clone()),
+            delay: Duration::from_millis(200),
+        });
+
+        let err = crawler
+            .run_active_request(
+                CrawlRunId::new("run-shutdown-timeout"),
+                StartCrawlRequest {
+                    config: crawler.config,
+                    seed_nodes: vec![seed],
+                },
+                processor,
+                Instant::now(),
+                Utc::now(),
+                claim_active_run(active_run_slot(), CrawlRunId::new("run-shutdown-timeout"))
+                    .expect("active run"),
+            )
+            .await
+            .expect_err("shutdown timeout should force the crawl to fail");
+
+        assert!(
+            err.to_string()
+                .contains("worker shutdown grace period elapsed"),
+            "unexpected error: {err}"
+        );
     }
 }

@@ -1,6 +1,7 @@
 use crate::wire::constants::MAIN_NET_MAGIC;
 use crate::wire::message::{Command, RawMessage};
 use std::io::{self, Read, Write};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 const MAX_PAYLOAD_SIZE: u32 = 32 * 1024 * 1024;
 
@@ -30,55 +31,32 @@ const MAX_PAYLOAD_SIZE: u32 = 32 * 1024 * 1024;
 /// assert!(raw.payload.is_empty());
 /// ```
 pub fn read_message<R: Read>(reader: &mut R) -> io::Result<RawMessage> {
-    use sha2::{Digest, Sha256};
-
     let mut header = [0u8; 24];
     reader.read_exact(&mut header)?;
-
-    let magic: [u8; 4] = header[0..4]
-        .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid magic field"))?;
-
-    let cmd = header[4..16]
-        .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid cmd field"))?;
-
-    let command = Command::from(&cmd);
-
-    let length = u32::from_le_bytes(
-        header[16..20]
-            .try_into()
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length field"))?,
-    );
-
-    if magic != MAIN_NET_MAGIC.to_le_bytes() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unexpected network magic",
-        ));
-    }
-
-    if length > MAX_PAYLOAD_SIZE {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "payload exceeds Bitcoin message size limit",
-        ));
-    }
-
-    let checksum: [u8; 4] = header[20..24]
-        .try_into()
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid checksum field"))?;
-
+    let (magic, command, length, checksum) = decode_header(&header)?;
     let mut payload = vec![0u8; length as usize];
     reader.read_exact(&mut payload)?;
+    validate_checksum(checksum, &payload)?;
 
-    let expected_checksum = Sha256::digest(Sha256::digest(&payload));
-    if checksum != expected_checksum[..4] {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "invalid payload checksum",
-        ));
-    }
+    Ok(RawMessage {
+        magic,
+        command,
+        payload,
+        checksum,
+    })
+}
+
+/// Async variant of [`read_message`] for cancellable Tokio I/O paths.
+pub async fn read_message_async<R>(reader: &mut R) -> io::Result<RawMessage>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut header = [0u8; 24];
+    reader.read_exact(&mut header).await?;
+    let (magic, command, length, checksum) = decode_header(&header)?;
+    let mut payload = vec![0u8; length as usize];
+    reader.read_exact(&mut payload).await?;
+    validate_checksum(checksum, &payload)?;
 
     Ok(RawMessage {
         magic,
@@ -132,21 +110,88 @@ pub fn read_message<R: Read>(reader: &mut R) -> io::Result<RawMessage> {
 ///
 /// Returns an error if writing to the underlying stream fails.
 pub fn send_message<W: Write>(writer: &mut W, command: Command, payload: &[u8]) -> io::Result<()> {
-    use byteorder::{LittleEndian, WriteBytesExt};
-    use sha2::{Digest, Sha256};
+    let header = build_header(command, payload);
+    writer.write_all(&header)?;
+    writer.write_all(payload)
+}
 
-    writer.write_u32::<LittleEndian>(MAIN_NET_MAGIC)?;
+/// Async variant of [`send_message`] for cancellable Tokio I/O paths.
+pub async fn send_message_async<W>(
+    writer: &mut W,
+    command: Command,
+    payload: &[u8],
+) -> io::Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    let header = build_header(command, payload);
+    writer.write_all(&header).await?;
+    writer.write_all(payload).await
+}
 
-    writer.write_all(&command.as_bytes())?;
+fn decode_header(header: &[u8; 24]) -> io::Result<([u8; 4], Command, u32, [u8; 4])> {
+    let magic: [u8; 4] = header[0..4]
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid magic field"))?;
 
-    writer.write_u32::<LittleEndian>(payload.len() as u32)?;
+    let cmd = header[4..16]
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid cmd field"))?;
 
-    let checksum = Sha256::digest(Sha256::digest(payload));
-    writer.write_all(&checksum[..4])?;
+    let command = Command::from(&cmd);
 
-    writer.write_all(payload)?;
+    let length = u32::from_le_bytes(
+        header[16..20]
+            .try_into()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid length field"))?,
+    );
+
+    if magic != MAIN_NET_MAGIC.to_le_bytes() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unexpected network magic",
+        ));
+    }
+
+    if length > MAX_PAYLOAD_SIZE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "payload exceeds Bitcoin message size limit",
+        ));
+    }
+
+    let checksum: [u8; 4] = header[20..24]
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid checksum field"))?;
+
+    Ok((magic, command, length, checksum))
+}
+
+fn build_header(command: Command, payload: &[u8]) -> [u8; 24] {
+    let mut header = [0u8; 24];
+    header[0..4].copy_from_slice(&MAIN_NET_MAGIC.to_le_bytes());
+    header[4..16].copy_from_slice(&command.as_bytes());
+    header[16..20].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+    header[20..24].copy_from_slice(&payload_checksum(payload));
+    header
+}
+
+fn validate_checksum(checksum: [u8; 4], payload: &[u8]) -> io::Result<()> {
+    if checksum != payload_checksum(payload) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid payload checksum",
+        ));
+    }
 
     Ok(())
+}
+
+fn payload_checksum(payload: &[u8]) -> [u8; 4] {
+    use sha2::{Digest, Sha256};
+
+    let checksum = Sha256::digest(Sha256::digest(payload));
+    checksum[..4].try_into().expect("checksum prefix length")
 }
 
 #[cfg(test)]

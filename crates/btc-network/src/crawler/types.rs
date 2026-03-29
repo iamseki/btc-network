@@ -25,6 +25,8 @@ pub struct CrawlerConfig {
     pub connect_retry_backoff: Duration,
     /// Per-connection read/write timeout used by session I/O.
     pub io_timeout: Duration,
+    /// Maximum time to wait for worker tasks to drain after shutdown starts.
+    pub shutdown_grace_period: Duration,
     /// Enables extra per-node logs.
     pub verbose: bool,
 }
@@ -41,6 +43,7 @@ impl Default for CrawlerConfig {
             connect_max_attempts: 3,
             connect_retry_backoff: Duration::from_millis(250),
             io_timeout: Duration::from_secs(10),
+            shutdown_grace_period: Duration::from_secs(15),
             verbose: false,
         }
     }
