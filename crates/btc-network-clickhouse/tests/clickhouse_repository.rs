@@ -152,6 +152,7 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
             &run_id,
             CrawlPhase::Crawling,
             base_time + Duration::seconds(4),
+            1,
             None,
         ))
         .await?;
@@ -160,6 +161,7 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
             &run_id,
             CrawlPhase::Draining,
             base_time + Duration::seconds(5),
+            2,
             Some("stop requested".to_string()),
         ))
         .await?;
@@ -198,6 +200,56 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
             },
         ]
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = ClickHouseCrawlerRepository::new(&db.config);
+
+    let run_id = CrawlRunId::new("run-live-tied");
+    let tied_time = Utc::now();
+
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Crawling,
+            tied_time,
+            1,
+            None,
+        ))
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Failed,
+            tied_time,
+            2,
+            Some("checkpoint tie".to_string()),
+        ))
+        .await?;
+
+    let latest = repository
+        .get_run_checkpoint(&run_id)
+        .await?
+        .expect("checkpoint");
+    assert_eq!(latest.phase, CrawlPhase::Failed);
+    assert_eq!(latest.checkpoint_sequence, 2);
+    assert_eq!(latest.stop_reason.as_deref(), Some("checkpoint tie"));
+
+    let runs = repository.list_runs().await?;
+    let run = runs
+        .into_iter()
+        .find(|checkpoint| checkpoint.run_id == run_id)
+        .expect("run summary");
+    assert_eq!(run.phase, CrawlPhase::Failed);
+    assert_eq!(run.checkpoint_sequence, 2);
+    assert_eq!(run.stop_reason.as_deref(), Some("checkpoint tie"));
+    assert_eq!(run.metrics.unique_nodes, 6);
+    assert_eq!(run.metrics.persisted_observation_rows, 8);
 
     Ok(())
 }
@@ -293,12 +345,14 @@ fn sample_checkpoint(
     run_id: &CrawlRunId,
     phase: CrawlPhase,
     checkpointed_at: chrono::DateTime<Utc>,
+    checkpoint_sequence: u64,
     stop_reason: Option<String>,
 ) -> CrawlRunCheckpoint {
     CrawlRunCheckpoint {
         run_id: run_id.clone(),
         phase,
         checkpointed_at,
+        checkpoint_sequence,
         started_at: checkpointed_at - Duration::seconds(10),
         stop_reason,
         failure_reason: None,

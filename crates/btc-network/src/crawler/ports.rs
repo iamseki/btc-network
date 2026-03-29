@@ -194,6 +194,7 @@ mod tests {
             run_id: CrawlRunId::new("run-1"),
             phase: CrawlPhase::Crawling,
             checkpointed_at: Utc::now(),
+            checkpoint_sequence: 1,
             started_at: Utc::now(),
             stop_reason: None,
             failure_reason: None,

@@ -402,6 +402,7 @@ pub struct CrawlRunCheckpoint {
     pub run_id: CrawlRunId,
     pub phase: CrawlPhase,
     pub checkpointed_at: DateTime<Utc>,
+    pub checkpoint_sequence: u64,
     pub started_at: DateTime<Utc>,
     pub stop_reason: Option<String>,
     pub failure_reason: Option<String>,

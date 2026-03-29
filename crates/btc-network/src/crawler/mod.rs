@@ -7,7 +7,7 @@ mod worker;
 
 use std::error::Error;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex as StdMutex, OnceLock};
 use std::time::Instant;
 
@@ -115,6 +115,7 @@ impl Crawler {
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stats = Arc::new(CrawlerStats::default());
+        let checkpoint_sequence = Arc::new(AtomicU64::new(0));
         let stop = Arc::new(AtomicBool::new(false));
         let phase = Arc::new(Mutex::new(CrawlPhase::Bootstrap));
 
@@ -137,6 +138,7 @@ impl Crawler {
             CrawlPhase::Bootstrap,
             &state,
             &stats,
+            &checkpoint_sequence,
             started_at_utc,
             None,
             None,
@@ -153,6 +155,7 @@ impl Crawler {
             CrawlPhase::Crawling,
             &state,
             &stats,
+            &checkpoint_sequence,
             started_at_utc,
             None,
             None,
@@ -179,6 +182,7 @@ impl Crawler {
             Arc::clone(&phase),
             Arc::clone(&state),
             Arc::clone(&stats),
+            Arc::clone(&checkpoint_sequence),
             Arc::clone(&stop),
             started_at_utc,
             request.config.lifecycle_tick,
@@ -233,6 +237,7 @@ impl Crawler {
             CrawlPhase::Draining,
             &state,
             &stats,
+            &checkpoint_sequence,
             started_at_utc,
             Some("workers drained".to_string()),
             failure_reason.clone(),
@@ -272,6 +277,7 @@ impl Crawler {
             final_phase,
             &state,
             &stats,
+            &checkpoint_sequence,
             started_at_utc,
             Some("crawl finished".to_string()),
             failure_reason.clone(),
@@ -426,11 +432,13 @@ async fn write_checkpoint(
     phase: CrawlPhase,
     state: &Arc<Mutex<CrawlState>>,
     stats: &Arc<CrawlerStats>,
+    checkpoint_sequence: &Arc<AtomicU64>,
     started_at: DateTime<Utc>,
     stop_reason: Option<String>,
     failure_reason: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut checkpoint = snapshot_checkpoint(run_id, phase, state, stats, started_at).await;
+    let mut checkpoint =
+        snapshot_checkpoint(run_id, phase, state, stats, checkpoint_sequence, started_at).await;
     checkpoint.stop_reason = stop_reason;
     checkpoint.failure_reason = failure_reason;
     repository.insert_run_checkpoint(checkpoint).await?;

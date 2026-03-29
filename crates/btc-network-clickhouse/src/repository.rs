@@ -92,7 +92,7 @@ impl CrawlerRepository for ClickHouseCrawlerRepository {
         Box::pin(async move {
             self.client
                 .query(
-                    "SELECT ?fields FROM ? WHERE run_id = ? ORDER BY checkpointed_at DESC LIMIT 1",
+                    "SELECT ?fields FROM ? WHERE run_id = ? ORDER BY checkpointed_at DESC, checkpoint_sequence DESC LIMIT 1",
                 )
                 .bind(Identifier(CRAWLER_RUN_CHECKPOINTS_TABLE))
                 .bind(run_id.as_str())
@@ -114,6 +114,7 @@ SELECT
     run_id,
     phase,
     latest_checkpointed_at AS checkpointed_at,
+    latest_checkpoint_sequence AS checkpoint_sequence,
     started_at,
     stop_reason,
     failure_reason,
@@ -132,23 +133,24 @@ SELECT
 FROM (
     SELECT
         run_id,
-        argMax(phase, checkpointed_at) AS phase,
+        argMax(phase, tuple(checkpointed_at, checkpoint_sequence)) AS phase,
         max(checkpointed_at) AS latest_checkpointed_at,
-        argMax(started_at, checkpointed_at) AS started_at,
-        argMax(stop_reason, checkpointed_at) AS stop_reason,
-        argMax(failure_reason, checkpointed_at) AS failure_reason,
-        argMax(frontier_size, checkpointed_at) AS frontier_size,
-        argMax(in_flight_work, checkpointed_at) AS in_flight_work,
-        argMax(scheduled_tasks, checkpointed_at) AS scheduled_tasks,
-        argMax(successful_handshakes, checkpointed_at) AS successful_handshakes,
-        argMax(failed_tasks, checkpointed_at) AS failed_tasks,
-        argMax(queued_nodes_total, checkpointed_at) AS queued_nodes_total,
-        argMax(unique_nodes, checkpointed_at) AS unique_nodes,
-        argMax(discovered_node_states, checkpointed_at) AS discovered_node_states,
-        argMax(persisted_observation_rows, checkpointed_at) AS persisted_observation_rows,
-        argMax(writer_backlog, checkpointed_at) AS writer_backlog,
-        argMax(resume_state, checkpointed_at) AS resume_state,
-        argMax(caller, checkpointed_at) AS caller
+        argMax(checkpoint_sequence, tuple(checkpointed_at, checkpoint_sequence)) AS latest_checkpoint_sequence,
+        argMax(started_at, tuple(checkpointed_at, checkpoint_sequence)) AS started_at,
+        argMax(stop_reason, tuple(checkpointed_at, checkpoint_sequence)) AS stop_reason,
+        argMax(failure_reason, tuple(checkpointed_at, checkpoint_sequence)) AS failure_reason,
+        argMax(frontier_size, tuple(checkpointed_at, checkpoint_sequence)) AS frontier_size,
+        argMax(in_flight_work, tuple(checkpointed_at, checkpoint_sequence)) AS in_flight_work,
+        argMax(scheduled_tasks, tuple(checkpointed_at, checkpoint_sequence)) AS scheduled_tasks,
+        argMax(successful_handshakes, tuple(checkpointed_at, checkpoint_sequence)) AS successful_handshakes,
+        argMax(failed_tasks, tuple(checkpointed_at, checkpoint_sequence)) AS failed_tasks,
+        argMax(queued_nodes_total, tuple(checkpointed_at, checkpoint_sequence)) AS queued_nodes_total,
+        argMax(unique_nodes, tuple(checkpointed_at, checkpoint_sequence)) AS unique_nodes,
+        argMax(discovered_node_states, tuple(checkpointed_at, checkpoint_sequence)) AS discovered_node_states,
+        argMax(persisted_observation_rows, tuple(checkpointed_at, checkpoint_sequence)) AS persisted_observation_rows,
+        argMax(writer_backlog, tuple(checkpointed_at, checkpoint_sequence)) AS writer_backlog,
+        argMax(resume_state, tuple(checkpointed_at, checkpoint_sequence)) AS resume_state,
+        argMax(caller, tuple(checkpointed_at, checkpoint_sequence)) AS caller
     FROM ?
     GROUP BY run_id
 )
@@ -254,6 +256,7 @@ mod tests {
             run_id: CrawlRunId::new("run-1"),
             phase: CrawlPhase::Crawling,
             checkpointed_at: Utc::now(),
+            checkpoint_sequence: 1,
             started_at: Utc::now(),
             stop_reason: None,
             failure_reason: None,
@@ -366,7 +369,8 @@ mod tests {
         repository.list_runs().await.expect("list runs");
 
         let query = recording.query().await;
-        assert!(query.contains("argMax(phase, checkpointed_at)"));
+        assert!(query.contains("argMax(phase, tuple(checkpointed_at, checkpoint_sequence))"));
+        assert!(query.contains("latest_checkpoint_sequence AS checkpoint_sequence"));
         assert!(query.contains("GROUP BY run_id"));
         assert!(query.contains("crawler_run_checkpoints"));
     }

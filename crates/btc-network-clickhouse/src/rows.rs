@@ -38,6 +38,7 @@ pub(crate) struct RunCheckpointRow {
     pub phase: String,
     #[serde(with = "clickhouse::serde::chrono::datetime")]
     pub checkpointed_at: DateTime<Utc>,
+    pub checkpoint_sequence: u64,
     #[serde(with = "clickhouse::serde::chrono::datetime")]
     pub started_at: DateTime<Utc>,
     pub stop_reason: Option<String>,
@@ -105,6 +106,7 @@ pub(crate) fn from_checkpoint(checkpoint: CrawlRunCheckpoint) -> RunCheckpointRo
         run_id: checkpoint.run_id.as_str().to_string(),
         phase: phase_to_str(checkpoint.phase).to_string(),
         checkpointed_at: checkpoint.checkpointed_at,
+        checkpoint_sequence: checkpoint.checkpoint_sequence,
         started_at: checkpoint.started_at,
         stop_reason: checkpoint.stop_reason,
         failure_reason: checkpoint.failure_reason,
@@ -128,6 +130,7 @@ pub(crate) fn to_checkpoint(row: RunCheckpointRow) -> CrawlRunCheckpoint {
         run_id: CrawlRunId::new(row.run_id),
         phase: phase_from_str(&row.phase),
         checkpointed_at: row.checkpointed_at,
+        checkpoint_sequence: row.checkpoint_sequence,
         started_at: row.started_at,
         stop_reason: row.stop_reason,
         failure_reason: row.failure_reason,
