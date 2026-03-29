@@ -19,6 +19,10 @@ pub struct CrawlerConfig {
     pub lifecycle_tick: Duration,
     /// TCP connect timeout used per node.
     pub connect_timeout: Duration,
+    /// Maximum number of TCP connect attempts per node, including the first try.
+    pub connect_max_attempts: usize,
+    /// Base exponential backoff between failed TCP connect attempts.
+    pub connect_retry_backoff: Duration,
     /// Per-connection read/write timeout used by session I/O.
     pub io_timeout: Duration,
     /// Enables extra per-node logs.
@@ -34,6 +38,8 @@ impl Default for CrawlerConfig {
             idle_timeout: Duration::from_secs(5 * 60),
             lifecycle_tick: Duration::from_secs(1),
             connect_timeout: Duration::from_secs(30),
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::from_millis(250),
             io_timeout: Duration::from_secs(10),
             verbose: false,
         }

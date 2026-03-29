@@ -44,6 +44,12 @@ struct CrawlArgs {
     #[arg(long, default_value_t = 30)]
     connect_timeout_secs: u64,
 
+    #[arg(long, default_value_t = 3)]
+    connect_max_attempts: usize,
+
+    #[arg(long, default_value_t = 250)]
+    connect_retry_backoff_ms: u64,
+
     #[arg(long, default_value_t = 10)]
     io_timeout_secs: u64,
 
@@ -146,6 +152,8 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
         max_runtime: Duration::from_secs(args.max_runtime_minutes * 60),
         idle_timeout: Duration::from_secs(args.idle_timeout_minutes * 60),
         connect_timeout: Duration::from_secs(args.connect_timeout_secs),
+        connect_max_attempts: args.connect_max_attempts,
+        connect_retry_backoff: Duration::from_millis(args.connect_retry_backoff_ms),
         io_timeout: Duration::from_secs(args.io_timeout_secs),
         verbose: args.verbose,
         ..CrawlerConfig::default()
@@ -199,6 +207,8 @@ mod tests {
             max_runtime_minutes: 60,
             idle_timeout_minutes: 5,
             connect_timeout_secs: 30,
+            connect_max_attempts: 4,
+            connect_retry_backoff_ms: 500,
             io_timeout_secs: 10,
             verbose: false,
             clickhouse: ClickHouseArgs {
@@ -216,6 +226,8 @@ mod tests {
         let config = build_crawler_config(&args);
 
         assert_eq!(config.max_tracked_nodes, 250_000);
+        assert_eq!(config.connect_max_attempts, 4);
+        assert_eq!(config.connect_retry_backoff, Duration::from_millis(500));
     }
 
     #[test]

@@ -1,8 +1,10 @@
 use crate::session::Session;
 use crate::wire;
 use crate::wire::message::{AddrV2Addr, VersionMessage};
+use std::io;
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
 use super::domain::{CrawlEndpoint, CrawlNetwork, FailureClassification};
@@ -31,15 +33,7 @@ pub(crate) fn process_node(endpoint: CrawlEndpoint, config: CrawlerConfig) -> No
         })
     })?;
     let connect_started = Instant::now();
-    let stream =
-        TcpStream::connect_timeout(&connect_addr, config.connect_timeout).map_err(|e| {
-            Box::new(NodeVisitFailure {
-                node: endpoint.clone(),
-                latency: total_started.elapsed(),
-                classification: FailureClassification::Connect,
-                message: format!("connect {connect_addr}: {e}"),
-            })
-        })?;
+    let stream = connect_with_retries(&endpoint, connect_addr, config, total_started)?;
     let connect_elapsed = connect_started.elapsed();
     stream
         .set_read_timeout(Some(config.io_timeout))
@@ -116,6 +110,90 @@ pub(crate) fn process_node(endpoint: CrawlEndpoint, config: CrawlerConfig) -> No
     }
 
     Ok(visit)
+}
+
+fn connect_with_retries(
+    endpoint: &CrawlEndpoint,
+    connect_addr: SocketAddr,
+    config: CrawlerConfig,
+    total_started: Instant,
+) -> Result<TcpStream, Box<NodeVisitFailure>> {
+    connect_with_retries_using(
+        endpoint,
+        connect_addr,
+        config,
+        total_started,
+        || TcpStream::connect_timeout(&connect_addr, config.connect_timeout),
+        thread::sleep,
+    )
+}
+
+fn connect_with_retries_using<T, Connect, Sleep>(
+    endpoint: &CrawlEndpoint,
+    connect_target: impl ToString,
+    config: CrawlerConfig,
+    total_started: Instant,
+    mut connect: Connect,
+    mut sleep: Sleep,
+) -> Result<T, Box<NodeVisitFailure>>
+where
+    Connect: FnMut() -> io::Result<T>,
+    Sleep: FnMut(Duration),
+{
+    let connect_target = connect_target.to_string();
+    let max_attempts = config.connect_max_attempts.max(1);
+    let mut last_error = None;
+
+    for attempt in 1..=max_attempts {
+        match connect() {
+            Ok(stream) => return Ok(stream),
+            Err(error) => {
+                last_error = Some(error);
+
+                if attempt == max_attempts {
+                    break;
+                }
+
+                let backoff = connect_retry_delay(config.connect_retry_backoff, attempt);
+                if config.verbose {
+                    info!(
+                        node = %endpoint.canonical,
+                        attempt,
+                        max_attempts,
+                        backoff_ms = backoff.as_millis(),
+                        "[crawler] connect attempt failed; retrying"
+                    );
+                }
+                if !backoff.is_zero() {
+                    sleep(backoff);
+                }
+            }
+        }
+    }
+
+    let error = last_error.expect("connect retry loop should capture the last error");
+    let message = if max_attempts == 1 {
+        format!("connect {connect_target}: {error}")
+    } else {
+        format!("connect {connect_target} failed after {max_attempts} attempts: {error}")
+    };
+
+    Err(Box::new(NodeVisitFailure {
+        node: endpoint.clone(),
+        latency: total_started.elapsed(),
+        classification: FailureClassification::Connect,
+        message,
+    }))
+}
+
+fn connect_retry_delay(base: Duration, retry_number: usize) -> Duration {
+    if base.is_zero() {
+        return Duration::ZERO;
+    }
+
+    let shift = retry_number.saturating_sub(1).min(10);
+    let factor = 1u32 << shift;
+    base.checked_mul(factor).unwrap_or(Duration::MAX)
 }
 
 pub(crate) trait NodeClient {
@@ -269,6 +347,7 @@ mod tests {
     use super::*;
     use crate::wire::message::{NetAddr, Services};
     use std::net::{Ipv4Addr, SocketAddrV4};
+    use std::time::Duration;
 
     struct MockClient {
         calls: Vec<&'static str>,
@@ -343,6 +422,78 @@ mod tests {
         assert_eq!(err.message, "handshake failed");
         assert_eq!(err.classification, FailureClassification::Handshake);
         assert_eq!(client.calls, vec!["handshake"]);
+    }
+
+    #[test]
+    fn connect_with_retries_retries_before_succeeding() {
+        let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(1, 1, 1, 7),
+            8333,
+        )));
+        let config = CrawlerConfig {
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::from_millis(10),
+            ..CrawlerConfig::default()
+        };
+        let mut attempts = 0;
+        let mut backoffs = Vec::new();
+
+        let result = connect_with_retries_using(
+            &node,
+            "1.1.1.7:8333",
+            config,
+            Instant::now(),
+            || {
+                attempts += 1;
+                if attempts < 3 {
+                    Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))
+                } else {
+                    Ok("connected")
+                }
+            },
+            |delay| backoffs.push(delay),
+        )
+        .expect("third attempt should succeed");
+
+        assert_eq!(result, "connected");
+        assert_eq!(attempts, 3);
+        assert_eq!(
+            backoffs,
+            vec![Duration::from_millis(10), Duration::from_millis(20)]
+        );
+    }
+
+    #[test]
+    fn connect_with_retries_returns_connect_failure_after_max_attempts() {
+        let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(1, 1, 1, 8),
+            8333,
+        )));
+        let config = CrawlerConfig {
+            connect_max_attempts: 2,
+            connect_retry_backoff: Duration::from_millis(5),
+            ..CrawlerConfig::default()
+        };
+        let mut attempts = 0;
+        let mut backoffs = Vec::new();
+
+        let err = connect_with_retries_using(
+            &node,
+            "1.1.1.8:8333",
+            config,
+            Instant::now(),
+            || {
+                attempts += 1;
+                Err::<(), _>(io::Error::new(io::ErrorKind::TimedOut, "timed out"))
+            },
+            |delay| backoffs.push(delay),
+        )
+        .expect_err("connect should fail after max attempts");
+
+        assert_eq!(attempts, 2);
+        assert_eq!(backoffs, vec![Duration::from_millis(5)]);
+        assert_eq!(err.classification, FailureClassification::Connect);
+        assert!(err.message.contains("failed after 2 attempts"));
     }
 
     #[test]

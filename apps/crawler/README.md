@@ -156,6 +156,8 @@ Optional crawler tuning overrides:
 - `--max-runtime-minutes`
 - `--idle-timeout-minutes`
 - `--connect-timeout-secs`
+- `--connect-max-attempts`
+- `--connect-retry-backoff-ms`
 - `--io-timeout-secs`
 
 The crawler will still run without MMDB files, but enrichment will be unavailable and ASN/country data will not be persisted.
