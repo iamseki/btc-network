@@ -11,7 +11,7 @@ The preferred local development path for the crawler uses:
 1. Run `make crawler-mmdb-update`.
 2. Run `make crawler-dev-up`.
 3. Run `make crawler-migrate`.
-4. Run `make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"`.
+4. Run `make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb --max-tracked-nodes 500000 --connect-max-attempts 10 --connect-retry-backoff-ms 250 --connect-timeout-secs 30 --io-timeout-secs 20"`.
 
 ## Local Paths
 
@@ -272,6 +272,39 @@ WHERE crawl_run_id = (SELECT run_id FROM latest_run)
 GROUP BY failure_classification
 ORDER BY failures DESC, failure_classification ASC;
 ```
+
+Compare the latest checkpoint summary across runs:
+
+```sql
+SELECT
+    run_id,
+    phase,
+    scheduled_tasks,
+    unique_nodes,
+    frontier_size,
+    in_flight_work,
+    persisted_rows,
+    unique_nodes - scheduled_tasks AS unscheduled_gap,
+    round(100.0 * scheduled_tasks / nullIf(unique_nodes, 0), 2) AS scheduled_pct
+FROM (
+    SELECT
+        run_id,
+        argMax(phase, tuple(checkpointed_at, checkpoint_sequence)) AS phase,
+        argMax(scheduled_tasks, tuple(checkpointed_at, checkpoint_sequence)) AS scheduled_tasks,
+        argMax(unique_nodes, tuple(checkpointed_at, checkpoint_sequence)) AS unique_nodes,
+        argMax(frontier_size, tuple(checkpointed_at, checkpoint_sequence)) AS frontier_size,
+        argMax(in_flight_work, tuple(checkpointed_at, checkpoint_sequence)) AS in_flight_work,
+        argMax(persisted_observation_rows, tuple(checkpointed_at, checkpoint_sequence)) AS persisted_rows,
+        max(checkpointed_at) AS latest_checkpointed_at
+    FROM crawler_run_checkpoints
+    GROUP BY run_id
+)
+ORDER BY latest_checkpointed_at DESC;
+```
+
+`unscheduled_gap` is the difference between nodes that were discovered and tracked (`unique_nodes`) and nodes that workers actually attempted (`scheduled_tasks`).
+This gap is normal when a run stops before draining the full frontier, for example because it hit `max_runtime`, hit `idle_timeout`, or ended with queued work still remaining.
+It can also grow when `--max-tracked-nodes` is large enough to admit more discoveries than the current runtime and concurrency settings can process in one run.
 
 Verified versus failed observations by network type for the latest run:
 
