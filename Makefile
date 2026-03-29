@@ -6,19 +6,31 @@ LOCAL_CARGO_HOME := $(CURDIR)/.cargo-home
 LOCAL_ADVISORY_DB := $(LOCAL_CARGO_HOME)/advisory-db
 LOCAL_DENY_ADVISORY_DB := $(firstword $(wildcard $(LOCAL_CARGO_HOME)/advisory-dbs/*))
 LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
+CRAWLER_CLICKHOUSE_LOCAL_URL := http://localhost:8123
+CRAWLER_CLICKHOUSE_LOCAL_DATABASE := btc_network
+CRAWLER_CLICKHOUSE_LOCAL_USER := btc_network_dev
+CRAWLER_CLICKHOUSE_LOCAL_PASSWORD := btc_network_dev
 
 ## Run the crawler binary
 crawler:
-	@cargo run -p btc-network-crawler -- $(ARGS)
+	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
+	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
+	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
+	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
+	cargo run -p btc-network-crawler -- $(ARGS)
 
 ## Apply ClickHouse migrations for the crawler persistence schema
 crawler-migrate:
-	@cargo run -p btc-network-crawler -- migrate-clickhouse $(ARGS)
+	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
+	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
+	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
+	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
+	cargo run -p btc-network-crawler -- migrate-clickhouse $(ARGS)
 
 ## Start local ClickHouse for crawler development
 crawler-dev-up:
 	@mkdir -p .dev-data/clickhouse
-	@docker compose -f apps/crawler/docker-compose.yml up -d
+	@docker compose -f apps/crawler/docker-compose.yml up -d --wait
 
 ## Download or refresh local MMDB files for crawler development
 crawler-mmdb-update:
@@ -27,6 +39,12 @@ crawler-mmdb-update:
 ## Stop local ClickHouse for crawler development
 crawler-dev-down:
 	@docker compose -f apps/crawler/docker-compose.yml down
+
+## Reset local ClickHouse data for crawler development
+crawler-dev-reset:
+	@docker compose -f apps/crawler/docker-compose.yml down
+	@mkdir -p .dev-data/clickhouse
+	@docker run --rm -v "$(CURDIR)/.dev-data/clickhouse:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
 
 ## Tail local ClickHouse logs for crawler development
 crawler-dev-logs:
@@ -146,10 +164,12 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  make crawler ARGS=\"--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb\""
-	@echo "  make crawler-migrate ARGS=\"--clickhouse-url http://localhost:8123 --clickhouse-database btc_network\""
+	@echo "  make crawler-migrate"
+	@echo "    uses local dev ClickHouse defaults: url=$(CRAWLER_CLICKHOUSE_LOCAL_URL) db=$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE) user=$(CRAWLER_CLICKHOUSE_LOCAL_USER)"
 	@echo "  make crawler-dev-up"
 	@echo "  make crawler-mmdb-update"
 	@echo "  make crawler-dev-down"
+	@echo "  make crawler-dev-reset"
 	@echo "  make crawler-dev-logs"
 	@echo "  make crawler-debug"
 	@echo "    example: make crawler-debug TIMEOUT_MINUTES=5 MAX_CONCURRENCY=1000 IDLE_TIMEOUT_MINUTES=5 OUT=artifacts/crawler-timing-run-1"

@@ -63,6 +63,13 @@ make crawler-dev-up
 ```
 
 This starts the local ClickHouse service defined in [`docker-compose.yml`](./docker-compose.yml) and exposes it on `http://localhost:8123`.
+The command waits for the container healthcheck before it returns.
+
+The local development container is configured with these credentials:
+
+- database: `btc_network`
+- user: `btc_network_dev`
+- password: `btc_network_dev`
 
 To stop it:
 
@@ -86,15 +93,28 @@ From the repository root:
 make crawler-migrate
 ```
 
-That uses the crawler app's default local ClickHouse settings:
+That uses the preferred local ClickHouse development settings automatically:
 
 - URL: `http://localhost:8123`
 - database: `btc_network`
+- user: `btc_network_dev`
+- password: `btc_network_dev`
+
+These are local development defaults provided by the repository Make targets.
+The crawler binary itself still only defaults the URL and database; it does not hardcode a global username or password.
 
 If you need different settings, pass them through `ARGS`:
 
 ```bash
-make crawler-migrate ARGS="--clickhouse-url http://localhost:8123 --clickhouse-database btc_network"
+make crawler-migrate ARGS="--clickhouse-user another_user --clickhouse-password another_password"
+```
+
+If you already initialized `.dev-data/clickhouse/` with older local settings and keep seeing authentication failures, reset the local dev data once and start again:
+
+```bash
+make crawler-dev-reset
+make crawler-dev-up
+make crawler-migrate
 ```
 
 ## Run The Crawler
@@ -104,6 +124,8 @@ With local MMDB files in place:
 ```bash
 make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"
 ```
+
+`make crawler` also injects the same local ClickHouse development defaults automatically, so it matches `make crawler-dev-up` and `make crawler-migrate` out of the box.
 
 You can also provide the same paths through environment variables:
 
@@ -121,6 +143,66 @@ Optional ClickHouse overrides:
 - `--clickhouse-password`
 
 The crawler will still run without MMDB files, but enrichment will be unavailable and ASN/country data will not be persisted.
+
+## Inspect Data
+
+The quickest built-in option is the native `clickhouse-client` shell.
+
+If you have it installed locally, connect to the local dev instance with:
+
+```bash
+clickhouse-client --host localhost --port 9000 --database btc_network --user btc_network_dev --password btc_network_dev
+```
+
+Useful first queries:
+
+```sql
+SELECT phase, checkpointed_at, scheduled_tasks, successful_handshakes, failed_tasks
+FROM crawler_run_checkpoints
+ORDER BY checkpointed_at DESC
+LIMIT 10;
+```
+
+```sql
+SELECT observed_at, endpoint, network_type, handshake_status, enrichment_status, asn, country
+FROM node_observations
+ORDER BY observed_at DESC
+LIMIT 20;
+```
+
+```sql
+SELECT asn, asn_organization, count() AS observations
+FROM node_observations
+WHERE asn IS NOT NULL
+GROUP BY asn, asn_organization
+ORDER BY observations DESC
+LIMIT 20;
+```
+
+If you prefer HTTP instead of the native shell:
+
+```bash
+curl 'http://localhost:8123/?database=btc_network&user=btc_network_dev&password=btc_network_dev' \
+  --data-binary 'SELECT count() FROM node_observations'
+```
+
+## ClickHouse Clients
+
+Good local options for this project:
+
+- `clickhouse-client`
+  Best default if you want the most direct and lowest-friction local experience.
+
+- `DBeaver`
+  Good general-purpose GUI and officially listed by ClickHouse as a SQL client integration.
+
+- `DataGrip`
+  Good if you already live in JetBrains tools and want a polished SQL IDE.
+
+For this repository, I recommend:
+
+1. use `clickhouse-client` for quick local verification
+2. use `DBeaver` or `DataGrip` if you want a GUI for browsing tables and saving queries
 
 ## Typical Local Flow
 

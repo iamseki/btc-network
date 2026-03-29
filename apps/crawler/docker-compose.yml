@@ -3,10 +3,15 @@ services:
     image: clickhouse/clickhouse-server:25.3
     container_name: btc-network-crawler-clickhouse
     restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: btc_network
+      CLICKHOUSE_USER: btc_network_dev
+      CLICKHOUSE_PASSWORD: btc_network_dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
     ports:
       - "8123:8123"
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      test: ["CMD", "clickhouse-client", "--user", "btc_network_dev", "--password", "btc_network_dev", "--query", "SELECT 1"]
       interval: 5s
       timeout: 5s
       retries: 12
