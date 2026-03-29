@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use super::domain::{CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics};
 use super::ports::{CrawlerRepository, CrawlerRepositoryError};
-use super::types::{CrawlState, CrawlerStats};
+use super::types::{CrawlResumeState, CrawlState, CrawlerStats};
 
 const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -27,11 +27,11 @@ pub(crate) struct CheckpointEmitterContext {
 pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
     stop: Arc<AtomicBool>,
+    started_at: Instant,
     max_runtime: Duration,
     idle_timeout: Duration,
     tick_every: Duration,
 ) {
-    let started_at = Instant::now();
     let mut ticker = tokio::time::interval(tick_every);
 
     loop {
@@ -136,9 +136,19 @@ pub(crate) async fn snapshot_checkpoint(
             persisted_observation_rows: stats.persisted_rows.load(Ordering::Relaxed),
             writer_backlog: stats.writer_backlog.load(Ordering::Relaxed),
         },
-        resume_state: None,
+        resume_state: Some(serialize_resume_state(&guard)),
         caller: None,
     }
+}
+
+pub(crate) fn serialize_resume_state(state: &CrawlState) -> String {
+    serde_json::to_string(&state.to_resume_state()).expect("crawler resume state should serialize")
+}
+
+pub(crate) fn deserialize_resume_state(
+    resume_state: &str,
+) -> Result<CrawlResumeState, serde_json::Error> {
+    serde_json::from_str(resume_state)
 }
 
 fn next_checkpoint_sequence(checkpoint_sequence: &AtomicU64) -> u64 {
@@ -193,6 +203,7 @@ mod tests {
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Instant::now(),
             Duration::from_millis(20),
             Duration::from_secs(10),
             Duration::from_millis(5),
@@ -214,6 +225,7 @@ mod tests {
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Instant::now(),
             Duration::from_secs(10),
             Duration::from_millis(20),
             Duration::from_millis(5),
@@ -232,6 +244,7 @@ mod tests {
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Instant::now(),
             Duration::from_secs(10),
             Duration::from_secs(10),
             Duration::from_millis(5),
@@ -239,6 +252,24 @@ mod tests {
         .await;
 
         assert!(before.elapsed() < Duration::from_millis(100));
+        assert!(stop.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn lifecycle_uses_original_started_at_for_max_runtime() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+
+        run_lifecycle(
+            Arc::clone(&state),
+            Arc::clone(&stop),
+            Instant::now() - Duration::from_millis(50),
+            Duration::from_millis(20),
+            Duration::from_secs(10),
+            Duration::from_millis(5),
+        )
+        .await;
+
         assert!(stop.load(Ordering::Relaxed));
     }
 
@@ -277,6 +308,16 @@ mod tests {
         assert_eq!(checkpoint.metrics.persisted_observation_rows, 3);
         assert_eq!(checkpoint.metrics.writer_backlog, 4);
         assert_eq!(checkpoint.checkpoint_sequence, 1);
+        let resume_state = deserialize_resume_state(
+            checkpoint
+                .resume_state
+                .as_deref()
+                .expect("resume state should be present"),
+        )
+        .expect("resume state should deserialize");
+        assert_eq!(resume_state.seen_nodes.len(), 1);
+        assert_eq!(resume_state.pending_nodes.len(), 1);
+        assert_eq!(resume_state.in_flight_nodes.len(), 0);
     }
 
     #[tokio::test]

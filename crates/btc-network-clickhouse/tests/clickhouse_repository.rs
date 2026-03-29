@@ -1,18 +1,27 @@
 use std::error::Error;
+use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{env, fs};
 
 use ::clickhouse::Row;
 use btc_network::crawler::{
     BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
     CrawlRunId, CrawlRunMetrics, CrawlerRepository, HandshakeStatus, IpEnrichment,
-    ObservationConfidence, ObservationId, PersistedNodeObservation, RawNodeObservation,
+    IpEnrichmentProvider, ObservationConfidence, ObservationId, PersistedNodeObservation,
+    RawNodeObservation,
 };
 use btc_network_clickhouse::{
     ClickHouseConnectionConfig, ClickHouseCrawlerRepository, ClickHouseMigrationRunner,
 };
+use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use chrono::{Duration, Utc};
 use serde::Deserialize;
+use serde::Serialize;
+use maxminddb_writer::paths::IpAddrWithMask;
+use maxminddb_writer::{Database, metadata};
 use testcontainers_modules::{
     clickhouse,
     testcontainers::{ContainerAsync, ImageExt, runners::AsyncRunner},
@@ -61,6 +70,90 @@ impl TestDatabase {
 #[clickhouse(crate = "::clickhouse")]
 struct TableNameRow {
     name: String,
+}
+
+#[derive(Debug, Row, Deserialize)]
+#[clickhouse(crate = "::clickhouse")]
+struct PersistedObservationRow {
+    endpoint: String,
+    enrichment_status: String,
+    asn: Option<u32>,
+    country: Option<String>,
+    prefix: Option<String>,
+}
+
+#[derive(Serialize)]
+struct AsnFixture<'a> {
+    autonomous_system_number: u32,
+    autonomous_system_organization: &'a str,
+}
+
+#[derive(Serialize)]
+struct CountryCodeFixture<'a> {
+    country_code: &'a str,
+}
+
+struct TestFixtureDir {
+    root: PathBuf,
+}
+
+impl TestFixtureDir {
+    fn new() -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+
+        let root = env::temp_dir().join(format!(
+            "btc-network-clickhouse-tests-{}-{}",
+            std::process::id(),
+            NEXT_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).expect("create temp dir");
+
+        Self { root }
+    }
+
+    fn write_asn_db(&self, file_name: &str, entries: &[(&str, AsnFixture<'_>)]) -> PathBuf {
+        let mut db = Database::default();
+        db.metadata.ip_version = metadata::IpVersion::V4;
+        db.metadata.database_type = "GeoLite2-ASN".to_string();
+
+        for (network, value) in entries {
+            let data = db.insert_value(value).expect("insert ASN fixture");
+            db.insert_node(network.parse::<IpAddrWithMask>().expect("CIDR"), data);
+        }
+
+        self.write_db(file_name, &db)
+    }
+
+    fn write_country_code_db(
+        &self,
+        file_name: &str,
+        database_type: &str,
+        entries: &[(&str, CountryCodeFixture<'_>)],
+    ) -> PathBuf {
+        let mut db = Database::default();
+        db.metadata.ip_version = metadata::IpVersion::V4;
+        db.metadata.database_type = database_type.to_string();
+
+        for (network, value) in entries {
+            let data = db.insert_value(value).expect("insert country fixture");
+            db.insert_node(network.parse::<IpAddrWithMask>().expect("CIDR"), data);
+        }
+
+        self.write_db(file_name, &db)
+    }
+
+    fn write_db(&self, file_name: &str, db: &Database) -> PathBuf {
+        let path = self.root.join(file_name);
+        let file = File::create(&path).expect("create mmdb fixture");
+        db.write_to(file).expect("write mmdb fixture");
+        path
+    }
+}
+
+impl Drop for TestFixtureDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
 }
 
 #[tokio::test]
@@ -178,11 +271,19 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
         .expect("checkpoint");
     assert_eq!(latest.phase, CrawlPhase::Draining);
     assert_eq!(latest.stop_reason.as_deref(), Some("stop requested"));
+    assert_eq!(
+        latest.resume_state.as_deref(),
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
+    );
 
     let runs = repository.list_runs().await?;
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].run_id, run_id);
     assert_eq!(runs[0].phase, CrawlPhase::Draining);
+    assert_eq!(
+        runs[0].resume_state.as_deref(),
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
+    );
 
     let mut counts = repository.count_nodes_by_asn().await?;
     counts.sort_by(|left, right| {
@@ -245,6 +346,10 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     assert_eq!(latest.phase, CrawlPhase::Failed);
     assert_eq!(latest.checkpoint_sequence, 2);
     assert_eq!(latest.stop_reason.as_deref(), Some("checkpoint tie"));
+    assert_eq!(
+        latest.resume_state.as_deref(),
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
+    );
 
     let runs = repository.list_runs().await?;
     let run = runs
@@ -254,8 +359,94 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     assert_eq!(run.phase, CrawlPhase::Failed);
     assert_eq!(run.checkpoint_sequence, 2);
     assert_eq!(run.stop_reason.as_deref(), Some("checkpoint tie"));
+    assert_eq!(
+        run.resume_state.as_deref(),
+        Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
+    );
     assert_eq!(run.metrics.unique_nodes, 6);
     assert_eq!(run.metrics.persisted_observation_rows, 8);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicable() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = ClickHouseCrawlerRepository::new(&db.config);
+    let fixture = TestFixtureDir::new();
+    let asn_path = fixture.write_asn_db(
+        "asn.mmdb",
+        &[(
+            "1.1.1.0/24",
+            AsnFixture {
+                autonomous_system_number: 13335,
+                autonomous_system_organization: "Cloudflare, Inc.",
+            },
+        )],
+    );
+    let country_path = fixture.write_country_code_db(
+        "country.mmdb",
+        "country ipvAll",
+        &[("1.1.1.0/24", CountryCodeFixture { country_code: "AU" })],
+    );
+    let provider =
+        MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))?;
+
+    let run_id = CrawlRunId::new("run-mmdb-live-1");
+    let observed_at = Utc::now();
+    let public_endpoint = CrawlEndpoint::new(
+        "1.1.1.7",
+        8333,
+        CrawlNetwork::Ipv4,
+        Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7))),
+    );
+    let private_endpoint = CrawlEndpoint::new(
+        "10.0.0.7",
+        8333,
+        CrawlNetwork::Ipv4,
+        Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 7))),
+    );
+
+    repository
+        .insert_observations_stream(vec![
+            sample_verified_observation_for_endpoint(
+                &run_id,
+                &public_endpoint,
+                "observation-mmdb-public",
+                observed_at,
+                provider.enrich(&public_endpoint),
+            ),
+            sample_verified_observation_for_endpoint(
+                &run_id,
+                &private_endpoint,
+                "observation-mmdb-private",
+                observed_at + Duration::seconds(1),
+                provider.enrich(&private_endpoint),
+            ),
+        ])
+        .await?;
+
+    let rows = db
+        .config
+        .client()
+        .query("SELECT ?fields FROM node_observations ORDER BY endpoint ASC")
+        .fetch_all::<PersistedObservationRow>()
+        .await?;
+
+    assert_eq!(rows.len(), 2);
+
+    assert_eq!(rows[0].endpoint, public_endpoint.canonical);
+    assert_eq!(rows[0].enrichment_status, "matched");
+    assert_eq!(rows[0].asn, Some(13335));
+    assert_eq!(rows[0].country.as_deref(), Some("AU"));
+    assert_eq!(rows[0].prefix.as_deref(), Some("1.1.1.0/24"));
+
+    assert_eq!(rows[1].endpoint, private_endpoint.canonical);
+    assert_eq!(rows[1].enrichment_status, "not_applicable");
+    assert_eq!(rows[1].asn, None);
+    assert_eq!(rows[1].country, None);
+    assert_eq!(rows[1].prefix, None);
 
     Ok(())
 }
@@ -306,6 +497,35 @@ fn sample_verified_observation(
             country.map(ToString::to_string),
             asn.map(|_| format!("{host}/24")),
         ),
+    )
+}
+
+fn sample_verified_observation_for_endpoint(
+    run_id: &CrawlRunId,
+    endpoint: &CrawlEndpoint,
+    observation_id: &str,
+    observed_at: chrono::DateTime<Utc>,
+    enrichment: IpEnrichment,
+) -> PersistedNodeObservation {
+    RawNodeObservation {
+        observed_at,
+        crawl_run_id: run_id.clone(),
+        endpoint: endpoint.clone(),
+        handshake_status: HandshakeStatus::Succeeded,
+        confidence: ObservationConfidence::Verified,
+        protocol_version: Some(70016),
+        services: Some(1),
+        user_agent: Some("/Satoshi:27.0.0/".to_string()),
+        start_height: Some(900_000),
+        relay: Some(true),
+        discovered_count: 8,
+        latency: Some(std::time::Duration::from_millis(125)),
+        failure_classification: None,
+    }
+    .into_persisted(
+        ObservationId::new(observation_id),
+        BatchId::new(format!("batch-{observation_id}")),
+        enrichment,
     )
 }
 
@@ -374,7 +594,10 @@ fn sample_checkpoint(
             persisted_observation_rows: 8,
             writer_backlog: 0,
         },
-        resume_state: Some("{\"frontier\":[]}".to_string()),
+        resume_state: Some(
+            "{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}"
+                .to_string(),
+        ),
         caller: Some("integration-test".to_string()),
     }
 }

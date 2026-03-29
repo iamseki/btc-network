@@ -424,6 +424,8 @@ dependencies = [
  "chrono",
  "hex",
  "rand 0.8.5",
+ "serde",
+ "serde_json",
  "sha2",
  "tokio",
  "tracing",
@@ -445,9 +447,11 @@ name = "btc-network-clickhouse"
 version = "0.1.0"
 dependencies = [
  "btc-network",
+ "btc-network-mmdb",
  "chrono",
  "clickhouse",
  "hex",
+ "maxminddb-writer",
  "serde",
  "sha2",
  "testcontainers-modules",

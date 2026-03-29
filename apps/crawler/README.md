@@ -175,6 +175,14 @@ clickhouse-client --host localhost --port 9000 --database btc_network --user btc
 
 Useful first queries:
 
+Quick glossary for the checkpoint metrics used below:
+
+- `unique_nodes`: every endpoint discovered and accepted into tracking during the run
+- `frontier_size`: the current pending frontier, meaning discovered endpoints still waiting to be attempted by a worker
+- `scheduled_tasks`: node attempts already dequeued by workers
+- `successful_handshakes`: currently counts successful node visits, which means the handshake plus peer-discovery path completed for that node
+- `handshake_status` in `node_observations` is a historical field name; `failed` means the node visit failed somewhere, so use `failure_classification` for the exact stage
+
 During an active run, start with the latest checkpoint stream for the most recent `run_id`:
 
 ```sql
