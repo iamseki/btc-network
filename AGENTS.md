@@ -81,6 +81,7 @@ Run the smallest relevant scope while working. Run the broader gate before finis
 - Prefer PR titles in the same style as semantic commit subjects: `<type>(<scope>): <summary>` or `<type>: <summary>`
 - Allowed PR title types are `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, and `build`
 - If an `implementation-plan.md` exists, keep its progress tracker aligned with the active branch or PR when the work spans multiple commits or PRs
+- When work is being done on a dedicated implementation branch, open the corresponding PR or update the existing PR before treating the task as complete unless the user explicitly says not to
 - When opening a PR, use a short body with `## Summary`, `## Changes`, and `## Why` only when the reason is not already obvious from the summary and changes
 - Prefer a repository PR template when present instead of inventing a new structure
 
