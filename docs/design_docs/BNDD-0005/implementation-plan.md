@@ -42,7 +42,7 @@ Update rules:
 | --- | --- | --- | --- | --- |
 | Phase 1: Shared Domain Model | `merged` | `2026-03-28` | `main` | `Domain types and pure observation helpers are merged.` |
 | Phase 2: Shared Traits and Test Doubles | `merged` | `2026-03-28` | `main` | `Repository and enrichment traits plus test doubles are merged.` |
-| Phase 3: Coordinator and Runtime Pipeline Refactor | `reviewing` | `2026-03-28` | `PR #7` | `Coordinator flow, phase checkpoints, writer pipeline, and overlay/routability fixes are implemented and awaiting review.` |
+| Phase 3: Coordinator and Runtime Pipeline Refactor | `merged` | `2026-03-28` | `main` | `Coordinator flow, phase checkpoints, writer pipeline, overlay/routability fixes, and follow-up cancellation/checkpoint hardening are merged.` |
 | Phase 4: ClickHouse Crate and Migrations | `pending` | `2026-03-28` | `` | `` |
 | Phase 5: MMDB Enrichment Adapter | `pending` | `2026-03-28` | `` | `` |
 | Phase 6: App Wiring | `pending` | `2026-03-28` | `` | `` |
@@ -50,8 +50,8 @@ Update rules:
 
 ## Immediate Next Slice
 
-- Finish Phase 3 review and merge
-- Start Phase 4 with the ClickHouse adapter only after the shared runtime pipeline is stable on `main`
+- Start Phase 4 with the ClickHouse adapter and checked-in migrations
+- Keep the shared crate free of ClickHouse details while reusing the merged Phase 3 workflow and repository boundary
 
 ## Explicit Agent Constraints
 
