@@ -79,7 +79,7 @@ struct ClickHouseArgs {
     #[arg(long, env = "BTC_NETWORK_CLICKHOUSE_USER")]
     clickhouse_user: Option<String>,
 
-    #[arg(env = "BTC_NETWORK_CLICKHOUSE_PASSWORD", hide_env_values = true)]
+    #[arg(long, env = "BTC_NETWORK_CLICKHOUSE_PASSWORD", hide_env_values = true)]
     clickhouse_password: Option<String>,
 }
 
@@ -248,6 +248,8 @@ mod tests {
             "migrate-clickhouse",
             "--clickhouse-url",
             "http://clickhouse.internal:8123",
+            "--clickhouse-password",
+            "secret",
         ])
         .expect("cli");
 
@@ -256,6 +258,10 @@ mod tests {
                 assert_eq!(
                     args.clickhouse.clickhouse_url,
                     "http://clickhouse.internal:8123"
+                );
+                assert_eq!(
+                    args.clickhouse.clickhouse_password.as_deref(),
+                    Some("secret")
                 );
             }
             None => panic!("expected migrate-clickhouse command"),
