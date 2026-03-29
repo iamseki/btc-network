@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
@@ -79,7 +80,7 @@ impl From<&str> for BatchId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CrawlPhase {
     Bootstrap,
     Crawling,
@@ -88,7 +89,7 @@ pub enum CrawlPhase {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CrawlNetwork {
     Ipv4,
     Ipv6,
@@ -106,7 +107,7 @@ impl CrawlNetwork {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CrawlEndpoint {
     pub canonical: String,
     pub host: String,

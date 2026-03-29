@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use super::domain::{CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics};
 use super::ports::{CrawlerRepository, CrawlerRepositoryError};
-use super::types::{CrawlState, CrawlerStats};
+use super::types::{CrawlResumeState, CrawlState, CrawlerStats};
 
 const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -136,9 +136,19 @@ pub(crate) async fn snapshot_checkpoint(
             persisted_observation_rows: stats.persisted_rows.load(Ordering::Relaxed),
             writer_backlog: stats.writer_backlog.load(Ordering::Relaxed),
         },
-        resume_state: None,
+        resume_state: Some(serialize_resume_state(&guard)),
         caller: None,
     }
+}
+
+pub(crate) fn serialize_resume_state(state: &CrawlState) -> String {
+    serde_json::to_string(&state.to_resume_state()).expect("crawler resume state should serialize")
+}
+
+pub(crate) fn deserialize_resume_state(
+    resume_state: &str,
+) -> Result<CrawlResumeState, serde_json::Error> {
+    serde_json::from_str(resume_state)
 }
 
 fn next_checkpoint_sequence(checkpoint_sequence: &AtomicU64) -> u64 {
@@ -277,6 +287,15 @@ mod tests {
         assert_eq!(checkpoint.metrics.persisted_observation_rows, 3);
         assert_eq!(checkpoint.metrics.writer_backlog, 4);
         assert_eq!(checkpoint.checkpoint_sequence, 1);
+        let resume_state = deserialize_resume_state(
+            checkpoint
+                .resume_state
+                .as_deref()
+                .expect("resume state should be present"),
+        )
+        .expect("resume state should deserialize");
+        assert_eq!(resume_state.seen_nodes.len(), 1);
+        assert_eq!(resume_state.pending_nodes.len(), 1);
     }
 
     #[tokio::test]
