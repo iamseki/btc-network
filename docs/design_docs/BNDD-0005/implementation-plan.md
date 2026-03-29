@@ -43,15 +43,15 @@ Update rules:
 | Phase 1: Shared Domain Model | `merged` | `2026-03-28` | `main` | `Domain types and pure observation helpers are merged.` |
 | Phase 2: Shared Traits and Test Doubles | `merged` | `2026-03-28` | `main` | `Repository and enrichment traits plus test doubles are merged.` |
 | Phase 3: Coordinator and Runtime Pipeline Refactor | `merged` | `2026-03-28` | `main` | `Coordinator flow, phase checkpoints, writer pipeline, overlay/routability fixes, and follow-up cancellation/checkpoint hardening are merged.` |
-| Phase 4: ClickHouse Crate and Migrations | `pending` | `2026-03-28` | `` | `` |
+| Phase 4: ClickHouse Crate and Migrations | `reviewing` | `2026-03-28` | `feat/BNDD-0005-phase-4-clickhouse` | `ClickHouse adapter crate, migration runner, checked-in SQL migrations, and repository tests are on the Phase 4 branch.` |
 | Phase 5: MMDB Enrichment Adapter | `pending` | `2026-03-28` | `` | `` |
 | Phase 6: App Wiring | `pending` | `2026-03-28` | `` | `` |
 | Phase 7: End-to-End Verification | `pending` | `2026-03-28` | `` | `` |
 
 ## Immediate Next Slice
 
-- Start Phase 4 with the ClickHouse adapter and checked-in migrations
-- Keep the shared crate free of ClickHouse details while reusing the merged Phase 3 workflow and repository boundary
+- Finish review and merge of the ClickHouse adapter crate and checked-in migrations
+- Start Phase 5 with the MMDB enrichment adapter after the storage adapter lands on `main`
 
 ## Explicit Agent Constraints
 

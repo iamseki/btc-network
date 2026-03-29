@@ -1,0 +1,17 @@
+[package]
+name = "btc-network-clickhouse"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+btc-network = { path = "../btc-network" }
+chrono = "0.4.44"
+clickhouse = { version = "0.14.2", features = ["chrono"] }
+hex = "0.4.3"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+clickhouse = { version = "0.14.2", features = ["chrono", "test-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
