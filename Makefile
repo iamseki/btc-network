@@ -9,11 +9,24 @@ LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 
 ## Run the crawler binary
 crawler:
-	@cargo run -p btc-network-crawler
+	@cargo run -p btc-network-crawler -- $(ARGS)
 
 ## Apply ClickHouse migrations for the crawler persistence schema
 crawler-migrate:
 	@cargo run -p btc-network-crawler -- migrate-clickhouse $(ARGS)
+
+## Start local ClickHouse for crawler development
+crawler-dev-up:
+	@mkdir -p .dev-data/clickhouse
+	@docker compose -f apps/crawler/docker-compose.yml up -d
+
+## Stop local ClickHouse for crawler development
+crawler-dev-down:
+	@docker compose -f apps/crawler/docker-compose.yml down
+
+## Tail local ClickHouse logs for crawler development
+crawler-dev-logs:
+	@docker compose -f apps/crawler/docker-compose.yml logs -f clickhouse
 
 ## Run the listener binary
 listener:
@@ -128,8 +141,11 @@ clean:
 help:
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make crawler"
+	@echo "  make crawler ARGS=\"--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb\""
 	@echo "  make crawler-migrate ARGS=\"--clickhouse-url http://localhost:8123 --clickhouse-database btc_network\""
+	@echo "  make crawler-dev-up"
+	@echo "  make crawler-dev-down"
+	@echo "  make crawler-dev-logs"
 	@echo "  make crawler-debug"
 	@echo "    example: make crawler-debug TIMEOUT_MINUTES=5 MAX_CONCURRENCY=1000 IDLE_TIMEOUT_MINUTES=5 OUT=artifacts/crawler-timing-run-1"
 	@echo "  make listener"

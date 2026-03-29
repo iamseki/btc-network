@@ -73,6 +73,8 @@ Crawler:
 make crawler
 ```
 
+For the preferred local crawler setup with Docker-backed ClickHouse and local MMDB files, see [apps/crawler/README.md](apps/crawler/README.md).
+
 Desktop app:
 
 ```bash

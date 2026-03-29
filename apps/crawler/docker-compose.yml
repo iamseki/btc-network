@@ -1,0 +1,15 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3
+    container_name: btc-network-crawler-clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    volumes:
+      - ../../.dev-data/clickhouse:/var/lib/clickhouse
