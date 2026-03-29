@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  CARGO_HOME: ${{ github.workspace }}/.cargo-home
+  RUST_TOOLCHAIN: 1.93.1
+
 concurrency:
   group: ci-cd-${{ github.ref }}
   cancel-in-progress: true
@@ -57,7 +61,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.93.1
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          profile: minimal
+
+      - name: Cache Cargo build inputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -101,7 +118,22 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.93.1
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          profile: minimal
+
+      - name: Cache Rust security tooling
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}/bin
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            ${{ env.CARGO_HOME }}/.crates2.json
+            ${{ env.CARGO_HOME }}/.crates.toml
+          key: ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-security-
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -111,6 +143,9 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             apps/desktop/package-lock.json
+
+      - name: Add cached Cargo bin to PATH
+        run: echo "${CARGO_HOME}/bin" >> "$GITHUB_PATH"
 
       - name: Install Rust security tools
         run: cargo install --locked cargo-audit cargo-deny
