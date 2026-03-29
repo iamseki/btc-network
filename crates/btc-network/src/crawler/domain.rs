@@ -397,11 +397,19 @@ pub struct CrawlRunMetrics {
     pub writer_backlog: usize,
 }
 
+/// A durable snapshot of a crawl run at a specific point in time.
+///
+/// `checkpointed_at` records the wall-clock time of the snapshot. Because multiple
+/// checkpoints can be written with the same persisted timestamp resolution,
+/// `checkpoint_sequence` provides the deterministic per-run ordering key for
+/// "latest checkpoint" reads and run-summary aggregation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrawlRunCheckpoint {
     pub run_id: CrawlRunId,
     pub phase: CrawlPhase,
     pub checkpointed_at: DateTime<Utc>,
+    /// Monotonic per-run sequence used to break ties when two checkpoints share
+    /// the same persisted `checkpointed_at` value.
     pub checkpoint_sequence: u64,
     pub started_at: DateTime<Utc>,
     pub stop_reason: Option<String>,
