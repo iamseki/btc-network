@@ -11,6 +11,10 @@ LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 crawler:
 	@cargo run -p btc-network-crawler
 
+## Apply ClickHouse migrations for the crawler persistence schema
+crawler-migrate:
+	@cargo run -p btc-network-crawler -- migrate-clickhouse $(ARGS)
+
 ## Run the listener binary
 listener:
 	@cargo run -p btc-network-listener
@@ -125,6 +129,7 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  make crawler"
+	@echo "  make crawler-migrate ARGS=\"--clickhouse-url http://localhost:8123 --clickhouse-database btc_network\""
 	@echo "  make crawler-debug"
 	@echo "    example: make crawler-debug TIMEOUT_MINUTES=5 MAX_CONCURRENCY=1000 IDLE_TIMEOUT_MINUTES=5 OUT=artifacts/crawler-timing-run-1"
 	@echo "  make listener"

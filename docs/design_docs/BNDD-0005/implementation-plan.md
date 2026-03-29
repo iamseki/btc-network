@@ -44,14 +44,14 @@ Update rules:
 | Phase 2: Shared Traits and Test Doubles | `merged` | `2026-03-28` | `main` | `Repository and enrichment traits plus test doubles are merged.` |
 | Phase 3: Coordinator and Runtime Pipeline Refactor | `merged` | `2026-03-28` | `main` | `Coordinator flow, phase checkpoints, writer pipeline, overlay/routability fixes, and follow-up cancellation/checkpoint hardening are merged.` |
 | Phase 4: ClickHouse Crate and Migrations | `merged` | `2026-03-29` | `main` | `ClickHouse adapter, checked-in migrations, live Testcontainers-backed integration tests, deterministic checkpoint ordering, migration workflow docs, and internal module split by concern are merged.` |
-| Phase 5: MMDB Enrichment Adapter | `reviewing` | `2026-03-29` | `PR #12` | `MMDB enrichment now lives in a dedicated adapter crate with local IPv4/IPv6 lookup, partial-match handling, crate docs, and focused tests that generate temporary MMDB fixtures.` |
-| Phase 6: App Wiring | `pending` | `2026-03-28` | `` | `` |
+| Phase 5: MMDB Enrichment Adapter | `merged` | `2026-03-29` | `main` | `MMDB enrichment now lives in a dedicated adapter crate with local IPv4/IPv6 lookup, startup dataset-type validation, and focused tests that generate temporary MMDB fixtures.` |
+| Phase 6: App Wiring | `in_progress` | `2026-03-29` | `feat/BNDD-0005-phase-6-app-wiring` | `Wire the crawler app to ClickHouse and MMDB adapters, keep migrations explicit, and add a small tested CLI/config surface.` |
 | Phase 7: End-to-End Verification | `pending` | `2026-03-28` | `` | `` |
 
 ## Immediate Next Slice
 
-- Merge the reviewed MMDB enrichment adapter work in PR `#12`
-- Start Phase 6 by wiring the crawler app to the new ClickHouse and MMDB adapters without reimplementing workflow logic in the binary
+- Finish Phase 6 by wiring the crawler app to the new ClickHouse and MMDB adapters without reimplementing workflow logic in the binary
+- Keep migrations explicit with a dedicated app command instead of coupling them to crawler startup
 
 ## Explicit Agent Constraints
 
