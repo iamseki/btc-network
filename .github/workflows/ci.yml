@@ -130,8 +130,6 @@ jobs:
             ${{ env.CARGO_HOME }}/git
             ${{ env.CARGO_HOME }}/.crates2.json
             ${{ env.CARGO_HOME }}/.crates.toml
-            ${{ env.CARGO_HOME }}/advisory-db
-            ${{ env.CARGO_HOME }}/advisory-dbs
           key: ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-
