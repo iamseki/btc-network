@@ -73,6 +73,13 @@ struct CrawlArgs {
     #[arg(long, default_value_t = 10)]
     io_timeout_secs: u64,
 
+    /// Maximum number of seconds to wait for worker tasks to drain during shutdown.
+    ///
+    /// If the grace period expires, remaining worker tasks are aborted so the
+    /// process can exit instead of hanging in the terminal.
+    #[arg(long, default_value_t = 15)]
+    shutdown_grace_period_secs: u64,
+
     /// Emit per-node timing and retry logs.
     #[arg(long, default_value_t = false)]
     verbose: bool,
@@ -176,6 +183,7 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
         connect_max_attempts: args.connect_max_attempts,
         connect_retry_backoff: Duration::from_millis(args.connect_retry_backoff_ms),
         io_timeout: Duration::from_secs(args.io_timeout_secs),
+        shutdown_grace_period: Duration::from_secs(args.shutdown_grace_period_secs),
         verbose: args.verbose,
         ..CrawlerConfig::default()
     }
@@ -231,6 +239,7 @@ mod tests {
             connect_max_attempts: 4,
             connect_retry_backoff_ms: 500,
             io_timeout_secs: 10,
+            shutdown_grace_period_secs: 20,
             verbose: false,
             clickhouse: ClickHouseArgs {
                 clickhouse_url: "http://localhost:8123".to_string(),
@@ -249,6 +258,7 @@ mod tests {
         assert_eq!(config.max_tracked_nodes, 250_000);
         assert_eq!(config.connect_max_attempts, 4);
         assert_eq!(config.connect_retry_backoff, Duration::from_millis(500));
+        assert_eq!(config.shutdown_grace_period, Duration::from_secs(20));
     }
 
     #[test]

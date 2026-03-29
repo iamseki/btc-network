@@ -10,6 +10,8 @@ use super::domain::{CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics}
 use super::ports::{CrawlerRepository, CrawlerRepositoryError};
 use super::types::{CrawlState, CrawlerStats};
 
+const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(30);
+
 pub(crate) struct CheckpointEmitterContext {
     pub(crate) repository: Arc<dyn CrawlerRepository>,
     pub(crate) run_id: CrawlRunId,
@@ -73,6 +75,7 @@ pub(crate) async fn run_checkpoint_emitter(
         tick_every,
     } = context;
     let mut ticker = tokio::time::interval(tick_every);
+    let mut last_progress_log_at = None;
 
     loop {
         ticker.tick().await;
@@ -91,6 +94,10 @@ pub(crate) async fn run_checkpoint_emitter(
             started_at,
         )
         .await;
+        if should_log_progress(last_progress_log_at, PROGRESS_LOG_INTERVAL) {
+            log_progress_summary(&checkpoint);
+            last_progress_log_at = Some(Instant::now());
+        }
         if let Err(err) = repository.insert_run_checkpoint(checkpoint).await {
             warn!("[crawler] failed to write checkpoint: {err}");
             stop.store(true, Ordering::Relaxed);
@@ -136,6 +143,37 @@ pub(crate) async fn snapshot_checkpoint(
 
 fn next_checkpoint_sequence(checkpoint_sequence: &AtomicU64) -> u64 {
     checkpoint_sequence.fetch_add(1, Ordering::Relaxed) + 1
+}
+
+fn should_log_progress(last_logged_at: Option<Instant>, interval: Duration) -> bool {
+    match last_logged_at {
+        None => true,
+        Some(last_logged_at) => last_logged_at.elapsed() >= interval,
+    }
+}
+
+fn log_progress_summary(checkpoint: &CrawlRunCheckpoint) {
+    let metrics = &checkpoint.metrics;
+    let success_pct = if metrics.scheduled_tasks == 0 {
+        0.0
+    } else {
+        (metrics.successful_handshakes as f64 / metrics.scheduled_tasks as f64) * 100.0
+    };
+
+    info!(
+        run_id = %checkpoint.run_id.as_str(),
+        phase = ?checkpoint.phase,
+        scheduled_tasks = metrics.scheduled_tasks,
+        successful_handshakes = metrics.successful_handshakes,
+        failed_tasks = metrics.failed_tasks,
+        frontier_size = metrics.frontier_size,
+        in_flight_work = metrics.in_flight_work,
+        unique_nodes = metrics.unique_nodes,
+        persisted_observation_rows = metrics.persisted_observation_rows,
+        writer_backlog = metrics.writer_backlog,
+        success_pct = success_pct,
+        "[crawler] progress summary"
+    );
 }
 
 #[cfg(test)]

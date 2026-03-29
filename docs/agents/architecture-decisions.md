@@ -15,6 +15,14 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `crates/btc-network/src/session/` owns stateful peer interaction over an established connection
 - `crates/btc-network/src/client/` owns app-facing workflows reused by CLI and desktop
 
+## Async Networking Direction
+
+- The crawler runtime uses the async session path for cancellation-aware socket I/O and shutdown
+- The shared peer client workflows under `crates/btc-network/src/client/peer.rs` are still synchronous today
+- Do not add protocol or session logic to desktop or web adapters just to get async behavior
+- If async networking is extended beyond the crawler, prefer migrating the shared client boundary in `crates/btc-network/src/client/peer.rs` first, then keep app adapters thin
+- Prioritize longer-running shared workflows such as chain height, peer address lookup, and block download before rewriting short single-peer commands
+
 ## Frontend Architecture
 
 - Frontend is web-first

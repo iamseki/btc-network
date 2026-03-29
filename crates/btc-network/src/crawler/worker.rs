@@ -75,19 +75,15 @@ pub(crate) async fn run_worker(context: WorkerContext) {
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
         stats.in_flight.fetch_add(1, Ordering::Relaxed);
+        let _in_flight_guard = InFlightGuard::new(stats.as_ref());
 
-        let processor = Arc::clone(&processor);
-        let endpoint_for_process = endpoint.clone();
         let process_started = Instant::now();
-        let visit_result =
-            tokio::task::spawn_blocking(move || processor.process(endpoint_for_process, config))
-                .await;
+        let visit_result = processor.process(endpoint.clone(), config).await;
         let process_elapsed = process_started.elapsed();
 
         match visit_result {
-            Ok(Ok(visit)) => {
+            Ok(visit) => {
                 stats.success.fetch_add(1, Ordering::Relaxed);
-                stats.in_flight.fetch_sub(1, Ordering::Relaxed);
 
                 let discovered_count = visit.discovered.len();
                 let raw = RawNodeObservation::from_success(
@@ -148,9 +144,8 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     );
                 }
             }
-            Ok(Err(err)) => {
+            Err(err) => {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
-                stats.in_flight.fetch_sub(1, Ordering::Relaxed);
 
                 let raw = RawNodeObservation::from_failure(
                     Utc::now(),
@@ -188,47 +183,23 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     );
                 }
             }
-            Err(err) => {
-                stats.failed.fetch_add(1, Ordering::Relaxed);
-                stats.in_flight.fetch_sub(1, Ordering::Relaxed);
-
-                let raw = RawNodeObservation::from_failure(
-                    Utc::now(),
-                    run_id.clone(),
-                    endpoint.clone(),
-                    crate::crawler::FailureClassification::Other("join".to_string()),
-                    process_elapsed,
-                );
-                let persisted = build_persisted_observation(raw, enrichment_provider.as_ref());
-                if !enqueue_observation(
-                    &stats,
-                    &stop,
-                    &observation_tx,
-                    persisted,
-                    endpoint.canonical.as_str(),
-                )
-                .await
-                {
-                    return;
-                }
-
-                if config.verbose {
-                    info!(
-                        node = %endpoint.canonical,
-                        queue_lock_wait_ms = queue_lock_wait.as_millis(),
-                        queue_recv_wait_ms = queue_recv_wait.as_millis(),
-                        queue_lock_hold_ms = queue_lock_hold.as_millis(),
-                        process_ms = process_elapsed.as_millis(),
-                        node_total_ms = node_cycle_started.elapsed().as_millis(),
-                        "[crawler] worker timing"
-                    );
-                    warn!(
-                        "[crawler] blocking task join error for {}: {err}",
-                        endpoint.canonical
-                    );
-                }
-            }
         }
+    }
+}
+
+struct InFlightGuard<'a> {
+    stats: &'a CrawlerStats,
+}
+
+impl<'a> InFlightGuard<'a> {
+    fn new(stats: &'a CrawlerStats) -> Self {
+        Self { stats }
+    }
+}
+
+impl Drop for InFlightGuard<'_> {
+    fn drop(&mut self) {
+        self.stats.in_flight.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -364,9 +335,15 @@ mod tests {
     }
 
     impl NodeProcessor for MockProcessor {
-        fn process(&self, endpoint: CrawlEndpoint, _config: CrawlerConfig) -> NodeVisitResult {
+        fn process<'a>(
+            &'a self,
+            endpoint: CrawlEndpoint,
+            _config: CrawlerConfig,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = NodeVisitResult> + Send + 'a>>
+        {
             self.calls.fetch_add(1, Ordering::Relaxed);
-            self.responses
+            let result = self
+                .responses
                 .lock()
                 .expect("mock responses lock")
                 .remove(&endpoint)
@@ -379,7 +356,8 @@ mod tests {
                         ),
                         message: "missing mock response".to_string(),
                     }))
-                })
+                });
+            Box::pin(async move { result })
         }
     }
 
@@ -405,6 +383,7 @@ mod tests {
             connect_max_attempts: 1,
             connect_retry_backoff: Duration::ZERO,
             io_timeout: Duration::from_millis(50),
+            shutdown_grace_period: Duration::from_secs(1),
             verbose: false,
         }
     }
