@@ -31,6 +31,7 @@ Important:
 
 - the adapter performs local lookups only
 - it does not download or refresh MMDB files at runtime
+- startup validates that the configured MMDB files are compatible with the expected ASN and country roles
 - endpoints that are not enrichment-eligible should stay behind the shared `IpEnrichmentProvider` boundary and resolve to `not_applicable`
 - when the adapter is intentionally disabled, use `MmdbIpEnrichmentProvider::unavailable()`
 

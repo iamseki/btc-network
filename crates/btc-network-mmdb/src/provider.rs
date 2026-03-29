@@ -25,6 +25,19 @@ impl MmdbEnrichmentInitError {
             message: error.to_string(),
         }
     }
+
+    fn invalid_type(
+        database_kind: &'static str,
+        path: PathBuf,
+        expected: &'static str,
+        actual: &str,
+    ) -> Self {
+        Self {
+            database_kind,
+            path,
+            message: format!("expected {expected} MMDB, found database_type={actual}"),
+        }
+    }
 }
 
 impl Display for MmdbEnrichmentInitError {
@@ -62,9 +75,23 @@ impl MmdbIpEnrichmentProvider {
         let asn_reader = Reader::open_readfile(config.asn_db_path()).map_err(|error| {
             MmdbEnrichmentInitError::open("ASN", config.asn_db_path().to_path_buf(), error)
         })?;
+        validate_database_type(
+            "ASN",
+            config.asn_db_path().to_path_buf(),
+            &asn_reader,
+            is_asn_database_type,
+            "an ASN-compatible",
+        )?;
         let country_reader = Reader::open_readfile(config.country_db_path()).map_err(|error| {
             MmdbEnrichmentInitError::open("country", config.country_db_path().to_path_buf(), error)
         })?;
+        validate_database_type(
+            "country",
+            config.country_db_path().to_path_buf(),
+            &country_reader,
+            is_country_database_type,
+            "a country-compatible",
+        )?;
 
         Ok(Self {
             readers: Some(LoadedReaders {
@@ -178,6 +205,36 @@ fn lookup_country(
             .map(ToOwned::to_owned),
         prefix,
     })
+}
+
+fn validate_database_type(
+    database_kind: &'static str,
+    path: PathBuf,
+    reader: &Reader<Vec<u8>>,
+    predicate: fn(&str) -> bool,
+    expected: &'static str,
+) -> Result<(), MmdbEnrichmentInitError> {
+    let database_type = reader.metadata.database_type.as_str();
+    if predicate(database_type) {
+        return Ok(());
+    }
+
+    Err(MmdbEnrichmentInitError::invalid_type(
+        database_kind,
+        path,
+        expected,
+        database_type,
+    ))
+}
+
+fn is_asn_database_type(database_type: &str) -> bool {
+    database_type.contains("ASN")
+}
+
+fn is_country_database_type(database_type: &str) -> bool {
+    database_type.contains("Country")
+        || database_type.contains("City")
+        || database_type.contains("Enterprise")
 }
 
 #[cfg(test)]
@@ -348,7 +405,11 @@ mod tests {
                 },
             )],
         );
-        let country_path = fixture.write_empty_db("country-empty.mmdb", metadata::IpVersion::V4);
+        let country_path = fixture.write_empty_typed_db(
+            "country-empty.mmdb",
+            metadata::IpVersion::V4,
+            "GeoLite2-Country",
+        );
         let provider =
             MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))
                 .expect("provider");
@@ -371,8 +432,13 @@ mod tests {
     #[test]
     fn returns_lookup_failed_when_database_has_no_matching_record() {
         let fixture = TestFixtureDir::new();
-        let asn_path = fixture.write_empty_db("asn-empty.mmdb", metadata::IpVersion::V4);
-        let country_path = fixture.write_empty_db("country-empty.mmdb", metadata::IpVersion::V4);
+        let asn_path =
+            fixture.write_empty_typed_db("asn-empty.mmdb", metadata::IpVersion::V4, "GeoLite2-ASN");
+        let country_path = fixture.write_empty_typed_db(
+            "country-empty.mmdb",
+            metadata::IpVersion::V4,
+            "GeoLite2-Country",
+        );
         let provider =
             MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))
                 .expect("provider");
@@ -400,6 +466,59 @@ mod tests {
         assert!(error.to_string().contains("failed to open ASN MMDB"));
     }
 
+    #[test]
+    fn rejects_country_dataset_used_as_asn_database() {
+        let fixture = TestFixtureDir::new();
+        let asn_path = fixture.write_country_db(
+            "wrong-asn.mmdb",
+            metadata::IpVersion::V4,
+            &[(
+                "1.1.1.0/24",
+                CountryFixture {
+                    country: CountryIsoFixture { iso_code: "AU" },
+                },
+            )],
+        );
+        let country_path = fixture.write_country_db("country.mmdb", metadata::IpVersion::V4, &[]);
+
+        let error =
+            MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))
+                .expect_err("wrong ASN dataset type should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("expected an ASN-compatible MMDB, found database_type=GeoLite2-Country")
+        );
+    }
+
+    #[test]
+    fn rejects_asn_dataset_used_as_country_database() {
+        let fixture = TestFixtureDir::new();
+        let asn_path = fixture.write_asn_db("asn.mmdb", metadata::IpVersion::V4, &[]);
+        let country_path = fixture.write_asn_db(
+            "wrong-country.mmdb",
+            metadata::IpVersion::V4,
+            &[(
+                "1.1.1.0/24",
+                AsnFixture {
+                    autonomous_system_number: 13335,
+                    autonomous_system_organization: "Cloudflare, Inc.",
+                },
+            )],
+        );
+
+        let error =
+            MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))
+                .expect_err("wrong country dataset type should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("expected a country-compatible MMDB, found database_type=GeoLite2-ASN")
+        );
+    }
+
     struct TestFixtureDir {
         root: PathBuf,
     }
@@ -418,10 +537,15 @@ mod tests {
             Self { root }
         }
 
-        fn write_empty_db(&self, file_name: &str, ip_version: metadata::IpVersion) -> PathBuf {
+        fn write_empty_typed_db(
+            &self,
+            file_name: &str,
+            ip_version: metadata::IpVersion,
+            database_type: &str,
+        ) -> PathBuf {
             let mut db = Database::default();
             db.metadata.ip_version = ip_version;
-            db.metadata.database_type = "GeoLite2-Test".to_string();
+            db.metadata.database_type = database_type.to_string();
             self.write_db(file_name, &db)
         }
 
