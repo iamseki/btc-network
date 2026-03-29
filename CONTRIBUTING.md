@@ -104,6 +104,8 @@ Keep the frontend API surface small:
 
 Run the smallest relevant checks while working, then run the broader project check before finishing.
 
+CI uses GitHub Actions cache for Cargo dependencies, build artifacts, and Rust security tooling. When you change the pinned Rust toolchain or materially change Cargo inputs, make sure the cache keys in [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) still invalidate as expected.
+
 Useful commands:
 
 - `make test` — full project gate
