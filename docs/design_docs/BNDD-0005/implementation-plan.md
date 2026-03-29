@@ -44,14 +44,14 @@ Update rules:
 | Phase 2: Shared Traits and Test Doubles | `merged` | `2026-03-28` | `main` | `Repository and enrichment traits plus test doubles are merged.` |
 | Phase 3: Coordinator and Runtime Pipeline Refactor | `merged` | `2026-03-28` | `main` | `Coordinator flow, phase checkpoints, writer pipeline, overlay/routability fixes, and follow-up cancellation/checkpoint hardening are merged.` |
 | Phase 4: ClickHouse Crate and Migrations | `merged` | `2026-03-29` | `main` | `ClickHouse adapter, checked-in migrations, live Testcontainers-backed integration tests, deterministic checkpoint ordering, migration workflow docs, and internal module split by concern are merged.` |
-| Phase 5: MMDB Enrichment Adapter | `in_progress` | `2026-03-29` | `feat/BNDD-0005-phase-5-mmdb` | `Implement local ASN/country/prefix lookup through a dedicated MMDB adapter crate without adding runtime downloads to the crawler path.` |
+| Phase 5: MMDB Enrichment Adapter | `reviewing` | `2026-03-29` | `PR #12` | `MMDB enrichment now lives in a dedicated adapter crate with local IPv4/IPv6 lookup, partial-match handling, crate docs, and focused tests that generate temporary MMDB fixtures.` |
 | Phase 6: App Wiring | `pending` | `2026-03-28` | `` | `` |
 | Phase 7: End-to-End Verification | `pending` | `2026-03-28` | `` | `` |
 
 ## Immediate Next Slice
 
-- Finish Phase 5 with the MMDB enrichment adapter crate and its focused lookup tests
-- Keep MMDB loading and filesystem concerns out of `crates/btc-network` while preserving the existing enrichment trait boundary
+- Merge the reviewed MMDB enrichment adapter work in PR `#12`
+- Start Phase 6 by wiring the crawler app to the new ClickHouse and MMDB adapters without reimplementing workflow logic in the binary
 
 ## Explicit Agent Constraints
 
