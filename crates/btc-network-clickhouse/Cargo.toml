@@ -14,6 +14,8 @@ serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
 
 [dev-dependencies]
+btc-network-mmdb = { path = "../btc-network-mmdb" }
 clickhouse = { version = "0.14.2", features = ["chrono", "test-util"] }
+maxminddb-writer = "0.1.2"
 testcontainers-modules = { version = "0.15.0", features = ["clickhouse"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

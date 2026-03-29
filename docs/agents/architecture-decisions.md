@@ -23,6 +23,13 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - If async networking is extended beyond the crawler, prefer migrating the shared client boundary in `crates/btc-network/src/client/peer.rs` first, then keep app adapters thin
 - Prioritize longer-running shared workflows such as chain height, peer address lookup, and block download before rewriting short single-peer commands
 
+## Crawler Terms
+
+- `frontier_size` means the pending frontier: discovered endpoints that are tracked but not yet attempted by a worker
+- `unique_nodes` counts tracked endpoints, not persisted observations; it can be much larger than completed node visits
+- `scheduled_tasks` is the count of attempted node visits dequeued by workers
+- `handshake_status` in persisted observations is a historical field name; failed rows can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
+
 ## Frontend Architecture
 
 - Frontend is web-first

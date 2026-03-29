@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
 
+use serde::{Deserialize, Serialize};
+
 use super::domain::{CrawlEndpoint, FailureClassification};
 
 /// Runtime configuration for the crawler orchestration loop.
@@ -49,7 +51,7 @@ impl Default for CrawlerConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeState {
     /// Version protocol number advertised by the peer.
     pub version: i32,
@@ -105,6 +107,65 @@ impl CrawlState {
             last_new_node_at: Instant::now(),
         }
     }
+
+    pub(crate) fn to_resume_state(&self) -> CrawlResumeState {
+        let mut seen_nodes = self.seen_nodes.iter().cloned().collect::<Vec<_>>();
+        seen_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
+
+        let mut pending_nodes = self.pending_nodes.iter().cloned().collect::<Vec<_>>();
+        pending_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
+
+        let mut node_states = self
+            .node_states
+            .iter()
+            .map(|(endpoint, state)| ResumeNodeState {
+                endpoint: endpoint.clone(),
+                state: state.clone(),
+            })
+            .collect::<Vec<_>>();
+        node_states.sort_by(|left, right| left.endpoint.canonical.cmp(&right.endpoint.canonical));
+
+        CrawlResumeState {
+            seen_nodes,
+            pending_nodes,
+            node_states,
+        }
+    }
+
+    pub(crate) fn from_resume_state(resume_state: CrawlResumeState) -> Self {
+        let mut state = Self::new();
+
+        for endpoint in resume_state.seen_nodes {
+            state.seen_nodes.insert(endpoint);
+        }
+
+        for endpoint in resume_state.pending_nodes {
+            state.seen_nodes.insert(endpoint.clone());
+            state.pending_nodes.insert(endpoint);
+        }
+
+        for node_state in resume_state.node_states {
+            state.seen_nodes.insert(node_state.endpoint.clone());
+            state
+                .node_states
+                .insert(node_state.endpoint, node_state.state);
+        }
+
+        state
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CrawlResumeState {
+    pub(crate) seen_nodes: Vec<CrawlEndpoint>,
+    pub(crate) pending_nodes: Vec<CrawlEndpoint>,
+    pub(crate) node_states: Vec<ResumeNodeState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ResumeNodeState {
+    pub(crate) endpoint: CrawlEndpoint,
+    pub(crate) state: NodeState,
 }
 
 #[derive(Debug, Clone)]
