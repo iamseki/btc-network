@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use chrono::{DateTime, Utc};
 use tokio::sync::{Mutex, mpsc};
+use tokio::task::{JoinError, JoinHandle};
 use tracing::{info, warn};
 
 pub use domain::{
@@ -88,9 +89,16 @@ impl Crawler {
             rand::random::<u64>()
         ));
 
-        let _active_run_guard = claim_active_run(active_run_slot(), run_id.clone())?;
+        let active_run_guard = claim_active_run(active_run_slot(), run_id.clone())?;
         let result = self
-            .run_active_request(run_id, request, processor, started_at, started_at_utc)
+            .run_active_request(
+                run_id,
+                request,
+                processor,
+                started_at,
+                started_at_utc,
+                active_run_guard,
+            )
             .await;
 
         result
@@ -103,6 +111,7 @@ impl Crawler {
         processor: Arc<dyn NodeProcessor>,
         started_at: Instant,
         started_at_utc: DateTime<Utc>,
+        _active_run_guard: ActiveRunGuard,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stats = Arc::new(CrawlerStats::default());
@@ -143,21 +152,21 @@ impl Crawler {
         )
         .await?;
 
-        let writer_handle = tokio::spawn(run_observation_writer(
+        let writer_handle = AbortOnDropHandle::new(tokio::spawn(run_observation_writer(
             Arc::clone(&self.repository),
             Arc::clone(&stats),
             Arc::clone(&stop),
             observation_rx,
             writer_batch_size(request.config),
-        ));
-        let lifecycle_handle = tokio::spawn(run_lifecycle(
+        )));
+        let lifecycle_handle = AbortOnDropHandle::new(tokio::spawn(run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
             request.config.max_runtime,
             request.config.idle_timeout,
             request.config.lifecycle_tick,
-        ));
-        let checkpoint_handle = tokio::spawn(run_checkpoint_emitter(
+        )));
+        let checkpoint_handle = AbortOnDropHandle::new(tokio::spawn(run_checkpoint_emitter(
             Arc::clone(&self.repository),
             run_id.clone(),
             Arc::clone(&phase),
@@ -166,13 +175,14 @@ impl Crawler {
             Arc::clone(&stop),
             started_at_utc,
             request.config.lifecycle_tick,
-        ));
-        let signal_handle = tokio::spawn(run_signal_shutdown(Arc::clone(&stop)));
+        )));
+        let signal_handle =
+            AbortOnDropHandle::new(tokio::spawn(run_signal_shutdown(Arc::clone(&stop))));
 
         let worker_count = effective_worker_count(request.config.max_concurrency);
         let mut workers = Vec::with_capacity(worker_count);
         for _ in 0..worker_count {
-            workers.push(tokio::spawn(run_worker(
+            workers.push(AbortOnDropHandle::new(tokio::spawn(run_worker(
                 request.config,
                 run_id.clone(),
                 Arc::clone(&state),
@@ -183,17 +193,26 @@ impl Crawler {
                 observation_tx.clone(),
                 Arc::clone(&processor),
                 Arc::clone(&self.enrichment_provider),
-            )));
+            ))));
         }
         drop(queue_tx);
         drop(observation_tx);
 
+        let mut task_set = CrawlTaskSet::new(
+            Arc::clone(&stop),
+            workers,
+            writer_handle,
+            lifecycle_handle,
+            checkpoint_handle,
+            signal_handle,
+        );
+
         let mut failure_reason = None;
-        for handle in workers {
-            if let Err(err) = handle.await {
+        for mut handle in task_set.worker_handles.drain(..) {
+            if let Err(err) = handle.join().await {
                 warn!("[crawler] worker join error: {err}");
                 stop.store(true, Ordering::Relaxed);
-                failure_reason = Some(format!("worker join error: {err}"));
+                record_failure(&mut failure_reason, format!("worker join error: {err}"));
             }
         }
 
@@ -214,27 +233,22 @@ impl Crawler {
         .await?;
 
         stop.store(true, Ordering::Relaxed);
-        let writer_result = match writer_handle.await {
-            Ok(result) => result,
-            Err(err) => Err(CrawlerRepositoryError::new(format!(
-                "writer task join error: {err}"
-            ))),
-        };
+        let writer_result =
+            task_set.writer_handle.join().await.map_err(|err| {
+                CrawlerRepositoryError::new(format!("writer task join error: {err}"))
+            })?;
         if let Err(err) = writer_result {
-            failure_reason = Some(err.to_string());
+            record_failure(&mut failure_reason, err.to_string());
         }
 
-        let _ = lifecycle_handle.await;
-        let checkpoint_result = match checkpoint_handle.await {
-            Ok(result) => result,
-            Err(err) => Err(CrawlerRepositoryError::new(format!(
-                "checkpoint emitter join error: {err}"
-            ))),
-        };
+        let _ = task_set.lifecycle_handle.join().await;
+        let checkpoint_result = task_set.checkpoint_handle.join().await.map_err(|err| {
+            CrawlerRepositoryError::new(format!("checkpoint emitter join error: {err}"))
+        })?;
         if let Err(err) = checkpoint_result {
             record_failure(&mut failure_reason, err.to_string());
         }
-        signal_handle.abort();
+        task_set.signal_handle.abort();
 
         let final_phase = if failure_reason.is_some() {
             CrawlPhase::Failed
@@ -332,6 +346,70 @@ fn clear_active_run_slot(active_run: &'static StdMutex<Option<CrawlRunId>>) {
 fn record_failure(failure_reason: &mut Option<String>, reason: String) {
     if failure_reason.is_none() {
         *failure_reason = Some(reason);
+    }
+}
+
+struct AbortOnDropHandle<T> {
+    handle: Option<JoinHandle<T>>,
+}
+
+impl<T> AbortOnDropHandle<T> {
+    fn new(handle: JoinHandle<T>) -> Self {
+        Self {
+            handle: Some(handle),
+        }
+    }
+
+    async fn join(&mut self) -> Result<T, JoinError> {
+        let handle = self.handle.take().expect("join handle present");
+        handle.await
+    }
+
+    fn abort(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+impl<T> Drop for AbortOnDropHandle<T> {
+    fn drop(&mut self) {
+        self.abort();
+    }
+}
+
+struct CrawlTaskSet {
+    stop: Arc<AtomicBool>,
+    worker_handles: Vec<AbortOnDropHandle<()>>,
+    writer_handle: AbortOnDropHandle<Result<(), CrawlerRepositoryError>>,
+    lifecycle_handle: AbortOnDropHandle<()>,
+    checkpoint_handle: AbortOnDropHandle<Result<(), CrawlerRepositoryError>>,
+    signal_handle: AbortOnDropHandle<()>,
+}
+
+impl CrawlTaskSet {
+    fn new(
+        stop: Arc<AtomicBool>,
+        worker_handles: Vec<AbortOnDropHandle<()>>,
+        writer_handle: AbortOnDropHandle<Result<(), CrawlerRepositoryError>>,
+        lifecycle_handle: AbortOnDropHandle<()>,
+        checkpoint_handle: AbortOnDropHandle<Result<(), CrawlerRepositoryError>>,
+        signal_handle: AbortOnDropHandle<()>,
+    ) -> Self {
+        Self {
+            stop,
+            worker_handles,
+            writer_handle,
+            lifecycle_handle,
+            checkpoint_handle,
+            signal_handle,
+        }
+    }
+}
+
+impl Drop for CrawlTaskSet {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
     }
 }
 
@@ -481,6 +559,7 @@ mod tests {
     use std::future::pending;
     use std::net::{IpAddr, Ipv4Addr};
     use std::sync::Mutex as StdSyncMutex;
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
 
     fn active_run_test_lock() -> &'static Mutex<()> {
@@ -681,6 +760,110 @@ mod tests {
         }
     }
 
+    struct SlowNodeProcessor {
+        visit: NodeVisit,
+        delay: Duration,
+    }
+
+    impl NodeProcessor for SlowNodeProcessor {
+        fn process(
+            &self,
+            _endpoint: CrawlEndpoint,
+            _config: CrawlerConfig,
+        ) -> Result<NodeVisit, NodeVisitFailure> {
+            std::thread::sleep(self.delay);
+            Ok(self.visit.clone())
+        }
+    }
+
+    struct InFlightGuard<'a> {
+        active: &'a AtomicUsize,
+    }
+
+    impl Drop for InFlightGuard<'_> {
+        fn drop(&mut self) {
+            self.active.fetch_sub(1, AtomicOrdering::Relaxed);
+        }
+    }
+
+    struct BlockingPeriodicCheckpointRepository {
+        checkpoint_calls: StdSyncMutex<usize>,
+        active_periodic_writes: AtomicUsize,
+    }
+
+    impl BlockingPeriodicCheckpointRepository {
+        fn new() -> Self {
+            Self {
+                checkpoint_calls: StdSyncMutex::new(0),
+                active_periodic_writes: AtomicUsize::new(0),
+            }
+        }
+
+        fn active_periodic_writes(&self) -> usize {
+            self.active_periodic_writes.load(AtomicOrdering::Relaxed)
+        }
+    }
+
+    impl CrawlerRepository for BlockingPeriodicCheckpointRepository {
+        fn insert_observation<'a>(
+            &'a self,
+            _observation: PersistedNodeObservation,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn insert_observations_stream<'a>(
+            &'a self,
+            _observations: Vec<PersistedNodeObservation>,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn insert_run_checkpoint<'a>(
+            &'a self,
+            _checkpoint: CrawlRunCheckpoint,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            let should_block = {
+                let mut calls = self.checkpoint_calls.lock().expect("checkpoint calls lock");
+                *calls += 1;
+                *calls >= 3
+            };
+
+            Box::pin(async move {
+                if !should_block {
+                    return Ok(());
+                }
+
+                self.active_periodic_writes
+                    .fetch_add(1, AtomicOrdering::Relaxed);
+                let _guard = InFlightGuard {
+                    active: &self.active_periodic_writes,
+                };
+                pending::<Result<(), CrawlerRepositoryError>>().await
+            })
+        }
+
+        fn get_run_checkpoint<'a>(
+            &'a self,
+            _run_id: &'a CrawlRunId,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn list_runs<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn count_nodes_by_asn<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+    }
+
     #[tokio::test]
     async fn run_with_request_returns_error_when_periodic_checkpointing_fails() {
         let _test_guard = active_run_test_lock().lock().await;
@@ -723,5 +906,65 @@ mod tests {
             .expect_err("checkpoint emitter failures should fail the crawl");
 
         assert!(err.to_string().contains("periodic checkpoint failed"));
+    }
+
+    #[tokio::test]
+    async fn cancelling_run_aborts_periodic_checkpoint_task_before_slot_reopens() {
+        let _test_guard = active_run_test_lock().lock().await;
+        clear_active_run_slot(active_run_slot());
+
+        let repository = Arc::new(BlockingPeriodicCheckpointRepository::new());
+        let crawler = Arc::new(Crawler::with_adapters(
+            CrawlerConfig {
+                max_concurrency: 1,
+                max_runtime: Duration::from_secs(1),
+                idle_timeout: Duration::from_secs(1),
+                lifecycle_tick: Duration::from_millis(5),
+                connect_timeout: Duration::from_millis(50),
+                io_timeout: Duration::from_millis(50),
+                verbose: false,
+            },
+            repository.clone(),
+            Arc::new(StaticEnrichmentProvider),
+        ));
+        let seed = public_endpoint(9);
+        let processor: Arc<dyn NodeProcessor> = Arc::new(SlowNodeProcessor {
+            visit: static_visit(seed.clone()),
+            delay: Duration::from_millis(100),
+        });
+        let request = StartCrawlRequest {
+            config: crawler.config,
+            seed_nodes: vec![seed],
+        };
+
+        let crawler_task = {
+            let crawler = Arc::clone(&crawler);
+            tokio::spawn(async move {
+                let _ = crawler.run_with_request(request, processor).await;
+            })
+        };
+
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while repository.active_periodic_writes() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("periodic checkpoint task should start");
+
+        crawler_task.abort();
+        let _ = crawler_task.await;
+
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while repository.active_periodic_writes() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("periodic checkpoint task should be aborted on cancellation");
+
+        let guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
+            .expect("slot should reopen only after cancellation cleanup");
+        drop(guard);
     }
 }
