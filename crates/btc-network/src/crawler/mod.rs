@@ -7,8 +7,8 @@ mod worker;
 
 use std::error::Error;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex as StdMutex, OnceLock};
 use std::time::Instant;
 
 use chrono::{DateTime, Utc};
@@ -88,11 +88,10 @@ impl Crawler {
             rand::random::<u64>()
         ));
 
-        claim_active_run(active_run_slot(), run_id.clone()).await?;
+        let _active_run_guard = claim_active_run(active_run_slot(), run_id.clone())?;
         let result = self
             .run_active_request(run_id, request, processor, started_at, started_at_utc)
             .await;
-        release_active_run(active_run_slot()).await;
 
         result
     }
@@ -226,7 +225,15 @@ impl Crawler {
         }
 
         let _ = lifecycle_handle.await;
-        let _ = checkpoint_handle.await;
+        let checkpoint_result = match checkpoint_handle.await {
+            Ok(result) => result,
+            Err(err) => Err(CrawlerRepositoryError::new(format!(
+                "checkpoint emitter join error: {err}"
+            ))),
+        };
+        if let Err(err) = checkpoint_result {
+            record_failure(&mut failure_reason, err.to_string());
+        }
         signal_handle.abort();
 
         let final_phase = if failure_reason.is_some() {
@@ -279,27 +286,53 @@ fn writer_batch_size(config: CrawlerConfig) -> usize {
     effective_worker_count(config.max_concurrency).max(1)
 }
 
-fn active_run_slot() -> &'static Arc<Mutex<Option<CrawlRunId>>> {
-    static ACTIVE_RUN: OnceLock<Arc<Mutex<Option<CrawlRunId>>>> = OnceLock::new();
-    ACTIVE_RUN.get_or_init(|| Arc::new(Mutex::new(None)))
+fn active_run_slot() -> &'static StdMutex<Option<CrawlRunId>> {
+    static ACTIVE_RUN: OnceLock<StdMutex<Option<CrawlRunId>>> = OnceLock::new();
+    ACTIVE_RUN.get_or_init(|| StdMutex::new(None))
 }
 
-async fn claim_active_run(
-    active_run: &Arc<Mutex<Option<CrawlRunId>>>,
+#[derive(Debug)]
+struct ActiveRunGuard {
+    active_run: &'static StdMutex<Option<CrawlRunId>>,
     run_id: CrawlRunId,
-) -> Result<(), Box<dyn Error>> {
-    let mut guard = active_run.lock().await;
+}
+
+impl Drop for ActiveRunGuard {
+    fn drop(&mut self) {
+        release_active_run(self.active_run, &self.run_id);
+    }
+}
+
+fn claim_active_run(
+    active_run: &'static StdMutex<Option<CrawlRunId>>,
+    run_id: CrawlRunId,
+) -> Result<ActiveRunGuard, Box<dyn Error>> {
+    let mut guard = active_run.lock().map_err(|_| "active run slot poisoned")?;
     if let Some(existing) = guard.as_ref() {
         return Err(format!("crawl run {} is already active", existing.as_str()).into());
     }
 
-    *guard = Some(run_id);
-    Ok(())
+    *guard = Some(run_id.clone());
+    Ok(ActiveRunGuard { active_run, run_id })
 }
 
-async fn release_active_run(active_run: &Arc<Mutex<Option<CrawlRunId>>>) {
-    let mut guard = active_run.lock().await;
+fn release_active_run(active_run: &'static StdMutex<Option<CrawlRunId>>, run_id: &CrawlRunId) {
+    let mut guard = active_run.lock().expect("active run slot lock");
+    if guard.as_ref() == Some(run_id) {
+        *guard = None;
+    }
+}
+
+#[cfg(test)]
+fn clear_active_run_slot(active_run: &'static StdMutex<Option<CrawlRunId>>) {
+    let mut guard = active_run.lock().expect("active run slot lock");
     *guard = None;
+}
+
+fn record_failure(failure_reason: &mut Option<String>, reason: String) {
+    if failure_reason.is_none() {
+        *failure_reason = Some(reason);
+    }
 }
 
 async fn write_checkpoint(
@@ -441,6 +474,19 @@ impl CrawlerRepository for NoopCrawlerRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crawler::types::{NodeVisit, NodeVisitFailure};
+    use crate::wire::message::Services;
+    use chrono::Utc;
+    use std::collections::VecDeque;
+    use std::future::pending;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::sync::Mutex as StdSyncMutex;
+    use std::time::Duration;
+
+    fn active_run_test_lock() -> &'static Mutex<()> {
+        static ACTIVE_RUN_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ACTIVE_RUN_TEST_LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn worker_count_is_at_least_one() {
@@ -451,35 +497,231 @@ mod tests {
 
     #[tokio::test]
     async fn active_run_claim_rejects_second_run() {
-        let active_run = Arc::new(Mutex::new(None));
+        let _test_guard = active_run_test_lock().lock().await;
+        static ACTIVE_RUN: StdMutex<Option<CrawlRunId>> = StdMutex::new(None);
+        clear_active_run_slot(&ACTIVE_RUN);
 
-        claim_active_run(&active_run, CrawlRunId::new("run-1"))
-            .await
-            .expect("first claim");
-        let err = claim_active_run(&active_run, CrawlRunId::new("run-2"))
-            .await
+        let first_guard =
+            claim_active_run(&ACTIVE_RUN, CrawlRunId::new("run-1")).expect("first claim");
+        let err = claim_active_run(&ACTIVE_RUN, CrawlRunId::new("run-2"))
             .expect_err("second claim should fail");
 
         assert!(err.to_string().contains("already active"));
 
-        release_active_run(&active_run).await;
-        claim_active_run(&active_run, CrawlRunId::new("run-3"))
-            .await
-            .expect("claim after release");
+        drop(first_guard);
+        let third_guard =
+            claim_active_run(&ACTIVE_RUN, CrawlRunId::new("run-3")).expect("claim after release");
+        drop(third_guard);
     }
 
     #[tokio::test]
     async fn active_run_slot_is_shared_process_wide() {
-        release_active_run(active_run_slot()).await;
-        claim_active_run(active_run_slot(), CrawlRunId::new("run-1"))
-            .await
+        let _test_guard = active_run_test_lock().lock().await;
+        clear_active_run_slot(active_run_slot());
+        let first_guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-1"))
             .expect("claim shared slot");
 
         let err = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
-            .await
             .expect_err("second shared claim should fail");
 
         assert!(err.to_string().contains("already active"));
-        release_active_run(active_run_slot()).await;
+        drop(first_guard);
+    }
+
+    #[tokio::test]
+    async fn active_run_guard_releases_slot_when_future_is_cancelled() {
+        let _test_guard = active_run_test_lock().lock().await;
+        clear_active_run_slot(active_run_slot());
+
+        let handle = tokio::spawn(async {
+            let _guard =
+                claim_active_run(active_run_slot(), CrawlRunId::new("run-1")).expect("claim slot");
+            pending::<()>().await;
+        });
+
+        tokio::task::yield_now().await;
+        handle.abort();
+        let _ = handle.await;
+
+        let guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
+            .expect("cancellation should release slot");
+        drop(guard);
+    }
+
+    #[derive(Clone)]
+    struct StaticNodeProcessor {
+        visit: NodeVisit,
+    }
+
+    impl NodeProcessor for StaticNodeProcessor {
+        fn process(
+            &self,
+            _endpoint: CrawlEndpoint,
+            _config: CrawlerConfig,
+        ) -> Result<NodeVisit, NodeVisitFailure> {
+            Ok(self.visit.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct FlakyCheckpointRepository {
+        checkpoint_results: StdSyncMutex<VecDeque<Result<(), CrawlerRepositoryError>>>,
+        observations: StdSyncMutex<Vec<PersistedNodeObservation>>,
+        checkpoints: StdSyncMutex<Vec<CrawlRunCheckpoint>>,
+    }
+
+    impl FlakyCheckpointRepository {
+        fn new(checkpoint_results: Vec<Result<(), CrawlerRepositoryError>>) -> Self {
+            Self {
+                checkpoint_results: StdSyncMutex::new(VecDeque::from(checkpoint_results)),
+                observations: StdSyncMutex::new(Vec::new()),
+                checkpoints: StdSyncMutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CrawlerRepository for FlakyCheckpointRepository {
+        fn insert_observation<'a>(
+            &'a self,
+            observation: PersistedNodeObservation,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async move {
+                self.observations
+                    .lock()
+                    .expect("observations lock")
+                    .push(observation);
+                Ok(())
+            })
+        }
+
+        fn insert_observations_stream<'a>(
+            &'a self,
+            observations: Vec<PersistedNodeObservation>,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async move {
+                self.observations
+                    .lock()
+                    .expect("observations lock")
+                    .extend(observations);
+                Ok(())
+            })
+        }
+
+        fn insert_run_checkpoint<'a>(
+            &'a self,
+            checkpoint: CrawlRunCheckpoint,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async move {
+                self.checkpoints
+                    .lock()
+                    .expect("checkpoints lock")
+                    .push(checkpoint);
+                let mut results = self
+                    .checkpoint_results
+                    .lock()
+                    .expect("checkpoint results lock");
+                match results.pop_front() {
+                    Some(result) => result,
+                    None => Ok(()),
+                }
+            })
+        }
+
+        fn get_run_checkpoint<'a>(
+            &'a self,
+            _run_id: &'a CrawlRunId,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+        {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn list_runs<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
+            Box::pin(async { Ok(self.checkpoints.lock().expect("checkpoints lock").clone()) })
+        }
+
+        fn count_nodes_by_asn<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+    }
+
+    struct StaticEnrichmentProvider;
+
+    impl IpEnrichmentProvider for StaticEnrichmentProvider {
+        fn enrich(&self, _endpoint: &CrawlEndpoint) -> IpEnrichment {
+            IpEnrichment::unavailable()
+        }
+    }
+
+    fn public_endpoint(octet: u8) -> CrawlEndpoint {
+        CrawlEndpoint::new(
+            format!("1.1.1.{octet}"),
+            8333,
+            CrawlNetwork::Ipv4,
+            Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, octet))),
+        )
+    }
+
+    fn static_visit(endpoint: CrawlEndpoint) -> NodeVisit {
+        NodeVisit {
+            node: endpoint,
+            state: NodeState {
+                version: 70016,
+                services: Services::NODE_WITNESS.bits(),
+                user_agent: "/Satoshi:27.0.0/".to_string(),
+                start_height: 900_000,
+                relay: Some(true),
+                timestamp: Utc::now().timestamp(),
+            },
+            discovered: Vec::new(),
+            latency: Duration::from_millis(5),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_with_request_returns_error_when_periodic_checkpointing_fails() {
+        let _test_guard = active_run_test_lock().lock().await;
+        clear_active_run_slot(active_run_slot());
+
+        let repository = Arc::new(FlakyCheckpointRepository::new(vec![
+            Ok(()),
+            Ok(()),
+            Err(CrawlerRepositoryError::new("periodic checkpoint failed")),
+            Ok(()),
+            Ok(()),
+        ]));
+        let crawler = Crawler::with_adapters(
+            CrawlerConfig {
+                max_concurrency: 1,
+                max_runtime: Duration::from_secs(1),
+                idle_timeout: Duration::from_secs(1),
+                lifecycle_tick: Duration::from_millis(5),
+                connect_timeout: Duration::from_millis(50),
+                io_timeout: Duration::from_millis(50),
+                verbose: false,
+            },
+            repository,
+            Arc::new(StaticEnrichmentProvider),
+        );
+        let seed = public_endpoint(7);
+        let processor: Arc<dyn NodeProcessor> = Arc::new(StaticNodeProcessor {
+            visit: static_visit(seed.clone()),
+        });
+
+        let err = crawler
+            .run_with_request(
+                StartCrawlRequest {
+                    config: crawler.config,
+                    seed_nodes: vec![seed],
+                },
+                processor,
+            )
+            .await
+            .expect_err("checkpoint emitter failures should fail the crawl");
+
+        assert!(err.to_string().contains("periodic checkpoint failed"));
     }
 }
