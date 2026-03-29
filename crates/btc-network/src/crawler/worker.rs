@@ -100,7 +100,7 @@ pub(crate) async fn run_worker(
                 let mut guard = state.lock().await;
                 let state_lock_wait = state_lock_wait_started.elapsed();
                 let state_lock_hold_started = Instant::now();
-                let discovered = apply_visit_to_state(&mut guard, visit);
+                let discovered = apply_visit_to_state(&mut guard, visit, config.max_tracked_nodes);
                 let state_lock_hold = state_lock_hold_started.elapsed();
                 drop(guard);
                 let queued_count = discovered.len();
@@ -256,12 +256,13 @@ pub(crate) async fn seed_initial_nodes(
     stats: &Arc<CrawlerStats>,
     queue_tx: &mpsc::UnboundedSender<CrawlEndpoint>,
     seeds: Vec<CrawlEndpoint>,
+    max_tracked_nodes: usize,
 ) {
     let mut newly_queued = Vec::new();
     {
         let mut guard = state.lock().await;
         for endpoint in seeds {
-            if guard.seen_nodes.insert(endpoint.clone()) {
+            if try_track_endpoint(&mut guard, endpoint.clone(), max_tracked_nodes) {
                 guard.pending_nodes.insert(endpoint.clone());
                 newly_queued.push(endpoint);
             }
@@ -278,7 +279,11 @@ pub(crate) async fn seed_initial_nodes(
     }
 }
 
-pub(crate) fn apply_visit_to_state(state: &mut CrawlState, visit: NodeVisit) -> Vec<CrawlEndpoint> {
+pub(crate) fn apply_visit_to_state(
+    state: &mut CrawlState,
+    visit: NodeVisit,
+    max_tracked_nodes: usize,
+) -> Vec<CrawlEndpoint> {
     state.node_states.insert(visit.node, visit.state);
 
     let mut new_nodes = Vec::new();
@@ -287,7 +292,7 @@ pub(crate) fn apply_visit_to_state(state: &mut CrawlState, visit: NodeVisit) -> 
             continue;
         }
 
-        if state.seen_nodes.insert(endpoint.clone()) {
+        if try_track_endpoint(state, endpoint.clone(), max_tracked_nodes) {
             state.pending_nodes.insert(endpoint.clone());
             new_nodes.push(endpoint);
         }
@@ -298,6 +303,22 @@ pub(crate) fn apply_visit_to_state(state: &mut CrawlState, visit: NodeVisit) -> 
     }
 
     new_nodes
+}
+
+fn try_track_endpoint(
+    state: &mut CrawlState,
+    endpoint: CrawlEndpoint,
+    max_tracked_nodes: usize,
+) -> bool {
+    if state.seen_nodes.contains(&endpoint) {
+        return false;
+    }
+
+    if state.seen_nodes.len() >= max_tracked_nodes {
+        return false;
+    }
+
+    state.seen_nodes.insert(endpoint)
 }
 
 #[cfg(test)]
@@ -371,6 +392,7 @@ mod tests {
     fn test_config() -> CrawlerConfig {
         CrawlerConfig {
             max_concurrency: 1,
+            max_tracked_nodes: 16,
             max_runtime: Duration::from_secs(1),
             idle_timeout: Duration::from_secs(1),
             lifecycle_tick: Duration::from_millis(5),
@@ -429,7 +451,7 @@ mod tests {
             node.clone(),
             vec![already_known, new_node.clone(), overlay_endpoint()],
         );
-        let inserted = apply_visit_to_state(&mut state, visit);
+        let inserted = apply_visit_to_state(&mut state, visit, test_config().max_tracked_nodes);
 
         assert_eq!(inserted, vec![new_node.clone()]);
         assert!(state.node_states.contains_key(&node));
@@ -443,7 +465,11 @@ mod tests {
         let mut state = CrawlState::new();
         let before = state.last_new_node_at;
 
-        let inserted = apply_visit_to_state(&mut state, visit_for(node, vec![]));
+        let inserted = apply_visit_to_state(
+            &mut state,
+            visit_for(node, vec![]),
+            test_config().max_tracked_nodes,
+        );
 
         assert!(inserted.is_empty());
         assert_eq!(state.last_new_node_at, before);
@@ -465,7 +491,11 @@ mod tests {
             },
         );
 
-        apply_visit_to_state(&mut state, visit_for(node.clone(), vec![]));
+        apply_visit_to_state(
+            &mut state,
+            visit_for(node.clone(), vec![]),
+            test_config().max_tracked_nodes,
+        );
 
         let saved = state.node_states.get(&node).expect("node state");
         assert_eq!(saved.version, 70016);
@@ -634,7 +664,14 @@ mod tests {
         let b = test_endpoint(3);
         let seeds = vec![a.clone(), b.clone(), a.clone()];
 
-        seed_initial_nodes(&state, &stats, &queue_tx, seeds).await;
+        seed_initial_nodes(
+            &state,
+            &stats,
+            &queue_tx,
+            seeds,
+            test_config().max_tracked_nodes,
+        )
+        .await;
 
         assert_eq!(stats.queued_total.load(Ordering::Relaxed), 2);
         let first = queue_rx.try_recv().expect("first queued");
@@ -679,5 +716,42 @@ mod tests {
             persisted.enrichment.status,
             crate::crawler::IpEnrichmentStatus::NotApplicable
         );
+    }
+
+    #[test]
+    fn apply_visit_respects_max_tracked_nodes_limit() {
+        let mut state = CrawlState::new();
+        state.seen_nodes.insert(test_endpoint(2));
+        state.seen_nodes.insert(test_endpoint(3));
+
+        let inserted = apply_visit_to_state(
+            &mut state,
+            visit_for(test_endpoint(4), vec![test_endpoint(5)]),
+            2,
+        );
+
+        assert!(inserted.is_empty());
+        assert!(!state.pending_nodes.contains(&test_endpoint(5)));
+    }
+
+    #[tokio::test]
+    async fn seed_initial_nodes_respects_max_tracked_nodes_limit() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
+
+        seed_initial_nodes(
+            &state,
+            &stats,
+            &queue_tx,
+            vec![test_endpoint(2), test_endpoint(3)],
+            1,
+        )
+        .await;
+
+        assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
+        assert!(queue_rx.try_recv().is_ok());
+        assert!(queue_rx.try_recv().is_err());
+        assert_eq!(state.lock().await.seen_nodes.len(), 1);
     }
 }

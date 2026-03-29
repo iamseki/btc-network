@@ -59,6 +59,14 @@ impl Decode for Vec<AddrEntry> {
     fn decode(payload: &[u8]) -> io::Result<Self> {
         let mut c = 0;
         let count = read_varint(payload, &mut c)? as usize;
+
+        if count > 1000 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "addr: exceeds 1000-entry limit",
+            ));
+        }
+
         let mut entries = Vec::with_capacity(count);
 
         for _ in 0..count {
@@ -425,7 +433,9 @@ fn decode_net_addr(p: &[u8], c: &mut usize) -> io::Result<NetAddr> {
 
     let port = u16::from_be_bytes(slice2(p, c, "net_addr: port")?);
 
-    let ip = if ip_bytes[..12] == [0u8; 12] {
+    let ip = if ip_bytes[..12] == [0u8; 12]
+        || (ip_bytes[..10] == [0u8; 10] && ip_bytes[10] == 0xFF && ip_bytes[11] == 0xFF)
+    {
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(
             ip_bytes[12],
             ip_bytes[13],
@@ -772,6 +782,12 @@ mod tests {
         assert!(Vec::<AddrEntry>::decode(&payload).is_err());
     }
 
+    #[test]
+    fn decode_addr_rejects_over_1000_entries() {
+        let payload = vec![0xFD, 0xE9, 0x03];
+        assert!(Vec::<AddrEntry>::decode(&payload).is_err());
+    }
+
     // --- decode_net_addr ----------------------------------------------------
     //
     // Bitcoin P2P represents all addresses as 16-byte fields inside message
@@ -785,11 +801,9 @@ mod tests {
     // minority. Tor v2 is deprecated; Tor v3 and I2P require addrv2 (BIP 155),
     // which uses a separate message type and a different address encoding.
     //
-    // NOTE: our decoder currently checks for 12 zero bytes to detect IPv4.
-    // The standard Bitcoin encoding uses the ::ffff: prefix (10 zeros + 0xFF 0xFF),
-    // so real nodes' IPv4 addresses will fall through to the IPv6 branch.
-    // https://developer.bitcoin.org/reference/p2p_networking.html#addr
-    // https://github.com/bitcoin/bips/blob/master/bip-0155.mediawiki
+    // Legacy `net_addr` payloads may encode IPv4 using either 12 zero bytes or
+    // the standard ::ffff: prefix (10 zeros + 0xFF 0xFF). The decoder accepts
+    // both forms so legacy `addr` parsing stays compatible with real peers.
 
     /// Returns a raw 26-byte NetAddr field (services + 16-byte IP + port).
     fn raw_net_addr(services: u64, ip_field: [u8; 16], port: u16) -> Vec<u8> {
@@ -812,9 +826,10 @@ mod tests {
 
         let addr = decode_net_addr(&payload, &mut 0).unwrap();
         assert_eq!(addr.port, 8333);
-        // Our decoder checks for 12 zero bytes, not ::ffff:, so this
-        // decodes as IPv6. Fixing this would align with the spec.
-        assert!(matches!(addr.ip, std::net::IpAddr::V6(_)));
+        assert_eq!(
+            addr.ip,
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(8, 8, 8, 8))
+        );
     }
 
     #[test]
