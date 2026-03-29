@@ -519,6 +519,50 @@ mod tests {
         );
     }
 
+    #[test]
+    fn accepts_city_mmdb_as_country_compatible_dataset() {
+        let fixture = TestFixtureDir::new();
+        let asn_path = fixture.write_asn_db(
+            "asn.mmdb",
+            metadata::IpVersion::V4,
+            &[(
+                "8.8.8.0/24",
+                AsnFixture {
+                    autonomous_system_number: 15169,
+                    autonomous_system_organization: "Google LLC",
+                },
+            )],
+        );
+        let country_path = fixture.write_country_like_db(
+            "city.mmdb",
+            metadata::IpVersion::V4,
+            "GeoLite2-City",
+            &[(
+                "8.8.8.0/24",
+                CountryFixture {
+                    country: CountryIsoFixture { iso_code: "US" },
+                },
+            )],
+        );
+
+        let provider =
+            MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))
+                .expect("city dataset should be accepted for country lookups");
+        let endpoint = CrawlEndpoint::new(
+            "8.8.8.8",
+            8333,
+            CrawlNetwork::Ipv4,
+            Some(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))),
+        );
+
+        let enrichment = provider.enrich(&endpoint);
+
+        assert_eq!(enrichment.status, IpEnrichmentStatus::Matched);
+        assert_eq!(enrichment.asn, Some(15169));
+        assert_eq!(enrichment.country.as_deref(), Some("US"));
+        assert_eq!(enrichment.prefix.as_deref(), Some("8.8.8.0/24"));
+    }
+
     struct TestFixtureDir {
         root: PathBuf,
     }
@@ -573,9 +617,19 @@ mod tests {
             ip_version: metadata::IpVersion,
             entries: &[(&str, CountryFixture<'_>)],
         ) -> PathBuf {
+            self.write_country_like_db(file_name, ip_version, "GeoLite2-Country", entries)
+        }
+
+        fn write_country_like_db(
+            &self,
+            file_name: &str,
+            ip_version: metadata::IpVersion,
+            database_type: &str,
+            entries: &[(&str, CountryFixture<'_>)],
+        ) -> PathBuf {
             let mut db = Database::default();
             db.metadata.ip_version = ip_version;
-            db.metadata.database_type = "GeoLite2-Country".to_string();
+            db.metadata.database_type = database_type.to_string();
 
             for (network, value) in entries {
                 let data = db.insert_value(value).expect("insert country fixture");
