@@ -112,25 +112,46 @@ impl CrawlerRepository for ClickHouseCrawlerRepository {
                     "
 SELECT
     run_id,
-    argMax(phase, checkpointed_at) AS phase,
-    max(checkpointed_at) AS checkpointed_at,
-    argMax(started_at, checkpointed_at) AS started_at,
-    argMax(stop_reason, checkpointed_at) AS stop_reason,
-    argMax(failure_reason, checkpointed_at) AS failure_reason,
-    argMax(frontier_size, checkpointed_at) AS frontier_size,
-    argMax(in_flight_work, checkpointed_at) AS in_flight_work,
-    argMax(scheduled_tasks, checkpointed_at) AS scheduled_tasks,
-    argMax(successful_handshakes, checkpointed_at) AS successful_handshakes,
-    argMax(failed_tasks, checkpointed_at) AS failed_tasks,
-    argMax(queued_nodes_total, checkpointed_at) AS queued_nodes_total,
-    argMax(unique_nodes, checkpointed_at) AS unique_nodes,
-    argMax(discovered_node_states, checkpointed_at) AS discovered_node_states,
-    argMax(persisted_observation_rows, checkpointed_at) AS persisted_observation_rows,
-    argMax(writer_backlog, checkpointed_at) AS writer_backlog,
-    argMax(resume_state, checkpointed_at) AS resume_state,
-    argMax(caller, checkpointed_at) AS caller
-FROM ?
-GROUP BY run_id
+    phase,
+    latest_checkpointed_at AS checkpointed_at,
+    started_at,
+    stop_reason,
+    failure_reason,
+    frontier_size,
+    in_flight_work,
+    scheduled_tasks,
+    successful_handshakes,
+    failed_tasks,
+    queued_nodes_total,
+    unique_nodes,
+    discovered_node_states,
+    persisted_observation_rows,
+    writer_backlog,
+    resume_state,
+    caller
+FROM (
+    SELECT
+        run_id,
+        argMax(phase, checkpointed_at) AS phase,
+        max(checkpointed_at) AS latest_checkpointed_at,
+        argMax(started_at, checkpointed_at) AS started_at,
+        argMax(stop_reason, checkpointed_at) AS stop_reason,
+        argMax(failure_reason, checkpointed_at) AS failure_reason,
+        argMax(frontier_size, checkpointed_at) AS frontier_size,
+        argMax(in_flight_work, checkpointed_at) AS in_flight_work,
+        argMax(scheduled_tasks, checkpointed_at) AS scheduled_tasks,
+        argMax(successful_handshakes, checkpointed_at) AS successful_handshakes,
+        argMax(failed_tasks, checkpointed_at) AS failed_tasks,
+        argMax(queued_nodes_total, checkpointed_at) AS queued_nodes_total,
+        argMax(unique_nodes, checkpointed_at) AS unique_nodes,
+        argMax(discovered_node_states, checkpointed_at) AS discovered_node_states,
+        argMax(persisted_observation_rows, checkpointed_at) AS persisted_observation_rows,
+        argMax(writer_backlog, checkpointed_at) AS writer_backlog,
+        argMax(resume_state, checkpointed_at) AS resume_state,
+        argMax(caller, checkpointed_at) AS caller
+    FROM ?
+    GROUP BY run_id
+)
 ORDER BY checkpointed_at DESC
 ",
                 )

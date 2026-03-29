@@ -14,8 +14,8 @@ const CREATE_SCHEMA_MIGRATIONS_SQL: &str = r"
 CREATE TABLE IF NOT EXISTS ? (
     version String,
     name String,
-    checksum FixedString(64),
-    applied_at DateTime64(3, 'UTC')
+    checksum String,
+    applied_at DateTime
 ) ENGINE = MergeTree
 ORDER BY version
 ";
@@ -64,6 +64,7 @@ pub struct AppliedMigration {
     pub version: String,
     pub name: String,
     pub checksum: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime")]
     pub applied_at: DateTime<Utc>,
 }
 

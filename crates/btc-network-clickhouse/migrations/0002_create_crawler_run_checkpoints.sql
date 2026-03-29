@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS __BTC_NETWORK_DATABASE__.crawler_run_checkpoints (
     run_id String,
     phase LowCardinality(String),
-    checkpointed_at DateTime64(3, 'UTC'),
-    started_at DateTime64(3, 'UTC'),
+    checkpointed_at DateTime,
+    started_at DateTime,
     stop_reason Nullable(String),
     failure_reason Nullable(String),
     frontier_size UInt64,

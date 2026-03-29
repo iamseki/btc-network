@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Row, Serialize, Deserialize)]
 pub(crate) struct NodeObservationRow {
+    #[serde(with = "clickhouse::serde::chrono::datetime")]
     pub observed_at: DateTime<Utc>,
     pub crawl_run_id: String,
     pub observation_id: String,
@@ -35,7 +36,9 @@ pub(crate) struct NodeObservationRow {
 pub(crate) struct RunCheckpointRow {
     pub run_id: String,
     pub phase: String,
+    #[serde(with = "clickhouse::serde::chrono::datetime")]
     pub checkpointed_at: DateTime<Utc>,
+    #[serde(with = "clickhouse::serde::chrono::datetime")]
     pub started_at: DateTime<Utc>,
     pub stop_reason: Option<String>,
     pub failure_reason: Option<String>,

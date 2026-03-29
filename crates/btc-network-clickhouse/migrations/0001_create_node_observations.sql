@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS __BTC_NETWORK_DATABASE__.node_observations (
-    observed_at DateTime64(3, 'UTC'),
+    observed_at DateTime,
     crawl_run_id String,
     observation_id String,
     batch_id String,
