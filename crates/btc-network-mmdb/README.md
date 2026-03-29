@@ -52,7 +52,6 @@ From the repository root:
 
 ```bash
 cargo test -p btc-network-mmdb
-git diff --check
 ```
 
 The crate test suite writes tiny temporary MMDB fixtures at runtime and does not require Docker.

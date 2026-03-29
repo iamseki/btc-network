@@ -101,7 +101,6 @@ From the repository root:
 
 ```bash
 cargo test -p btc-network-clickhouse
-git diff --check
 ```
 
 The full crate test suite uses Testcontainers, so Docker must be available.
