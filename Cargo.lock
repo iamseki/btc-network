@@ -459,6 +459,8 @@ name = "btc-network-crawler"
 version = "0.1.0"
 dependencies = [
  "btc-network",
+ "btc-network-clickhouse",
+ "btc-network-mmdb",
  "btc-network-observability",
  "clap",
  "tokio",

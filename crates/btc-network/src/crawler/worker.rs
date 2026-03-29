@@ -340,8 +340,8 @@ fn try_track_endpoint(
 mod tests {
     use super::*;
     use crate::crawler::node::NodeProcessor;
-    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus, ObservationConfidence};
     use crate::crawler::types::NodeVisitResult;
+    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus, ObservationConfidence};
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::HashMap;
@@ -402,6 +402,8 @@ mod tests {
             idle_timeout: Duration::from_secs(1),
             lifecycle_tick: Duration::from_millis(5),
             connect_timeout: Duration::from_millis(50),
+            connect_max_attempts: 1,
+            connect_retry_backoff: Duration::ZERO,
             io_timeout: Duration::from_millis(50),
             verbose: false,
         }

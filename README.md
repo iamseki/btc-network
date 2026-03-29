@@ -73,6 +73,9 @@ Crawler:
 make crawler
 ```
 
+For the preferred local crawler setup with Docker-backed ClickHouse and local MMDB files, see [apps/crawler/README.md](apps/crawler/README.md).
+That guide also documents how to fetch and refresh the local MMDB datasets used by the crawler.
+
 Desktop app:
 
 ```bash
