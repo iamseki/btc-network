@@ -194,12 +194,12 @@ fn is_routable_ipv4(ip: Ipv4Addr) -> bool {
 fn is_routable_ipv6(ip: Ipv6Addr) -> bool {
     let segments = ip.segments();
 
-    !ip.is_loopback()
-        && !ip.is_multicast()
-        && !ip.is_unspecified()
-        && !ip.is_unique_local()
-        && !ip.is_unicast_link_local()
-        && !(segments[0] == 0x2001 && segments[1] == 0x0db8)
+    !(ip.is_loopback()
+        || ip.is_multicast()
+        || ip.is_unspecified()
+        || ip.is_unique_local()
+        || ip.is_unicast_link_local()
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

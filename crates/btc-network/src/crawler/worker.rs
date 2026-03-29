@@ -14,18 +14,33 @@ use super::ports::IpEnrichmentProvider;
 use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit};
 use crate::crawler::PersistedNodeObservation;
 
-pub(crate) async fn run_worker(
-    config: CrawlerConfig,
-    run_id: CrawlRunId,
-    state: Arc<Mutex<CrawlState>>,
-    stats: Arc<CrawlerStats>,
-    stop: Arc<AtomicBool>,
-    queue_rx: Arc<Mutex<mpsc::UnboundedReceiver<CrawlEndpoint>>>,
-    queue_tx: mpsc::UnboundedSender<CrawlEndpoint>,
-    observation_tx: mpsc::Sender<PersistedNodeObservation>,
-    processor: Arc<dyn NodeProcessor>,
-    enrichment_provider: Arc<dyn IpEnrichmentProvider>,
-) {
+pub(crate) struct WorkerContext {
+    pub(crate) config: CrawlerConfig,
+    pub(crate) run_id: CrawlRunId,
+    pub(crate) state: Arc<Mutex<CrawlState>>,
+    pub(crate) stats: Arc<CrawlerStats>,
+    pub(crate) stop: Arc<AtomicBool>,
+    pub(crate) queue_rx: Arc<Mutex<mpsc::UnboundedReceiver<CrawlEndpoint>>>,
+    pub(crate) queue_tx: mpsc::UnboundedSender<CrawlEndpoint>,
+    pub(crate) observation_tx: mpsc::Sender<PersistedNodeObservation>,
+    pub(crate) processor: Arc<dyn NodeProcessor>,
+    pub(crate) enrichment_provider: Arc<dyn IpEnrichmentProvider>,
+}
+
+pub(crate) async fn run_worker(context: WorkerContext) {
+    let WorkerContext {
+        config,
+        run_id,
+        state,
+        stats,
+        stop,
+        queue_rx,
+        queue_tx,
+        observation_tx,
+        processor,
+        enrichment_provider,
+    } = context;
+
     loop {
         if stop.load(Ordering::Relaxed) {
             return;
@@ -326,6 +341,7 @@ mod tests {
     use super::*;
     use crate::crawler::node::NodeProcessor;
     use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus, ObservationConfidence};
+    use crate::crawler::types::NodeVisitResult;
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::HashMap;
@@ -335,18 +351,11 @@ mod tests {
 
     struct MockProcessor {
         calls: AtomicUsize,
-        responses: StdMutex<
-            HashMap<CrawlEndpoint, Result<NodeVisit, crate::crawler::types::NodeVisitFailure>>,
-        >,
+        responses: StdMutex<HashMap<CrawlEndpoint, NodeVisitResult>>,
     }
 
     impl MockProcessor {
-        fn new(
-            responses: HashMap<
-                CrawlEndpoint,
-                Result<NodeVisit, crate::crawler::types::NodeVisitFailure>,
-            >,
-        ) -> Self {
+        fn new(responses: HashMap<CrawlEndpoint, NodeVisitResult>) -> Self {
             Self {
                 calls: AtomicUsize::new(0),
                 responses: StdMutex::new(responses),
@@ -355,25 +364,21 @@ mod tests {
     }
 
     impl NodeProcessor for MockProcessor {
-        fn process(
-            &self,
-            endpoint: CrawlEndpoint,
-            _config: CrawlerConfig,
-        ) -> Result<NodeVisit, crate::crawler::types::NodeVisitFailure> {
+        fn process(&self, endpoint: CrawlEndpoint, _config: CrawlerConfig) -> NodeVisitResult {
             self.calls.fetch_add(1, Ordering::Relaxed);
             self.responses
                 .lock()
                 .expect("mock responses lock")
                 .remove(&endpoint)
                 .unwrap_or_else(|| {
-                    Err(crate::crawler::types::NodeVisitFailure {
+                    Err(Box::new(crate::crawler::types::NodeVisitFailure {
                         node: endpoint,
                         latency: Duration::from_millis(1),
                         classification: crate::crawler::FailureClassification::Other(
                             "missing mock response".to_string(),
                         ),
                         message: "missing mock response".to_string(),
-                    })
+                    }))
                 })
         }
     }
@@ -518,18 +523,18 @@ mod tests {
         let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
             enrichment: IpEnrichment::unavailable(),
         });
-        run_worker(
+        run_worker(WorkerContext {
             config,
-            CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::new("run-1"),
             state,
-            Arc::clone(&stats),
+            stats: Arc::clone(&stats),
             stop,
-            Arc::new(Mutex::new(in_rx)),
-            out_tx,
-            obs_tx,
-            Arc::clone(&processor),
-            enrichment,
-        )
+            queue_rx: Arc::new(Mutex::new(in_rx)),
+            queue_tx: out_tx,
+            observation_tx: obs_tx,
+            processor: Arc::clone(&processor),
+            enrichment_provider: enrichment,
+        })
         .await;
 
         assert_eq!(stats.scheduled.load(Ordering::Relaxed), 0);
@@ -568,18 +573,18 @@ mod tests {
             ),
         });
 
-        run_worker(
+        run_worker(WorkerContext {
             config,
-            CrawlRunId::new("run-1"),
-            Arc::clone(&state),
-            Arc::clone(&stats),
+            run_id: CrawlRunId::new("run-1"),
+            state: Arc::clone(&state),
+            stats: Arc::clone(&stats),
             stop,
-            Arc::new(Mutex::new(in_rx)),
-            out_tx,
-            obs_tx,
-            Arc::clone(&processor),
-            enrichment,
-        )
+            queue_rx: Arc::new(Mutex::new(in_rx)),
+            queue_tx: out_tx,
+            observation_tx: obs_tx,
+            processor: Arc::clone(&processor),
+            enrichment_provider: enrichment,
+        })
         .await;
 
         let persisted = obs_rx.recv().await.expect("persisted observation");
@@ -615,12 +620,12 @@ mod tests {
         let mut responses = HashMap::new();
         responses.insert(
             node.clone(),
-            Err(crate::crawler::types::NodeVisitFailure {
+            Err(Box::new(crate::crawler::types::NodeVisitFailure {
                 node: node.clone(),
                 latency: Duration::from_millis(10),
                 classification: crate::crawler::FailureClassification::Connect,
                 message: "connect failed".to_string(),
-            }),
+            })),
         );
         let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(responses));
         let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
@@ -632,18 +637,18 @@ mod tests {
             ),
         });
 
-        run_worker(
+        run_worker(WorkerContext {
             config,
-            CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::new("run-1"),
             state,
-            Arc::clone(&stats),
+            stats: Arc::clone(&stats),
             stop,
-            Arc::new(Mutex::new(in_rx)),
-            out_tx,
-            obs_tx,
-            Arc::clone(&processor),
-            enrichment,
-        )
+            queue_rx: Arc::new(Mutex::new(in_rx)),
+            queue_tx: out_tx,
+            observation_tx: obs_tx,
+            processor: Arc::clone(&processor),
+            enrichment_provider: enrichment,
+        })
         .await;
 
         let persisted = obs_rx.recv().await.expect("persisted observation");

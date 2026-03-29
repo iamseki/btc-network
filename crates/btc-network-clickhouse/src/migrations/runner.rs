@@ -101,14 +101,13 @@ impl ClickHouseMigrationRunner {
             if let Some(expected) = bundled_migrations()
                 .iter()
                 .find(|candidate| candidate.version() == migration.version)
+                && expected.checksum() != migration.checksum
             {
-                if expected.checksum() != migration.checksum {
-                    return Err(ClickHouseMigrationError::ChecksumMismatch {
-                        version: migration.version.clone(),
-                        expected: expected.checksum().to_string(),
-                        actual: migration.checksum.clone(),
-                    });
-                }
+                return Err(ClickHouseMigrationError::ChecksumMismatch {
+                    version: migration.version.clone(),
+                    expected: expected.checksum().to_string(),
+                    actual: migration.checksum.clone(),
+                });
             }
         }
 
