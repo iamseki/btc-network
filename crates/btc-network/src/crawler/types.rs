@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
+
+use super::domain::{CrawlEndpoint, FailureClassification};
 
 /// Runtime configuration for the crawler orchestration loop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,19 +71,24 @@ pub(crate) struct CrawlerStats {
     pub(crate) success: AtomicUsize,
     pub(crate) failed: AtomicUsize,
     pub(crate) queued_total: AtomicUsize,
+    pub(crate) in_flight: AtomicUsize,
+    pub(crate) persisted_rows: AtomicUsize,
+    pub(crate) writer_backlog: AtomicUsize,
 }
 
 #[derive(Debug)]
 pub(crate) struct CrawlState {
-    pub(crate) queued_nodes: HashSet<SocketAddr>,
-    pub(crate) node_states: HashMap<SocketAddr, NodeState>,
+    pub(crate) seen_nodes: HashSet<CrawlEndpoint>,
+    pub(crate) pending_nodes: HashSet<CrawlEndpoint>,
+    pub(crate) node_states: HashMap<CrawlEndpoint, NodeState>,
     pub(crate) last_new_node_at: Instant,
 }
 
 impl CrawlState {
     pub(crate) fn new() -> Self {
         Self {
-            queued_nodes: HashSet::new(),
+            seen_nodes: HashSet::new(),
+            pending_nodes: HashSet::new(),
             node_states: HashMap::new(),
             last_new_node_at: Instant::now(),
         }
@@ -91,7 +97,16 @@ impl CrawlState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NodeVisit {
-    pub(crate) node: SocketAddr,
+    pub(crate) node: CrawlEndpoint,
     pub(crate) state: NodeState,
-    pub(crate) discovered: Vec<SocketAddr>,
+    pub(crate) discovered: Vec<CrawlEndpoint>,
+    pub(crate) latency: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct NodeVisitFailure {
+    pub(crate) node: CrawlEndpoint,
+    pub(crate) latency: Duration,
+    pub(crate) classification: FailureClassification,
+    pub(crate) message: String,
 }
