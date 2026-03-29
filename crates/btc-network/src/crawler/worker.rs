@@ -340,8 +340,8 @@ fn try_track_endpoint(
 mod tests {
     use super::*;
     use crate::crawler::node::NodeProcessor;
-    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus, ObservationConfidence};
     use crate::crawler::types::NodeVisitResult;
+    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus, ObservationConfidence};
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::HashMap;

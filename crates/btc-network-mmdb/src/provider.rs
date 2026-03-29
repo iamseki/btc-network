@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use btc_network::crawler::{CrawlEndpoint, IpEnrichment, IpEnrichmentProvider};
 use maxminddb::geoip2;
 use maxminddb::{MaxMindDbError, Reader};
+use serde::Deserialize;
 
 use crate::config::MmdbEnrichmentConfig;
 
@@ -165,6 +166,20 @@ struct CountryLookup {
     prefix: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct CountryRecord<'a> {
+    #[serde(borrow)]
+    country: Option<IsoCodeRecord<'a>>,
+    #[serde(borrow)]
+    registered_country: Option<IsoCodeRecord<'a>>,
+    country_code: Option<&'a str>,
+}
+
+#[derive(Deserialize)]
+struct IsoCodeRecord<'a> {
+    iso_code: Option<&'a str>,
+}
+
 fn lookup_asn(reader: &Reader<Vec<u8>>, ip_addr: IpAddr) -> Result<AsnLookup, MaxMindDbError> {
     let lookup = reader.lookup(ip_addr)?;
     if !lookup.has_data() {
@@ -193,15 +208,18 @@ fn lookup_country(
     }
 
     let prefix = Some(lookup.network()?.to_string());
-    let record: geoip2::Country<'_> = lookup
+    let record: CountryRecord<'_> = lookup
         .decode()?
         .ok_or_else(|| MaxMindDbError::invalid_input("country lookup returned no record"))?;
 
     Ok(CountryLookup {
         country: record
             .country
-            .iso_code
-            .or(record.registered_country.iso_code)
+            .and_then(|country| country.iso_code)
+            .or(record
+                .registered_country
+                .and_then(|country| country.iso_code))
+            .or(record.country_code)
             .map(ToOwned::to_owned),
         prefix,
     })
@@ -228,13 +246,15 @@ fn validate_database_type(
 }
 
 fn is_asn_database_type(database_type: &str) -> bool {
-    database_type.contains("ASN")
+    database_type.to_ascii_lowercase().contains("asn")
 }
 
 fn is_country_database_type(database_type: &str) -> bool {
-    database_type.contains("Country")
-        || database_type.contains("City")
-        || database_type.contains("Enterprise")
+    let database_type = database_type.to_ascii_lowercase();
+
+    database_type.contains("country")
+        || database_type.contains("city")
+        || database_type.contains("enterprise")
 }
 
 #[cfg(test)]
@@ -265,6 +285,11 @@ mod tests {
     #[derive(Serialize)]
     struct CountryFixture<'a> {
         country: CountryIsoFixture<'a>,
+    }
+
+    #[derive(Serialize)]
+    struct CountryCodeFixture<'a> {
+        country_code: &'a str,
     }
 
     #[test]
@@ -563,6 +588,62 @@ mod tests {
         assert_eq!(enrichment.prefix.as_deref(), Some("8.8.8.0/24"));
     }
 
+    #[test]
+    fn accepts_ip_location_db_database_types_case_insensitively() {
+        let fixture = TestFixtureDir::new();
+        let asn_path =
+            fixture.write_empty_typed_db("asn.mmdb", metadata::IpVersion::V4, "asn ipvAll");
+        let country_path =
+            fixture.write_empty_typed_db("country.mmdb", metadata::IpVersion::V4, "country ipvAll");
+
+        let provider =
+            MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path));
+
+        assert!(
+            provider.is_ok(),
+            "ip-location-db MMDB metadata should be accepted"
+        );
+    }
+
+    #[test]
+    fn enriches_country_from_ip_location_db_country_code_field() {
+        let fixture = TestFixtureDir::new();
+        let asn_path = fixture.write_asn_db(
+            "asn.mmdb",
+            metadata::IpVersion::V4,
+            &[(
+                "1.1.1.0/24",
+                AsnFixture {
+                    autonomous_system_number: 13335,
+                    autonomous_system_organization: "Cloudflare, Inc.",
+                },
+            )],
+        );
+        let country_path = fixture.write_country_code_db(
+            "country.mmdb",
+            metadata::IpVersion::V4,
+            "country ipvAll",
+            &[("1.1.1.0/24", CountryCodeFixture { country_code: "AU" })],
+        );
+
+        let provider =
+            MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))
+                .expect("provider");
+        let endpoint = CrawlEndpoint::new(
+            "1.1.1.7",
+            8333,
+            CrawlNetwork::Ipv4,
+            Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7))),
+        );
+
+        let enrichment = provider.enrich(&endpoint);
+
+        assert_eq!(enrichment.status, IpEnrichmentStatus::Matched);
+        assert_eq!(enrichment.asn, Some(13335));
+        assert_eq!(enrichment.country.as_deref(), Some("AU"));
+        assert_eq!(enrichment.prefix.as_deref(), Some("1.1.1.0/24"));
+    }
+
     struct TestFixtureDir {
         root: PathBuf,
     }
@@ -626,6 +707,25 @@ mod tests {
             ip_version: metadata::IpVersion,
             database_type: &str,
             entries: &[(&str, CountryFixture<'_>)],
+        ) -> PathBuf {
+            let mut db = Database::default();
+            db.metadata.ip_version = ip_version;
+            db.metadata.database_type = database_type.to_string();
+
+            for (network, value) in entries {
+                let data = db.insert_value(value).expect("insert country fixture");
+                db.insert_node(network.parse::<IpAddrWithMask>().expect("CIDR"), data);
+            }
+
+            self.write_db(file_name, &db)
+        }
+
+        fn write_country_code_db(
+            &self,
+            file_name: &str,
+            ip_version: metadata::IpVersion,
+            database_type: &str,
+            entries: &[(&str, CountryCodeFixture<'_>)],
         ) -> PathBuf {
             let mut db = Database::default();
             db.metadata.ip_version = ip_version;

@@ -8,7 +8,7 @@ readme = "README.md"
 [dependencies]
 btc-network = { path = "../btc-network" }
 maxminddb = "0.27.3"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 maxminddb-writer = "0.1.2"
-serde = { version = "1", features = ["derive"] }

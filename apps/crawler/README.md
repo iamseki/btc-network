@@ -6,6 +6,13 @@ The preferred local development path for the crawler uses:
 - host-managed MMDB files under `.dev-data/mmdb/`
 - explicit migrations before the crawler starts
 
+## Typical Local Flow
+
+1. Run `make crawler-mmdb-update`.
+2. Run `make crawler-dev-up`.
+3. Run `make crawler-migrate`.
+4. Run `make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"`.
+
 ## Local Paths
 
 Use these local development paths from the repository root:
@@ -156,26 +163,142 @@ clickhouse-client --host localhost --port 9000 --database btc_network --user btc
 
 Useful first queries:
 
+During an active run, start with the latest checkpoint stream for the most recent `run_id`:
+
 ```sql
-SELECT phase, checkpointed_at, scheduled_tasks, successful_handshakes, failed_tasks
+WITH latest_run AS (
+    SELECT run_id
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+SELECT
+    run_id,
+    phase,
+    checkpointed_at,
+    frontier_size,
+    in_flight_work,
+    scheduled_tasks,
+    successful_handshakes,
+    failed_tasks,
+    persisted_observation_rows,
+    writer_backlog
 FROM crawler_run_checkpoints
-ORDER BY checkpointed_at DESC
+WHERE run_id = (SELECT run_id FROM latest_run)
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
 LIMIT 10;
 ```
 
+To inspect what is currently failing in that run, include `failure_classification` rather than relying on `handshake_status` alone:
+
 ```sql
-SELECT observed_at, endpoint, network_type, handshake_status, enrichment_status, asn, country
+WITH latest_run AS (
+    SELECT run_id
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+SELECT
+    observed_at,
+    endpoint,
+    network_type,
+    handshake_status,
+    failure_classification,
+    latency_ms,
+    enrichment_status,
+    asn,
+    country
 FROM node_observations
+WHERE crawl_run_id = (SELECT run_id FROM latest_run)
+  AND handshake_status = 'failed'
 ORDER BY observed_at DESC
 LIMIT 20;
 ```
 
+After a run finishes, the latest checkpoint for that `run_id` is the quickest summary:
+
 ```sql
-SELECT asn, asn_organization, count() AS observations
+WITH latest_run AS (
+    SELECT run_id
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+SELECT
+    run_id,
+    phase,
+    started_at,
+    checkpointed_at,
+    stop_reason,
+    failure_reason,
+    scheduled_tasks,
+    successful_handshakes,
+    failed_tasks,
+    unique_nodes,
+    discovered_node_states,
+    persisted_observation_rows
+FROM crawler_run_checkpoints
+WHERE run_id = (SELECT run_id FROM latest_run)
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+LIMIT 1;
+```
+
+Failure mix by stage for the latest run:
+
+```sql
+WITH latest_run AS (
+    SELECT run_id
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+SELECT
+    failure_classification,
+    count() AS failures
 FROM node_observations
-WHERE asn IS NOT NULL
+WHERE crawl_run_id = (SELECT run_id FROM latest_run)
+  AND handshake_status = 'failed'
+GROUP BY failure_classification
+ORDER BY failures DESC, failure_classification ASC;
+```
+
+Verified versus failed observations by network type for the latest run:
+
+```sql
+WITH latest_run AS (
+    SELECT run_id
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+SELECT
+    network_type,
+    count() AS observations,
+    countIf(confidence_level = 'verified') AS verified_nodes,
+    countIf(confidence_level = 'failed') AS failed_nodes,
+    round(100.0 * countIf(confidence_level = 'verified') / nullIf(count(), 0), 2) AS verified_pct
+FROM node_observations
+WHERE crawl_run_id = (SELECT run_id FROM latest_run)
+GROUP BY network_type
+ORDER BY verified_nodes DESC, failed_nodes DESC, network_type ASC;
+```
+
+Top ASNs among verified nodes in the latest run:
+
+```sql
+WITH latest_run AS (
+    SELECT run_id
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+SELECT asn, asn_organization, count() AS verified_nodes
+FROM node_observations
+WHERE crawl_run_id = (SELECT run_id FROM latest_run)
+  AND confidence_level = 'verified'
+  AND asn IS NOT NULL
 GROUP BY asn, asn_organization
-ORDER BY observations DESC
+ORDER BY verified_nodes DESC, asn ASC
 LIMIT 20;
 ```
 
