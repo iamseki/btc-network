@@ -9,6 +9,8 @@ use super::domain::{CrawlEndpoint, FailureClassification};
 pub struct CrawlerConfig {
     /// Maximum number of worker tasks polling and processing nodes concurrently.
     pub max_concurrency: usize,
+    /// Maximum number of unique endpoints tracked in-memory during a crawl.
+    pub max_tracked_nodes: usize,
     /// Hard wall-clock runtime limit for the full crawl.
     pub max_runtime: Duration,
     /// Stop when no new nodes were queued during this window.
@@ -27,6 +29,7 @@ impl Default for CrawlerConfig {
     fn default() -> Self {
         Self {
             max_concurrency: 1000,
+            max_tracked_nodes: 100_000,
             max_runtime: Duration::from_secs(60 * 60),
             idle_timeout: Duration::from_secs(5 * 60),
             lifecycle_tick: Duration::from_secs(1),

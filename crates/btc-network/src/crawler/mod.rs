@@ -123,7 +123,14 @@ impl Crawler {
         let (observation_tx, observation_rx) =
             mpsc::channel::<PersistedNodeObservation>(writer_channel_capacity(request.config));
 
-        seed_initial_nodes(&state, &stats, &queue_tx, request.seed_nodes).await;
+        seed_initial_nodes(
+            &state,
+            &stats,
+            &queue_tx,
+            request.seed_nodes,
+            request.config.max_tracked_nodes,
+        )
+        .await;
         write_checkpoint(
             Arc::clone(&self.repository),
             run_id.clone(),
@@ -879,6 +886,7 @@ mod tests {
         let crawler = Crawler::with_adapters(
             CrawlerConfig {
                 max_concurrency: 1,
+                max_tracked_nodes: 16,
                 max_runtime: Duration::from_secs(1),
                 idle_timeout: Duration::from_secs(1),
                 lifecycle_tick: Duration::from_millis(5),
@@ -917,6 +925,7 @@ mod tests {
         let crawler = Arc::new(Crawler::with_adapters(
             CrawlerConfig {
                 max_concurrency: 1,
+                max_tracked_nodes: 16,
                 max_runtime: Duration::from_secs(1),
                 idle_timeout: Duration::from_secs(1),
                 lifecycle_tick: Duration::from_millis(5),
