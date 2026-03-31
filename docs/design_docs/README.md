@@ -40,3 +40,4 @@ Use only the canonical status values below.
 | `BNDD-0003` | `Web and future API deployment strategy` | `implemented` | [BNDD-0003/BNDD-0003.md](./BNDD-0003/BNDD-0003.md) |
 | `BNDD-0004` | `Agent runtime observability via OpenTelemetry Collector and Langfuse` | `rejected` | [BNDD-0004/BNDD-0004.md](./BNDD-0004/BNDD-0004.md) |
 | `BNDD-0005` | `Durable crawler runtime and analytics persistence` | `accepted` | [BNDD-0005/BNDD-0005.md](./BNDD-0005/BNDD-0005.md) |
+| `BNDD-0006` | `Public crawler analytics UI and browser-safe API contract` | `implemented` | [BNDD-0006/BNDD-0006.md](./BNDD-0006/BNDD-0006.md) |

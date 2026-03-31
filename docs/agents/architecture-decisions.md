@@ -37,7 +37,10 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - React components must not import Tauri APIs directly
 - Frontend code talks to an app-facing client boundary under `apps/web/src/lib/api/`
 - The current real desktop-backed flows are handshake, ping, peer address lookup, chain height, block summary, and block download
-- The plain web runtime remains placeholder-backed until a browser-safe backend/API exists
+- Crawler analytics reads now go through the browser-safe HTTP app in `apps/api`
+- Both web and desktop analytics reads use the same HTTP helper and `VITE_API_BASE_URL`
+- Do not add crawler analytics Tauri commands in the current slice
+- The plain web runtime remains placeholder-backed only for the single-peer flows that still lack a browser-safe backend
 
 ## Frontend Composition Rule
 

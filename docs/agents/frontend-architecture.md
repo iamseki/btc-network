@@ -7,7 +7,7 @@ This repository adopts a web-first frontend architecture with a thin Tauri deskt
 - Keep the core Bitcoin protocol implementation in Rust
 - Reuse the same page structure across desktop and future web deployment
 - Prevent the frontend from depending directly on Tauri runtime APIs
-- Mirror the current CLI workflows before introducing new product surface
+- Keep the single-peer workflows aligned with the existing shared Rust client flows while allowing browser-safe analytics pages to grow through the HTTP API
 
 ## Visual Direction
 
@@ -67,7 +67,7 @@ React page -> shared UI/components -> api client interface -> adapter implementa
 Examples:
 
 - Desktop: `tauri-client.ts` calls native commands exposed by Tauri
-- Web: `web-client.ts` currently provides placeholder/mock responses where a browser-safe backend does not yet exist
+- Web: `web-client.ts` uses the HTTP analytics helper for crawler analytics and placeholder/mock responses for the remaining single-peer flows that still lack a browser-safe backend
 
 Current real desktop-backed commands:
 
@@ -122,11 +122,14 @@ Already in place:
 - shared Rust block summary and download flows extracted into `crates/btc-network/src/client/peer.rs`
 - Tauri desktop commands wired for handshake, ping, peer addresses, chain height, block summary, and block download
 - runtime selection between `web-client` and `tauri-client`
+- shared HTTP analytics helper used by both runtime adapters for crawler run and ASN reads
+- browser-safe Rust API app under `apps/api/` for public crawler analytics reads
+- analytics-first pages for `Crawler Runs` and `Network Analytics`
 - render tests for the app shell, sidebar behavior, and current page actions
 
 Still intentionally incomplete:
 
-- browser-safe backend/API for non-placeholder web execution
+- browser-safe backend/API for the remaining single-peer web execution
 - one-shot `getheaders` UI if that workflow becomes a product need beyond chain height
 
 ## Rust Extraction Direction
@@ -138,4 +141,4 @@ As integration grows, keep using the same pattern:
 - session behavior in `crates/btc-network/src/session/`
 - app-facing workflow extraction in `crates/btc-network/src/client/`
 - Tauri commands as thin bridges only
-- browser-safe behavior isolated behind `web-client.ts`
+- browser-safe analytics behavior isolated behind the HTTP helper under `apps/web/src/lib/api/`
