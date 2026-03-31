@@ -1,4 +1,5 @@
 import type { BtcAppClient } from "./client";
+import { countNodesByAsn, getCrawlRun, listCrawlRuns } from "./analytics-http";
 import type {
   AddrResult,
   BlockDownloadRequest,
@@ -135,6 +136,15 @@ function makeBlockSummary(hash: string): BlockSummary {
 }
 
 export const webClient: BtcAppClient = {
+  listCrawlRuns(limit) {
+    return listCrawlRuns(limit);
+  },
+  getCrawlRun(runId) {
+    return getCrawlRun(runId);
+  },
+  countNodesByAsn(limit) {
+    return countNodesByAsn(limit);
+  },
   async handshake(request: ConnectionRequest): Promise<HandshakeResult> {
     const seed = seedFromText(request.node);
     const services = serviceSummaryFromSeed(seed);

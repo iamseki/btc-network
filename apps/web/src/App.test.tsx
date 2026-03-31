@@ -11,12 +11,18 @@ const mockGetAddr = vi.fn();
 const mockGetLastBlockHeight = vi.fn();
 const mockGetBlock = vi.fn();
 const mockDownloadBlock = vi.fn();
+const mockListCrawlRuns = vi.fn();
+const mockGetCrawlRun = vi.fn();
+const mockCountNodesByAsn = vi.fn();
 const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
 const originalInnerWidth = window.innerWidth;
 
 vi.mock("./lib/api", () => ({
   getAppClient: () => ({
+    listCrawlRuns: mockListCrawlRuns,
+    getCrawlRun: mockGetCrawlRun,
+    countNodesByAsn: mockCountNodesByAsn,
     handshake: mockHandshake,
     ping: mockPing,
     getAddr: mockGetAddr,
@@ -36,8 +42,34 @@ afterEach(() => {
   mockGetLastBlockHeight.mockReset();
   mockGetBlock.mockReset();
   mockDownloadBlock.mockReset();
+  mockListCrawlRuns.mockReset();
+  mockGetCrawlRun.mockReset();
+  mockCountNodesByAsn.mockReset();
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
+  mockListCrawlRuns.mockResolvedValue([]);
+  mockGetCrawlRun.mockResolvedValue({
+    run: {
+      runId: "crawl-1",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 100,
+      successfulHandshakes: 25,
+      failedTasks: 75,
+      uniqueNodes: 120,
+      persistedObservationRows: 100,
+      successPct: 25,
+      scheduledPct: 83.33,
+      unscheduledGap: 20,
+    },
+    checkpoints: [],
+    failureCounts: [],
+    networkOutcomes: [],
+  });
+  mockCountNodesByAsn.mockResolvedValue([]);
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
@@ -52,6 +84,29 @@ beforeEach(() => {
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
+  mockListCrawlRuns.mockResolvedValue([]);
+  mockGetCrawlRun.mockResolvedValue({
+    run: {
+      runId: "crawl-1",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 100,
+      successfulHandshakes: 25,
+      failedTasks: 75,
+      uniqueNodes: 120,
+      persistedObservationRows: 100,
+      successPct: 25,
+      scheduledPct: 83.33,
+      unscheduledGap: 20,
+    },
+    checkpoints: [],
+    failureCounts: [],
+    networkOutcomes: [],
+  });
+  mockCountNodesByAsn.mockResolvedValue([]);
 });
 
 function setViewportWidth(width: number) {
@@ -68,10 +123,13 @@ describe("App sidebar shell", () => {
 
     expect(screen.queryByText("Menu")).toBeNull();
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Connection" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Connection" })).toBeTruthy();
-    expect(screen.getByText("Session Log")).toBeTruthy();
-    expect(screen.getByText(/Frontend loaded\./)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Network Analytics" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Network Analytics" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Network Analytics Views" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Verification" })).toBeTruthy();
+    expect(screen.queryByText("Session Log")).toBeNull();
+    expect(screen.queryByText(/Frontend loaded\./)).toBeNull();
   });
 
   it("expands the sidebar when the trigger is clicked", () => {
@@ -131,10 +189,37 @@ describe("App sidebar shell", () => {
   it("switches the visible page from the sidebar", () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Chain Height" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
 
-    expect(screen.getByRole("heading", { name: "Chain Height" })).toBeTruthy();
-    expect(screen.getByText("Fetch the current chain height for this peer.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Crawler Runs Views" })).toBeTruthy();
+    expect(screen.getByText(/pick one run, then choose the exact slice/i)).toBeTruthy();
+  });
+
+  it("shows page-specific sub-navigation for analytics pages", () => {
+    render(<App />);
+
+    expect(screen.getAllByRole("button", { name: "Network Analytics" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Crawler Runs" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+
+    expect(screen.getByRole("button", { name: "Checkpoints" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Failures" })).toBeTruthy();
+  });
+
+  it("updates the header eyebrow when the analytics sub-navigation changes", () => {
+    render(<App />);
+
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Overview");
+
+    fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Top ASNs");
+
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Failures" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Failures");
   });
 
   it("requests the last block height from the headers page", async () => {
@@ -248,6 +333,7 @@ describe("App sidebar shell", () => {
 
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Connection" }));
     fireEvent.click(screen.getByRole("button", { name: "Run Handshake" }));
     fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
 
@@ -292,6 +378,7 @@ describe("App sidebar shell", () => {
   it("clears the session log from the global panel", () => {
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Connection" }));
     fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear session log" }));
 

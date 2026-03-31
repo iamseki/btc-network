@@ -78,3 +78,62 @@ export type UiLogEvent = {
   level: "info" | "warn" | "error";
   message: string;
 };
+
+export type CrawlRunListItem = {
+  runId: string;
+  phase: string;
+  startedAt: string;
+  lastCheckpointedAt: string;
+  stopReason: string | null;
+  failureReason: string | null;
+  scheduledTasks: number;
+  successfulHandshakes: number;
+  failedTasks: number;
+  uniqueNodes: number;
+  persistedObservationRows: number;
+  successPct: number;
+  scheduledPct: number;
+  unscheduledGap: number;
+};
+
+export type CrawlRunCheckpointItem = {
+  phase: string;
+  checkpointedAt: string;
+  checkpointSequence: number;
+  stopReason: string | null;
+  failureReason: string | null;
+  frontierSize: number;
+  inFlightWork: number;
+  scheduledTasks: number;
+  successfulHandshakes: number;
+  failedTasks: number;
+  uniqueNodes: number;
+  persistedObservationRows: number;
+  writerBacklog: number;
+};
+
+export type FailureClassificationCount = {
+  classification: string;
+  observations: number;
+};
+
+export type NetworkOutcomeCount = {
+  networkType: string;
+  observations: number;
+  verifiedNodes: number;
+  failedNodes: number;
+  verifiedPct: number;
+};
+
+export type AsnNodeCountItem = {
+  asn: number | null;
+  asnOrganization: string | null;
+  verifiedNodes: number;
+};
+
+export type CrawlRunDetail = {
+  run: CrawlRunListItem;
+  checkpoints: CrawlRunCheckpointItem[];
+  failureCounts: FailureClassificationCount[];
+  networkOutcomes: NetworkOutcomeCount[];
+};

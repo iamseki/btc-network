@@ -1,8 +1,45 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { webClient } from "./web-client";
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("webClient", () => {
+  it("loads crawler runs through the shared HTTP analytics helper", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          runs: [
+            {
+              runId: "crawl-1",
+              phase: "completed",
+              startedAt: "2026-03-30T12:00:00Z",
+              lastCheckpointedAt: "2026-03-30T12:10:00Z",
+              stopReason: "idle timeout",
+              failureReason: null,
+              scheduledTasks: 100,
+              successfulHandshakes: 25,
+              failedTasks: 75,
+              uniqueNodes: 120,
+              persistedObservationRows: 100,
+              successPct: 25,
+              scheduledPct: 83.33,
+              unscheduledGap: 20,
+            },
+          ],
+        }),
+      }),
+    );
+
+    const runs = await webClient.listCrawlRuns();
+
+    expect(runs[0]?.runId).toBe("crawl-1");
+  });
+
   it("returns a deterministic mock handshake response for the requested node", async () => {
     const result = await webClient.handshake({ node: "seed.bitnodes.io:8333" });
 

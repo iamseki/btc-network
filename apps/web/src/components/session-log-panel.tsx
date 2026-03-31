@@ -27,7 +27,7 @@ export function SessionLogPanel({
   const latestEvent = events[0] ?? null;
 
   return (
-    <section className="border-t border-border bg-card/92 shadow-[0_-10px_30px_rgba(0,0,0,0.25)] md:sticky md:bottom-0 md:z-10">
+    <section className="border-t border-border bg-card/92 shadow-[0_-10px_30px_rgba(0,0,0,0.25)]">
       <div className="px-3 py-3 md:px-4 lg:px-6">
         <div className="flex items-center gap-3">
           <button
