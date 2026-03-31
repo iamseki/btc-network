@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "apps/api",
     "apps/cli",
     "apps/crawler",
     "apps/listener",
@@ -10,6 +11,7 @@ members = [
     "crates/btc-network-observability",
 ]
 default-members = [
+    "apps/api",
     "apps/cli",
     "apps/crawler",
     "apps/listener",

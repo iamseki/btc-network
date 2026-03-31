@@ -54,6 +54,14 @@ crawler-dev-logs:
 listener:
 	@cargo run -p btc-network-listener
 
+## Run the crawler analytics API with local ClickHouse defaults
+api:
+	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
+	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
+	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
+	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
+	cargo run -p btc-network-api
+
 ## Run crawler timing debug workflow (captures raw logs + timing summary)
 crawler-debug:
 	@scripts/crawler_timing.sh $(OUT) --timeout-minutes $(TIMEOUT_MINUTES) -- --max-concurrency $(MAX_CONCURRENCY) --idle-timeout-minutes $(IDLE_TIMEOUT_MINUTES)
@@ -103,6 +111,10 @@ rust-test:
 ## Run desktop Rust tests
 desktop-test:
 	@cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+
+## Run API tests
+api-test:
+	@cargo test -p btc-network-api --locked
 
 ## Audit Rust dependencies against RustSec
 security-rust-audit:
@@ -174,6 +186,8 @@ help:
 	@echo "  make crawler-debug"
 	@echo "    example: make crawler-debug TIMEOUT_MINUTES=5 MAX_CONCURRENCY=1000 IDLE_TIMEOUT_MINUTES=5 OUT=artifacts/crawler-timing-run-1"
 	@echo "  make listener"
+	@echo "  make api"
+	@echo "    uses local dev ClickHouse defaults: url=$(CRAWLER_CLICKHOUSE_LOCAL_URL) db=$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE) user=$(CRAWLER_CLICKHOUSE_LOCAL_USER)"
 	@echo "  make cli ARGS=\"--node host:port ping\""
 	@echo "  make build"
 	@echo "  make test"
@@ -187,6 +201,7 @@ help:
 	@echo "  make web-test"
 	@echo "  make web-build"
 	@echo "  make rust-test"
+	@echo "  make api-test"
 	@echo "  make desktop-install"
 	@echo "  make desktop-dev"
 	@echo "  make desktop-test"

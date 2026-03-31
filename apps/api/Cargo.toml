@@ -1,0 +1,20 @@
+[package]
+name = "btc-network-api"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+axum = "0.8"
+btc-network = { path = "../../crates/btc-network" }
+btc-network-clickhouse = { path = "../../crates/btc-network-clickhouse" }
+btc-network-observability = { path = "../../crates/btc-network-observability" }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["cors", "timeout"] }
+tracing = "0.1"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+serde_json = "1"

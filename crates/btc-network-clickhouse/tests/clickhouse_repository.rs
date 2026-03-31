@@ -9,19 +9,19 @@ use std::{env, fs};
 use ::clickhouse::Row;
 use btc_network::crawler::{
     BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
-    CrawlRunId, CrawlRunMetrics, CrawlerRepository, HandshakeStatus, IpEnrichment,
-    IpEnrichmentProvider, ObservationConfidence, ObservationId, PersistedNodeObservation,
-    RawNodeObservation,
+    CrawlRunId, CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, HandshakeStatus,
+    IpEnrichment, IpEnrichmentProvider, ObservationConfidence, ObservationId,
+    PersistedNodeObservation, RawNodeObservation,
 };
 use btc_network_clickhouse::{
     ClickHouseConnectionConfig, ClickHouseCrawlerRepository, ClickHouseMigrationRunner,
 };
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use chrono::{Duration, Utc};
-use serde::Deserialize;
-use serde::Serialize;
 use maxminddb_writer::paths::IpAddrWithMask;
 use maxminddb_writer::{Database, metadata};
+use serde::Deserialize;
+use serde::Serialize;
 use testcontainers_modules::{
     clickhouse,
     testcontainers::{ContainerAsync, ImageExt, runners::AsyncRunner},
@@ -285,7 +285,7 @@ async fn repository_round_trips_live_clickhouse_state() -> TestResult {
         Some("{\"seen_nodes\":[],\"pending_nodes\":[],\"in_flight_nodes\":[],\"node_states\":[]}")
     );
 
-    let mut counts = repository.count_nodes_by_asn().await?;
+    let mut counts = CrawlerRepository::count_nodes_by_asn(&repository).await?;
     counts.sort_by(|left, right| {
         left.asn
             .cmp(&right.asn)
@@ -447,6 +447,150 @@ async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicabl
     assert_eq!(rows[1].asn, None);
     assert_eq!(rows[1].country, None);
     assert_eq!(rows[1].prefix, None);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = ClickHouseCrawlerRepository::new(&db.config);
+    let base_time = Utc::now();
+
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &CrawlRunId::new("run-older"),
+            CrawlPhase::Completed,
+            base_time,
+            1,
+            Some("idle timeout".to_string()),
+        ))
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &CrawlRunId::new("run-newer"),
+            CrawlPhase::Failed,
+            base_time + Duration::seconds(5),
+            1,
+            Some("checkpoint failure".to_string()),
+        ))
+        .await?;
+
+    let runs = CrawlerAnalyticsReader::list_crawl_runs(&repository, 1).await?;
+
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].run_id, "run-newer");
+    assert_eq!(runs[0].phase, "failed");
+    assert_eq!(runs[0].success_pct, 133.33);
+    assert_eq!(runs[0].scheduled_pct, 50.0);
+    assert_eq!(runs[0].unscheduled_gap, 3);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = ClickHouseCrawlerRepository::new(&db.config);
+    let run_id = CrawlRunId::new("run-detail-1");
+    let base_time = Utc::now();
+
+    repository
+        .insert_observations_stream(vec![
+            sample_verified_observation(
+                &run_id,
+                "1.1.1.7",
+                "observation-a1",
+                base_time,
+                Some(64512),
+                Some("Example ASN"),
+                Some("US"),
+            ),
+            sample_failed_observation(
+                &run_id,
+                "1.1.1.9",
+                "observation-a2",
+                base_time + Duration::seconds(1),
+            ),
+        ])
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Crawling,
+            base_time + Duration::seconds(2),
+            1,
+            None,
+        ))
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Failed,
+            base_time + Duration::seconds(3),
+            2,
+            Some("checkpoint failure".to_string()),
+        ))
+        .await?;
+
+    let detail = CrawlerAnalyticsReader::get_crawl_run(&repository, &run_id, 10)
+        .await?
+        .expect("run detail");
+
+    assert_eq!(detail.run.run_id, "run-detail-1");
+    assert_eq!(detail.run.phase, "failed");
+    assert_eq!(detail.checkpoints.len(), 2);
+    assert_eq!(detail.checkpoints[0].phase, "failed");
+    assert_eq!(detail.failure_counts.len(), 1);
+    assert_eq!(detail.failure_counts[0].classification, "handshake");
+    assert_eq!(detail.failure_counts[0].observations, 1);
+    assert_eq!(detail.network_outcomes.len(), 1);
+    assert_eq!(detail.network_outcomes[0].network_type, "ipv4");
+    assert_eq!(detail.network_outcomes[0].observations, 2);
+    assert_eq!(detail.network_outcomes[0].verified_nodes, 1);
+    assert_eq!(detail.network_outcomes[0].failed_nodes, 1);
+    assert_eq!(detail.network_outcomes[0].verified_pct, 50.0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn analytics_reader_limits_asn_counts() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = ClickHouseCrawlerRepository::new(&db.config);
+    let run_id = CrawlRunId::new("run-asn-limit");
+    let base_time = Utc::now();
+
+    repository
+        .insert_observations_stream(vec![
+            sample_verified_observation(
+                &run_id,
+                "1.1.1.7",
+                "observation-a1",
+                base_time,
+                Some(64512),
+                Some("Example ASN"),
+                Some("US"),
+            ),
+            sample_verified_observation(
+                &run_id,
+                "8.8.8.8",
+                "observation-a2",
+                base_time + Duration::seconds(1),
+                Some(15169),
+                Some("Google LLC"),
+                Some("US"),
+            ),
+        ])
+        .await?;
+
+    let counts = CrawlerAnalyticsReader::count_nodes_by_asn(&repository, 1).await?;
+
+    assert_eq!(counts.len(), 1);
+    assert_eq!(counts[0].verified_nodes, 1);
 
     Ok(())
 }
