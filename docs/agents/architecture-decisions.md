@@ -39,6 +39,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - The current real desktop-backed flows are handshake, ping, peer address lookup, chain height, block summary, and block download
 - Crawler analytics reads now go through the browser-safe HTTP app in `apps/api`
 - Both web and desktop analytics reads use the same HTTP helper and `VITE_API_BASE_URL`
+- Hosted browser builds may opt into `VITE_DEMO_MODE` to serve deterministic mock analytics data instead of calling the HTTP API
 - Do not add crawler analytics Tauri commands in the current slice
 - The plain web runtime remains placeholder-backed only for the single-peer flows that still lack a browser-safe backend
 

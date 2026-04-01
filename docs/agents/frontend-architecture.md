@@ -67,7 +67,7 @@ React page -> shared UI/components -> api client interface -> adapter implementa
 Examples:
 
 - Desktop: `tauri-client.ts` calls native commands exposed by Tauri
-- Web: `web-client.ts` uses the HTTP analytics helper for crawler analytics and placeholder/mock responses for the remaining single-peer flows that still lack a browser-safe backend
+- Web: `web-client.ts` uses the HTTP analytics helper for crawler analytics by default, can switch to deterministic analytics demo data through `VITE_DEMO_MODE`, and keeps placeholder/mock responses for the remaining single-peer flows that still lack a browser-safe backend
 
 Current real desktop-backed commands:
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import type { BtcAppClient } from "@/lib/api/client";
 import type { CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+import { isDemoModeEnabled } from "@/lib/runtime-config";
 
 export type CrawlerRunsPanel = "overview" | "checkpoints" | "failures" | "network";
 
@@ -32,6 +33,7 @@ export function CrawlerRunsPage({
   onPanelChange,
   showPanelNav = true,
 }: CrawlerRunsPageProps) {
+  const demoMode = isDemoModeEnabled();
   const [runs, setRuns] = useState<CrawlRunListItem[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CrawlRunDetail | null>(null);
@@ -113,7 +115,9 @@ export function CrawlerRunsPage({
     null;
   const panelDescription =
     activePanel === "overview"
-      ? "Inspect recent runs without opening every breakdown at once. Pick one run, then choose the exact slice you want to see."
+      ? demoMode
+        ? "Inspect the deterministic demo run set used in the hosted browser build."
+        : "Inspect recent runs without opening every breakdown at once. Pick one run, then choose the exact slice you want to see."
       : activePanel === "checkpoints"
         ? "Review recent checkpoint progression for the selected run."
         : activePanel === "failures"
@@ -277,11 +281,21 @@ export function CrawlerRunsPage({
             </div>
 
             {isLoadingRuns ? (
-              <StatusPanel message="Loading recent crawler runs from the analytics API." />
+              <StatusPanel
+                message={
+                  demoMode
+                    ? "Loading recent crawler runs from the embedded demo dataset."
+                    : "Loading recent crawler runs from the analytics API."
+                }
+              />
             ) : runsError ? (
               <StatusPanel tone="error" message={`Crawler runs failed to load: ${runsError}`} />
             ) : runs.length === 0 ? (
-              <StatusPanel message="No crawler runs persisted yet." />
+              <StatusPanel
+                message={
+                  demoMode ? "No demo crawler runs are configured." : "No crawler runs persisted yet."
+                }
+              />
             ) : (
               <div className="overflow-hidden rounded-[8px] border border-border/80 bg-background/70">
                 <Table>

@@ -4,40 +4,59 @@ import { webClient } from "./web-client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe("webClient", () => {
   it("loads crawler runs through the shared HTTP analytics helper", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          runs: [
-            {
-              runId: "crawl-1",
-              phase: "completed",
-              startedAt: "2026-03-30T12:00:00Z",
-              lastCheckpointedAt: "2026-03-30T12:10:00Z",
-              stopReason: "idle timeout",
-              failureReason: null,
-              scheduledTasks: 100,
-              successfulHandshakes: 25,
-              failedTasks: 75,
-              uniqueNodes: 120,
-              persistedObservationRows: 100,
-              successPct: 25,
-              scheduledPct: 83.33,
-              unscheduledGap: 20,
-            },
-          ],
-        }),
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        runs: [
+          {
+            runId: "crawl-1",
+            phase: "completed",
+            startedAt: "2026-03-30T12:00:00Z",
+            lastCheckpointedAt: "2026-03-30T12:10:00Z",
+            stopReason: "idle timeout",
+            failureReason: null,
+            scheduledTasks: 100,
+            successfulHandshakes: 25,
+            failedTasks: 75,
+            uniqueNodes: 120,
+            persistedObservationRows: 100,
+            successPct: 25,
+            scheduledPct: 83.33,
+            unscheduledGap: 20,
+          },
+        ],
       }),
-    );
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const runs = await webClient.listCrawlRuns();
 
     expect(runs[0]?.runId).toBe("crawl-1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves analytics from the embedded demo dataset when demo mode is enabled", async () => {
+    vi.stubEnv("VITE_DEMO_MODE", "true");
+    const fetchMock = vi.fn().mockRejectedValue(new Error("fetch should not run in demo mode"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [runs, detail, asnRows] = await Promise.all([
+      webClient.listCrawlRuns(2),
+      webClient.getCrawlRun("crawl-demo-2026-03-31-1800"),
+      webClient.countNodesByAsn(3),
+    ]);
+
+    expect(runs).toHaveLength(2);
+    expect(runs[0]?.runId).toBe("crawl-demo-2026-03-31-1800");
+    expect(detail.run.runId).toBe("crawl-demo-2026-03-31-1800");
+    expect(detail.networkOutcomes.length).toBeGreaterThan(0);
+    expect(asnRows).toHaveLength(3);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns a deterministic mock handshake response for the requested node", async () => {
@@ -110,8 +129,12 @@ describe("webClient", () => {
 
     const events = await webClient.getRecentEvents();
 
-    expect(events[0]?.message).toContain("Mock ping round-trip completed");
-    expect(events[1]?.message).toContain("Mock handshake completed");
-    expect(events.some((event) => event.message.includes("placeholder mode"))).toBe(true);
+    expect(events.some((event) => event.message.includes("Mock ping round-trip completed"))).toBe(
+      true,
+    );
+    expect(events.some((event) => event.message.includes("Mock handshake completed"))).toBe(true);
+    expect(
+      events.some((event) => event.message.includes("browser mode") || event.message.includes("demo mode")),
+    ).toBe(true);
   });
 });

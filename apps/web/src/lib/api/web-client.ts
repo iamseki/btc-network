@@ -2,16 +2,20 @@ import type { BtcAppClient } from "./client";
 import { countNodesByAsn, getCrawlRun, listCrawlRuns } from "./analytics-http";
 import type {
   AddrResult,
+  AsnNodeCountItem,
   BlockDownloadRequest,
   BlockDownloadResult,
   BlockSummary,
   ConnectionRequest,
+  CrawlRunDetail,
+  CrawlRunListItem,
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
   PingResult,
   UiLogEvent,
 } from "./types";
+import { isDemoModeEnabled } from "@/lib/runtime-config";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -27,7 +31,9 @@ const INITIAL_EVENTS: UiLogEvent[] = [
   {
     at: nowIso(),
     level: "info",
-    message: "Web client is running in placeholder mode until the desktop and HTTP adapters are wired.",
+    message: isDemoModeEnabled()
+      ? "Web client is running in demo mode with deterministic mock data."
+      : "Web client is running in browser mode. Peer tools use deterministic mock data until browser-safe backends are wired.",
   },
 ];
 
@@ -135,14 +141,387 @@ function makeBlockSummary(hash: string): BlockSummary {
   };
 }
 
+const DEMO_RUNS: CrawlRunListItem[] = [
+  {
+    runId: "crawl-demo-2026-03-31-1800",
+    phase: "completed",
+    startedAt: "2026-03-31T18:00:00Z",
+    lastCheckpointedAt: "2026-03-31T18:22:00Z",
+    stopReason: "idle timeout",
+    failureReason: null,
+    scheduledTasks: 180,
+    successfulHandshakes: 74,
+    failedTasks: 106,
+    uniqueNodes: 241,
+    persistedObservationRows: 180,
+    successPct: 41.11,
+    scheduledPct: 74.69,
+    unscheduledGap: 61,
+  },
+  {
+    runId: "crawl-demo-2026-03-30-1200",
+    phase: "completed",
+    startedAt: "2026-03-30T12:00:00Z",
+    lastCheckpointedAt: "2026-03-30T12:18:00Z",
+    stopReason: "frontier drained",
+    failureReason: null,
+    scheduledTasks: 152,
+    successfulHandshakes: 58,
+    failedTasks: 94,
+    uniqueNodes: 204,
+    persistedObservationRows: 152,
+    successPct: 38.16,
+    scheduledPct: 74.51,
+    unscheduledGap: 52,
+  },
+  {
+    runId: "crawl-demo-2026-03-29-0915",
+    phase: "failed",
+    startedAt: "2026-03-29T09:15:00Z",
+    lastCheckpointedAt: "2026-03-29T09:41:00Z",
+    stopReason: null,
+    failureReason: "shutdown grace period elapsed",
+    scheduledTasks: 96,
+    successfulHandshakes: 21,
+    failedTasks: 75,
+    uniqueNodes: 173,
+    persistedObservationRows: 96,
+    successPct: 21.88,
+    scheduledPct: 55.49,
+    unscheduledGap: 77,
+  },
+];
+
+const DEMO_RUN_DETAILS: Record<string, CrawlRunDetail> = {
+  "crawl-demo-2026-03-31-1800": {
+    run: DEMO_RUNS[0]!,
+    checkpoints: [
+      {
+        phase: "bootstrapping",
+        checkpointedAt: "2026-03-31T18:06:00Z",
+        checkpointSequence: 1,
+        stopReason: null,
+        failureReason: null,
+        frontierSize: 182,
+        inFlightWork: 24,
+        scheduledTasks: 48,
+        successfulHandshakes: 19,
+        failedTasks: 29,
+        uniqueNodes: 122,
+        persistedObservationRows: 48,
+        writerBacklog: 3,
+      },
+      {
+        phase: "steady_state",
+        checkpointedAt: "2026-03-31T18:14:00Z",
+        checkpointSequence: 2,
+        stopReason: null,
+        failureReason: null,
+        frontierSize: 98,
+        inFlightWork: 11,
+        scheduledTasks: 129,
+        successfulHandshakes: 53,
+        failedTasks: 76,
+        uniqueNodes: 214,
+        persistedObservationRows: 129,
+        writerBacklog: 1,
+      },
+      {
+        phase: "completed",
+        checkpointedAt: "2026-03-31T18:22:00Z",
+        checkpointSequence: 3,
+        stopReason: "idle timeout",
+        failureReason: null,
+        frontierSize: 61,
+        inFlightWork: 0,
+        scheduledTasks: 180,
+        successfulHandshakes: 74,
+        failedTasks: 106,
+        uniqueNodes: 241,
+        persistedObservationRows: 180,
+        writerBacklog: 0,
+      },
+    ],
+    failureCounts: [
+      { classification: "connect", observations: 47 },
+      { classification: "handshake", observations: 29 },
+      { classification: "timeout", observations: 18 },
+      { classification: "peer-discovery", observations: 12 },
+    ],
+    networkOutcomes: [
+      {
+        networkType: "ipv4",
+        observations: 132,
+        verifiedNodes: 58,
+        failedNodes: 74,
+        verifiedPct: 43.94,
+      },
+      {
+        networkType: "ipv6",
+        observations: 28,
+        verifiedNodes: 10,
+        failedNodes: 18,
+        verifiedPct: 35.71,
+      },
+      {
+        networkType: "torv3",
+        observations: 14,
+        verifiedNodes: 5,
+        failedNodes: 9,
+        verifiedPct: 35.71,
+      },
+      {
+        networkType: "cjdns",
+        observations: 6,
+        verifiedNodes: 1,
+        failedNodes: 5,
+        verifiedPct: 16.67,
+      },
+    ],
+  },
+  "crawl-demo-2026-03-30-1200": {
+    run: DEMO_RUNS[1]!,
+    checkpoints: [
+      {
+        phase: "bootstrapping",
+        checkpointedAt: "2026-03-30T12:05:00Z",
+        checkpointSequence: 1,
+        stopReason: null,
+        failureReason: null,
+        frontierSize: 151,
+        inFlightWork: 17,
+        scheduledTasks: 45,
+        successfulHandshakes: 18,
+        failedTasks: 27,
+        uniqueNodes: 108,
+        persistedObservationRows: 45,
+        writerBacklog: 4,
+      },
+      {
+        phase: "steady_state",
+        checkpointedAt: "2026-03-30T12:11:00Z",
+        checkpointSequence: 2,
+        stopReason: null,
+        failureReason: null,
+        frontierSize: 88,
+        inFlightWork: 8,
+        scheduledTasks: 103,
+        successfulHandshakes: 40,
+        failedTasks: 63,
+        uniqueNodes: 176,
+        persistedObservationRows: 103,
+        writerBacklog: 2,
+      },
+      {
+        phase: "completed",
+        checkpointedAt: "2026-03-30T12:18:00Z",
+        checkpointSequence: 3,
+        stopReason: "frontier drained",
+        failureReason: null,
+        frontierSize: 52,
+        inFlightWork: 0,
+        scheduledTasks: 152,
+        successfulHandshakes: 58,
+        failedTasks: 94,
+        uniqueNodes: 204,
+        persistedObservationRows: 152,
+        writerBacklog: 0,
+      },
+    ],
+    failureCounts: [
+      { classification: "connect", observations: 36 },
+      { classification: "handshake", observations: 24 },
+      { classification: "timeout", observations: 22 },
+      { classification: "protocol", observations: 12 },
+    ],
+    networkOutcomes: [
+      {
+        networkType: "ipv4",
+        observations: 111,
+        verifiedNodes: 45,
+        failedNodes: 66,
+        verifiedPct: 40.54,
+      },
+      {
+        networkType: "ipv6",
+        observations: 25,
+        verifiedNodes: 8,
+        failedNodes: 17,
+        verifiedPct: 32.0,
+      },
+      {
+        networkType: "torv3",
+        observations: 12,
+        verifiedNodes: 4,
+        failedNodes: 8,
+        verifiedPct: 33.33,
+      },
+      {
+        networkType: "i2p",
+        observations: 4,
+        verifiedNodes: 1,
+        failedNodes: 3,
+        verifiedPct: 25.0,
+      },
+    ],
+  },
+  "crawl-demo-2026-03-29-0915": {
+    run: DEMO_RUNS[2]!,
+    checkpoints: [
+      {
+        phase: "bootstrapping",
+        checkpointedAt: "2026-03-29T09:22:00Z",
+        checkpointSequence: 1,
+        stopReason: null,
+        failureReason: null,
+        frontierSize: 139,
+        inFlightWork: 19,
+        scheduledTasks: 33,
+        successfulHandshakes: 10,
+        failedTasks: 23,
+        uniqueNodes: 96,
+        persistedObservationRows: 33,
+        writerBacklog: 6,
+      },
+      {
+        phase: "steady_state",
+        checkpointedAt: "2026-03-29T09:33:00Z",
+        checkpointSequence: 2,
+        stopReason: null,
+        failureReason: null,
+        frontierSize: 109,
+        inFlightWork: 13,
+        scheduledTasks: 77,
+        successfulHandshakes: 18,
+        failedTasks: 59,
+        uniqueNodes: 151,
+        persistedObservationRows: 77,
+        writerBacklog: 5,
+      },
+      {
+        phase: "failed",
+        checkpointedAt: "2026-03-29T09:41:00Z",
+        checkpointSequence: 3,
+        stopReason: null,
+        failureReason: "shutdown grace period elapsed",
+        frontierSize: 77,
+        inFlightWork: 0,
+        scheduledTasks: 96,
+        successfulHandshakes: 21,
+        failedTasks: 75,
+        uniqueNodes: 173,
+        persistedObservationRows: 96,
+        writerBacklog: 0,
+      },
+    ],
+    failureCounts: [
+      { classification: "connect", observations: 31 },
+      { classification: "timeout", observations: 20 },
+      { classification: "handshake", observations: 16 },
+      { classification: "dns", observations: 8 },
+    ],
+    networkOutcomes: [
+      {
+        networkType: "ipv4",
+        observations: 65,
+        verifiedNodes: 16,
+        failedNodes: 49,
+        verifiedPct: 24.62,
+      },
+      {
+        networkType: "ipv6",
+        observations: 19,
+        verifiedNodes: 3,
+        failedNodes: 16,
+        verifiedPct: 15.79,
+      },
+      {
+        networkType: "torv3",
+        observations: 8,
+        verifiedNodes: 2,
+        failedNodes: 6,
+        verifiedPct: 25.0,
+      },
+      {
+        networkType: "cjdns",
+        observations: 4,
+        verifiedNodes: 0,
+        failedNodes: 4,
+        verifiedPct: 0,
+      },
+    ],
+  },
+};
+
+const DEMO_ASN_ROWS: AsnNodeCountItem[] = [
+  { asn: 7922, asnOrganization: "Comcast Cable Communications, LLC", verifiedNodes: 12 },
+  { asn: 16509, asnOrganization: "Amazon.com, Inc.", verifiedNodes: 10 },
+  { asn: 24940, asnOrganization: "Hetzner Online GmbH", verifiedNodes: 9 },
+  { asn: 14061, asnOrganization: "DigitalOcean, LLC", verifiedNodes: 8 },
+  { asn: 63949, asnOrganization: "Linode, LLC", verifiedNodes: 7 },
+  { asn: 8075, asnOrganization: "Microsoft Corporation", verifiedNodes: 6 },
+  { asn: 13335, asnOrganization: "Cloudflare, Inc.", verifiedNodes: 5 },
+  { asn: 3320, asnOrganization: "Deutsche Telekom AG", verifiedNodes: 5 },
+  { asn: 12876, asnOrganization: "scaleup technologies GmbH & Co. KG", verifiedNodes: 4 },
+  { asn: 9009, asnOrganization: "M247 Europe SRL", verifiedNodes: 4 },
+];
+
+function cloneRun(run: CrawlRunListItem): CrawlRunListItem {
+  return { ...run };
+}
+
+function cloneRunDetail(detail: CrawlRunDetail): CrawlRunDetail {
+  return {
+    run: cloneRun(detail.run),
+    checkpoints: detail.checkpoints.map((checkpoint) => ({ ...checkpoint })),
+    failureCounts: detail.failureCounts.map((entry) => ({ ...entry })),
+    networkOutcomes: detail.networkOutcomes.map((entry) => ({ ...entry })),
+  };
+}
+
+async function listDemoRuns(limit = 10): Promise<CrawlRunListItem[]> {
+  const result = DEMO_RUNS.slice(0, limit).map(cloneRun);
+  pushEvent("info", `Demo mode served ${result.length} crawler run summaries from the embedded dataset.`);
+  return delay(result);
+}
+
+async function getDemoRunDetail(runId: string): Promise<CrawlRunDetail> {
+  const detail = DEMO_RUN_DETAILS[runId];
+
+  if (!detail) {
+    throw new Error(`No demo crawl run exists for ${runId}`);
+  }
+
+  pushEvent("info", `Demo mode loaded crawler run detail for ${runId}.`);
+  return delay(cloneRunDetail(detail));
+}
+
+async function countDemoNodesByAsn(limit = 10): Promise<AsnNodeCountItem[]> {
+  const result = DEMO_ASN_ROWS.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} ASN rows from the embedded dataset.`);
+  return delay(result);
+}
+
 export const webClient: BtcAppClient = {
   listCrawlRuns(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoRuns(limit);
+    }
+
     return listCrawlRuns(limit);
   },
   getCrawlRun(runId) {
+    if (isDemoModeEnabled()) {
+      return getDemoRunDetail(runId);
+    }
+
     return getCrawlRun(runId);
   },
   countNodesByAsn(limit) {
+    if (isDemoModeEnabled()) {
+      return countDemoNodesByAsn(limit);
+    }
+
     return countNodesByAsn(limit);
   },
   async handshake(request: ConnectionRequest): Promise<HandshakeResult> {

@@ -32,11 +32,13 @@ import type {
   PingResult,
   UiLogEvent,
 } from "./lib/api/types";
+import { analyticsModeLabel } from "./lib/runtime-config";
 
 const defaultNode = "seed.bitnodes.io:8333";
 const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
 const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim();
+const analyticsLabel = analyticsModeLabel();
 
 export function App() {
   const [selectedPage, setSelectedPage] = useState<AppPageId>("network-analytics");
@@ -434,7 +436,7 @@ export function App() {
                   </div>
                 ) : (
                   <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                    Public Read-Only Analytics
+                    {analyticsLabel}
                   </div>
                 )}
               </div>

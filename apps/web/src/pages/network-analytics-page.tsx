@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import type { BtcAppClient } from "@/lib/api/client";
 import type { AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+import { isDemoModeEnabled } from "@/lib/runtime-config";
 
 export type NetworkAnalyticsPanel = "overview" | "asn" | "verification";
 
@@ -31,6 +32,7 @@ export function NetworkAnalyticsPage({
   onPanelChange,
   showPanelNav = true,
 }: NetworkAnalyticsPageProps) {
+  const demoMode = isDemoModeEnabled();
   const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [latestDetail, setLatestDetail] = useState<CrawlRunDetail | null>(null);
@@ -85,10 +87,16 @@ export function NetworkAnalyticsPage({
     [...networkOutcomes].sort((left, right) => left.verifiedPct - right.verifiedPct)[0] ?? null;
   const panelDescription =
     activePanel === "overview"
-      ? "Use the public read-only analytics contract for ASN concentration and recent verification outcomes."
+      ? demoMode
+        ? "Review deterministic demo analytics while the public crawler API remains undeployed."
+        : "Use the public read-only analytics contract for ASN concentration and recent verification outcomes."
       : activePanel === "asn"
-        ? "Inspect where verified nodes concentrate by ASN without leaving the analytics surface."
-        : "Compare observed, verified, and failed nodes by network type for the latest run.";
+        ? demoMode
+          ? "Inspect the embedded demo ASN concentration set without depending on the public API."
+          : "Inspect where verified nodes concentrate by ASN without leaving the analytics surface."
+        : demoMode
+          ? "Compare demo observed, verified, and failed nodes by network type for the latest run."
+          : "Compare observed, verified, and failed nodes by network type for the latest run.";
   const summaryCards =
     activePanel === "overview"
       ? [
@@ -199,11 +207,23 @@ export function NetworkAnalyticsPage({
         ) : null}
 
         {isLoading ? (
-          <StatusPanel message="Loading ASN concentration and recent verification outcomes." />
+          <StatusPanel
+            message={
+              demoMode
+                ? "Loading demo ASN concentration and verification outcomes."
+                : "Loading ASN concentration and recent verification outcomes."
+            }
+          />
         ) : error ? (
           <StatusPanel tone="error" message={`Network analytics failed to load: ${error}`} />
         ) : !hasAnyAnalytics ? (
-          <StatusPanel message="No crawler analytics are available yet. Run the crawler locally or point the app at a populated API." />
+          <StatusPanel
+            message={
+              demoMode
+                ? "No demo analytics are configured for this build."
+                : "No crawler analytics are available yet. Run the crawler locally or point the app at a populated API."
+            }
+          />
         ) : (
           <div className="space-y-6">
             <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
