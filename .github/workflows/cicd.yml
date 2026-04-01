@@ -190,6 +190,7 @@ jobs:
       - name: Build web app
         env:
           VITE_SUPPORT_URL: ${{ vars.VITE_SUPPORT_URL }}
+          VITE_DEMO_MODE: true
         run: npm run build --prefix apps/web
 
       - name: Deploy to Cloudflare Pages
