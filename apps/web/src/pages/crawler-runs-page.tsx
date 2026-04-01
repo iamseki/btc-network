@@ -301,12 +301,16 @@ export function CrawlerRunsPage({
                       return (
                         <TableRow
                           key={run.runId}
-                          className={isSelected ? "bg-primary/8" : undefined}
+                          className={
+                            isSelected
+                              ? "bg-primary/8"
+                              : "transition-colors hover:bg-muted/35"
+                          }
                         >
                           <TableCell className="align-top">
                             <button
                               type="button"
-                              className="grid gap-1 text-left"
+                              className="grid w-full cursor-pointer gap-1 rounded-[6px] px-2 py-1 -mx-2 -my-1 text-left transition-colors outline-none hover:bg-primary/8 focus-visible:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring"
                               onClick={() => void loadRunDetail(run.runId)}
                             >
                               <span className="font-mono text-xs text-foreground">{run.runId}</span>

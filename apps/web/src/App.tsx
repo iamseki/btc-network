@@ -409,7 +409,7 @@ export function App() {
                   aria-label={currentSubnav.label}
                   className="min-w-0 overflow-x-auto md:flex md:justify-center"
                 >
-                  <div className="inline-flex min-w-max items-center gap-1.5 rounded-xl border border-border/80 bg-card/80 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="inline-flex min-w-max items-center gap-1.5 rounded-xl bg-card/80 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                     {currentSubnav.items.map((item) => (
                       <button
                         key={item.id}
