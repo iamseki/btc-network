@@ -19,12 +19,12 @@ Status values:
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
 | Phase 1: Shared analytics contract and API app | `reviewing` | `2026-04-01` | `PR #16` | `Shared crawler analytics read models, the ClickHouse-backed reader, the new Axum API app, and the initial public-read hardening layer remain on [PR #16](https://github.com/iamseki/btc-network/pull/16).` |
-| Phase 2: Web and desktop analytics UI wiring | `reviewing` | `2026-04-01` | `PR #16` | `The web shell includes analytics-first pages, page-level secondary navigation, the shared HTTP analytics helper, the hosted browser demo-mode fallback, the global latest-snapshot preview, compact header-row analytics summaries, lightweight inline charts, and the responsive crawler-runs surface on [PR #16](https://github.com/iamseki/btc-network/pull/16).` |
+| Phase 2: Web and desktop analytics UI wiring | `reviewing` | `2026-04-01` | `PR #16` | `The web shell includes analytics-first pages, page-level secondary navigation, the shared HTTP analytics helper, the hosted browser demo-mode fallback, the global latest-snapshot preview, the globe-first `Network Analytics` home page with compact `Risk Brief` and full-width `Risk Drivers`, compact header-row analytics summaries, lightweight inline charts, and the responsive crawler-runs inspection surface on [PR #16](https://github.com/iamseki/btc-network/pull/16).` |
 
 ## Immediate Next Slice
 
 - review and merge [PR #16](https://github.com/iamseki/btc-network/pull/16)
-- keep the BNDD and compact agent docs aligned with the optional browser demo-mode path, including the client-only latest-snapshot replay behavior, compact header-row analytics summaries, and lightweight chart guidance while the public API remains undeployed
+- keep the BNDD and compact agent docs aligned with the optional browser demo-mode path, including the client-only latest-snapshot replay behavior, globe-first home-page guidance, `Risk Brief` and `Risk Drivers` layout rules, compact header-row summaries, and lightweight chart guidance while the public API remains undeployed
 - keep follow-up work out of this slice unless it preserves the read-only API and the current analytics-first shell direction
 
 ## Explicit Agent Constraints
@@ -33,7 +33,7 @@ Status values:
 - keep desktop analytics reads on the shared HTTP path; do not add analytics-only Tauri commands in this slice
 - keep existing single-peer Tauri commands intact
 - keep ClickHouse details out of API responses
-- prefer focused tables, compact header summaries, and lightweight inline charts over heavier dashboard dependencies
+- prefer globe-first, score-first overview surfaces, focused tables, compact header summaries, product-facing risk-driver strips, and lightweight inline charts over heavier dashboard dependencies
 
 ## Verification
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BtcAppClient } from "@/lib/api/client";
@@ -39,7 +39,13 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
     handshake: vi.fn(),
     ping: vi.fn(),
     getAddr: vi.fn(),
-    getLastBlockHeight: vi.fn(),
+    getLastBlockHeight: vi.fn().mockResolvedValue({
+      node: "seed.bitnodes.io:8333",
+      height: 892345,
+      rounds: 2,
+      elapsedMs: 184,
+      bestBlockHash: "0000000000000000000123456789abcdef0123456789abcdef0123456789abcd",
+    }),
     getBlock: vi.fn(),
     downloadBlock: vi.fn(),
     getSuggestedBlockDownloadPath: vi.fn().mockResolvedValue("downloads/block.dat"),
@@ -119,19 +125,33 @@ describe("NetworkAnalyticsPage", () => {
 
     render(<NetworkAnalyticsPage client={client} />);
 
-    expect(await screen.findByText("Latest Run Focus")).toBeTruthy();
-    expect(screen.getByText("What This View Shows")).toBeTruthy();
-    expect(screen.getByText("ASN Concentration")).toBeTruthy();
+    expect(await screen.findByText("Network Risk Snapshot")).toBeTruthy();
+    expect(await screen.findByText("Decentralization Score")).toBeTruthy();
+    expect(screen.getByText("Eclipse Exposure (Proxy)")).toBeTruthy();
+    expect(screen.getByText("Observation Confidence")).toBeTruthy();
+    expect(screen.getByText("Transport Diversity")).toBeTruthy();
+    expect(scoreCardValue("Decentralization Score")).toBe("15");
+    expect(scoreCardValue("Eclipse Exposure (Proxy)")).toBe("86");
+    expect(scoreCardValue("Observation Confidence")).toBe("58");
+    expect(scoreCardValue("Transport Diversity")).toBe("0");
+    expect(screen.getByRole("button", { name: "Decentralization Score score explanation" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Eclipse Exposure (Proxy) score explanation" })).toBeTruthy();
+    expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
+    expect(await screen.findByText("Risk Drivers")).toBeTruthy();
+    expect(screen.queryByText("Checkpoint Rail")).toBeNull();
+    expect(screen.getByText(/Public risk view from the latest read-only crawler snapshot\./i)).toBeTruthy();
+    expect(screen.getByText("Block Height")).toBeTruthy();
+    expect(screen.getAllByText("892,345").length).toBeGreaterThan(0);
     expect(screen.getByText("Verification Distribution")).toBeTruthy();
     expect(screen.getByText("Example ASN")).toBeTruthy();
-    expect(screen.getByText("ipv4")).toBeTruthy();
+    expect(screen.getAllByText("ipv4").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
-    expect(await screen.findByText("Lead ASN")).toBeTruthy();
+    expect(await screen.findByText("Organization")).toBeTruthy();
     expect((await screen.findAllByText("Example ASN")).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Verification" }));
-    expect(await screen.findByText("Best Network")).toBeTruthy();
+    expect((await screen.findAllByText("Failed")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("ipv4")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("33.33%")).length).toBeGreaterThan(0);
   });
@@ -148,3 +168,15 @@ describe("NetworkAnalyticsPage", () => {
     ).toBeTruthy();
   });
 });
+
+function scoreCardValue(label: string): string {
+  const labelNode = screen.getByText(label);
+  const card = labelNode.closest("div[class*='rounded']");
+
+  if (!(card instanceof HTMLElement)) {
+    throw new Error(`Could not find score card for ${label}`);
+  }
+
+  const values = within(card).getAllByText(/^\d+$/);
+  return values[0]?.textContent ?? "";
+}

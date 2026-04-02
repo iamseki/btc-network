@@ -1,9 +1,13 @@
-import { LoaderCircle, RotateCw } from "lucide-react";
+import { CircleHelp, LoaderCircle, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  CrawlerLiveSignal,
+  useCrawlerSignalPlayback,
+} from "@/components/crawler-live-signal";
 import { SectionHeading } from "@/components/ui/section-heading";
 import {
   Table,
@@ -14,10 +18,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { BtcAppClient } from "@/lib/api/client";
-import type { AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+import type {
+  AsnNodeCountItem,
+  CrawlRunDetail,
+  CrawlRunListItem,
+  LastBlockHeightResult,
+} from "@/lib/api/types";
 import { isDemoModeEnabled } from "@/lib/runtime-config";
 
 export type NetworkAnalyticsPanel = "overview" | "asn" | "verification";
+
+const ANALYTICS_HEIGHT_NODE = "seed.bitnodes.io:8333";
 
 type NetworkAnalyticsPageProps = {
   client: BtcAppClient;
@@ -36,6 +47,7 @@ export function NetworkAnalyticsPage({
   const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [latestDetail, setLatestDetail] = useState<CrawlRunDetail | null>(null);
+  const [lastBlockHeight, setLastBlockHeight] = useState<LastBlockHeightResult | null>(null);
   const [internalActivePanel, setInternalActivePanel] = useState<NetworkAnalyticsPanel>("overview");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,9 +70,10 @@ export function NetworkAnalyticsPage({
     setError(null);
 
     try {
-      const [runs, nextAsnRows] = await Promise.all([
+      const [runs, nextAsnRows, nextBlockHeight] = await Promise.all([
         client.listCrawlRuns(1),
         client.countNodesByAsn(10),
+        client.getLastBlockHeight(ANALYTICS_HEIGHT_NODE).catch(() => null),
       ]);
       const mostRecentRun = runs[0] ?? null;
       const detail = mostRecentRun ? await client.getCrawlRun(mostRecentRun.runId) : null;
@@ -68,10 +81,12 @@ export function NetworkAnalyticsPage({
       setLatestRun(mostRecentRun);
       setLatestDetail(detail);
       setAsnRows(nextAsnRows);
+      setLastBlockHeight(nextBlockHeight);
     } catch (nextError) {
       setLatestRun(null);
       setLatestDetail(null);
       setAsnRows([]);
+      setLastBlockHeight(null);
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setIsLoading(false);
@@ -83,13 +98,51 @@ export function NetworkAnalyticsPage({
   const leadAsn = asnRows[0] ?? null;
   const secondAsn = asnRows[1] ?? null;
   const topNetwork = [...networkOutcomes].sort((left, right) => right.verifiedNodes - left.verifiedNodes)[0] ?? null;
+  const dominantNetwork =
+    [...networkOutcomes].sort((left, right) => right.observations - left.observations)[0] ?? null;
   const weakestNetwork =
     [...networkOutcomes].sort((left, right) => left.verifiedPct - right.verifiedPct)[0] ?? null;
+  const playback = useCrawlerSignalPlayback(latestDetail);
+  const observedNodes = networkOutcomes.reduce((sum, row) => sum + row.observations, 0);
+  const visibleVerifiedNodes = asnRows.reduce((sum, row) => sum + row.verifiedNodes, 0);
+  const asnConcentrationPct =
+    visibleVerifiedNodes > 0 && leadAsn ? (leadAsn.verifiedNodes / visibleVerifiedNodes) * 100 : null;
+  const verificationFailurePct = latestRun ? Math.max(0, 100 - latestRun.successPct) : null;
+  const frontierGapPct =
+    latestRun && latestRun.uniqueNodes > 0
+      ? (latestRun.unscheduledGap / latestRun.uniqueNodes) * 100
+      : null;
+  const weakestNetworkFailurePct = weakestNetwork ? Math.max(0, 100 - weakestNetwork.verifiedPct) : null;
+  const transportDiversityScore = computeDiversityScore(
+    networkOutcomes.map((row) => row.observations),
+  );
+  const transportCentralizationRisk = 100 - transportDiversityScore;
+  const persistenceCoveragePct =
+    latestRun && latestRun.scheduledTasks > 0
+      ? Math.min(100, (latestRun.persistedObservationRows / latestRun.scheduledTasks) * 100)
+      : null;
+  const decentralizationScore = clampPercent(
+    100 -
+      ((asnConcentrationPct ?? 100) * 0.5 +
+        transportCentralizationRisk * 0.3 +
+        (frontierGapPct ?? 100) * 0.2),
+  );
+  const eclipseExposureScore = clampPercent(
+    (asnConcentrationPct ?? 100) * 0.4 +
+      transportCentralizationRisk * 0.3 +
+      (verificationFailurePct ?? 100) * 0.2 +
+      (frontierGapPct ?? 100) * 0.1,
+  );
+  const observationConfidenceScore = clampPercent(
+    (latestRun?.successPct ?? 0) * 0.5 +
+      (latestRun?.scheduledPct ?? 0) * 0.3 +
+      (persistenceCoveragePct ?? 0) * 0.2,
+  );
   const panelDescription =
     activePanel === "overview"
       ? demoMode
-        ? "Review deterministic demo analytics while the public crawler API remains undeployed."
-        : "Use the public read-only analytics contract for ASN concentration and recent verification outcomes."
+        ? "Public risk view from the hosted demo snapshot."
+        : "Public risk view from the latest read-only crawler snapshot."
       : activePanel === "asn"
         ? demoMode
           ? "Inspect the embedded demo ASN concentration set without depending on the public API."
@@ -106,23 +159,20 @@ export function NetworkAnalyticsPage({
             detail: latestRun?.phase ?? "No phase recorded",
           },
           {
-            label: "Verified Success",
-            value: latestRun ? `${latestRun.successPct.toFixed(2)}%` : "n/a",
-            detail: latestRun
-              ? `${latestRun.successfulHandshakes.toLocaleString()} successful visits`
-              : "No run loaded",
+            label: "Sweep Window",
+            value: playback ? formatDuration(playback.loopDurationMs) : "n/a",
+            detail: playback
+              ? `Started ${formatTimestamp(playback.startedAt)}`
+              : latestRun
+                ? formatTimestamp(latestRun.lastCheckpointedAt)
+                : "No snapshot window",
           },
           {
-            label: "Tracked Nodes",
-            value: latestRun ? latestRun.uniqueNodes.toLocaleString() : "n/a",
-            detail: latestRun
-              ? `${latestRun.unscheduledGap.toLocaleString()} still unscheduled`
-              : "No frontier context",
-          },
-          {
-            label: "Persisted Rows",
-            value: latestRun ? latestRun.persistedObservationRows.toLocaleString() : "n/a",
-            detail: latestRun ? formatTimestamp(latestRun.lastCheckpointedAt) : "No checkpoint timestamp",
+            label: "Block Height",
+            value: lastBlockHeight ? lastBlockHeight.height.toLocaleString() : "n/a",
+            detail: lastBlockHeight?.bestBlockHash
+              ? `Tip ${truncateHash(lastBlockHeight.bestBlockHash)}`
+              : "Read-only peer tip lookup",
           },
         ]
       : activePanel === "asn"
@@ -177,7 +227,7 @@ export function NetworkAnalyticsPage({
     <Card>
       <CardContent className="space-y-8 p-4 sm:p-6">
         <SectionHeading
-          eyebrow="Network Analytics"
+          eyebrow={activePanel === "overview" ? "Network Risk Snapshot" : "Network Analytics"}
           title="Network Analytics"
           description={panelDescription}
           actions={
@@ -252,52 +302,145 @@ export function NetworkAnalyticsPage({
 
             {activePanel === "overview" ? (
               <div className="space-y-6">
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <OverviewCard
-                    title="Latest Run Focus"
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-start">
+                  <div className="order-2 w-full self-start rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-3 shadow-[0_14px_24px_rgba(0,0,0,0.14)] xl:order-2">
+                    <div className="flex items-center justify-between gap-3 rounded-[10px] border border-border/60 bg-background/38 px-3 py-2.5">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                          Risk Brief
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          First insight from the current snapshot
+                        </p>
+                      </div>
+                      <Badge variant="muted">{latestRun?.phase ?? "awaiting run"}</Badge>
+                    </div>
+
+                    <div className="mt-2.5 space-y-2">
+                      <ScoreCard
+                        label="Decentralization Score"
+                        value={`${Math.round(decentralizationScore)}`}
+                        emphasis="primary"
+                        density="compact"
+                        tooltip="Weighted from ASN concentration, transport balance, and uncovered frontier pressure. Higher is healthier."
+                        tone={classifyScoreTone(decentralizationScore, { healthy: 68, warning: 48 })}
+                        detail={
+                          leadAsn
+                            ? `${leadAsn.asnOrganization ?? "Unknown ASN"} currently holds the lead in the visible ASN set.`
+                            : "Waiting for concentration data from the visible ASN set."
+                        }
+                        footnote={
+                          asnConcentrationPct !== null
+                            ? `${asnConcentrationPct.toFixed(1)}% of visible verified nodes concentrate in the leading ASN`
+                            : "Derived from ASN concentration, transport spread, and frontier coverage"
+                        }
+                      />
+                      <ScoreCard
+                        label="Eclipse Exposure (Proxy)"
+                        value={`${Math.round(eclipseExposureScore)}`}
+                        emphasis="primary"
+                        density="compact"
+                        tooltip="Proxy risk from concentration, transport skew, failed verification, and uncovered frontier. Higher means more exposure."
+                        tone={classifyRiskTone(eclipseExposureScore, { warning: 42, critical: 62 })}
+                        detail={
+                          dominantNetwork
+                            ? `${dominantNetwork.networkType} currently dominates the observed transport mix.`
+                            : "Waiting for transport-mix data from the latest run."
+                        }
+                        footnote={
+                          weakestNetworkFailurePct !== null
+                            ? `${weakestNetworkFailurePct.toFixed(1)}% failure pressure on the weakest transport`
+                            : "Derived from concentration, transport skew, verification weakness, and frontier gap"
+                        }
+                      />
+                    </div>
+
+                    <div className="mt-2">
+                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                        <RiskMiniMetric
+                          label="Observation Confidence"
+                          value={`${Math.round(observationConfidenceScore)}`}
+                          tooltip="Confidence in the current public read-only view based on visit success, scheduled coverage, and persistence coverage."
+                          tone={classifyScoreTone(observationConfidenceScore, { healthy: 64, warning: 42 })}
+                          detail={
+                            latestRun
+                              ? `${latestRun.successPct.toFixed(1)}% visit success with ${latestRun.scheduledPct.toFixed(1)}% scheduled coverage.`
+                              : "Waiting for the latest run summary."
+                          }
+                          footnote={
+                            persistenceCoveragePct !== null
+                              ? `${persistenceCoveragePct.toFixed(1)}% persistence coverage`
+                              : "Verification, scheduling, persistence coverage"
+                          }
+                        />
+                        <RiskMiniMetric
+                          label="Transport Diversity"
+                          value={`${Math.round(transportDiversityScore)}`}
+                          tooltip="Entropy-style spread across observed network types. Higher means the visible network is less concentrated in one transport."
+                          tone={classifyScoreTone(transportDiversityScore, { healthy: 58, warning: 34 })}
+                          detail={
+                            dominantNetwork
+                              ? `${dominantNetwork.networkType} accounts for the largest observed transport slice.`
+                              : "Waiting for network outcome rows."
+                          }
+                          footnote={
+                            observedNodes > 0
+                              ? `${observedNodes.toLocaleString()} observed nodes`
+                              : "Current network-outcome distribution"
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="order-1 xl:order-1">
+                    {latestDetail ? (
+                      <CrawlerLiveSignal detail={latestDetail} playback={playback} variant="hero" />
+                    ) : (
+                      <StatusPanel message="No latest snapshot is available for replay." />
+                    )}
+                  </div>
+                </section>
+
+                {latestDetail ? (
+                  <RiskDriversStrip
+                    runId={latestDetail.run.runId}
                     items={[
                       {
-                        label: "Latest run",
-                        value: latestRun?.runId ?? "No recent run",
+                        label: "Lead Concentration",
+                        value:
+                          asnConcentrationPct !== null
+                            ? `${asnConcentrationPct.toFixed(1)}%`
+                            : "n/a",
+                        detail: leadAsn
+                          ? `${leadAsn.asnOrganization ?? "Unknown ASN"} leads visible verified nodes`
+                          : "Waiting for ASN concentration data",
                       },
                       {
-                        label: "Visit success",
-                        value: latestRun ? `${latestRun.successPct.toFixed(2)}%` : "n/a",
+                        label: "Weakest Transport",
+                        value: weakestNetwork ? weakestNetwork.networkType : "n/a",
+                        detail: weakestNetworkFailurePct !== null
+                          ? `${weakestNetworkFailurePct.toFixed(1)}% failure pressure on this network`
+                          : "Waiting for transport verification mix",
                       },
                       {
-                        label: "Lead ASN",
-                        value: leadAsn
-                          ? `${leadAsn.asn ?? "n/a"} · ${leadAsn.asnOrganization ?? "Unknown ASN"}`
-                          : "No ASN concentration returned",
+                        label: "Frontier Gap",
+                        value: frontierGapPct !== null ? `${frontierGapPct.toFixed(1)}%` : "n/a",
+                        detail: latestRun
+                          ? `${latestRun.unscheduledGap.toLocaleString()} tracked endpoints still unscheduled`
+                          : "Waiting for crawl coverage data",
                       },
                       {
-                        label: "Top network",
-                        value: topNetwork
-                          ? `${topNetwork.networkType} · ${topNetwork.verifiedPct.toFixed(2)}% verified`
-                          : "No network outcome breakdown returned",
+                        label: "Chain Height",
+                        value: lastBlockHeight ? lastBlockHeight.height.toLocaleString() : "n/a",
+                        detail: lastBlockHeight?.bestBlockHash
+                          ? `Peer tip ${truncateHash(lastBlockHeight.bestBlockHash)}`
+                          : "Read-only peer tip lookup",
                       },
                     ]}
                   />
-                  <OverviewCard
-                    title="What This View Shows"
-                    items={[
-                      {
-                        label: "ASN concentration",
-                        value: "Use Top ASNs to inspect where verified nodes cluster.",
-                      },
-                      {
-                        label: "Verification mix",
-                        value: "Use Verification to compare observed, verified, and failed nodes by network.",
-                      },
-                      {
-                        label: "Run context",
-                        value: latestRun
-                          ? `${latestRun.uniqueNodes.toLocaleString()} tracked nodes with ${latestRun.unscheduledGap.toLocaleString()} still unscheduled.`
-                          : "No latest run context is available.",
-                      },
-                    ]}
-                  />
-                </div>
+                ) : null}
+
                 <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                   <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
                   <VerificationMixChart title="Verification Distribution" rows={networkOutcomes} />
@@ -420,30 +563,6 @@ function PanelButton({
   );
 }
 
-function OverviewCard({
-  title,
-  items,
-}: {
-  title: string;
-  items: { label: string; value: string }[];
-}) {
-  return (
-    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">{title}</p>
-      <div className="mt-4 grid gap-4">
-        {items.map((item) => (
-          <div key={`${title}-${item.label}`} className="grid gap-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {item.label}
-            </p>
-            <p className="text-sm text-foreground">{item.value}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function HeaderStat({
   label,
   value,
@@ -460,6 +579,190 @@ function HeaderStat({
       </p>
       <p className="mt-1 break-all font-mono text-[13px] text-foreground">{value}</p>
       <p className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function ScoreCard({
+  label,
+  value,
+  tooltip,
+  detail,
+  footnote,
+  tone,
+  emphasis = "secondary",
+  density = "regular",
+}: {
+  label: string;
+  value: string;
+  tooltip: string;
+  detail: string;
+  footnote: string;
+  tone: "healthy" | "warning" | "critical";
+  emphasis?: "primary" | "secondary";
+  density?: "regular" | "compact";
+}) {
+  const toneClass =
+    tone === "critical"
+      ? "border-[rgba(176,88,63,0.42)] bg-[linear-gradient(180deg,rgba(176,88,63,0.18),rgba(24,12,10,0.74))]"
+      : tone === "warning"
+        ? "border-primary/28 bg-[linear-gradient(180deg,rgba(245,179,1,0.16),rgba(23,18,8,0.74))]"
+        : "border-[rgba(112,145,100,0.3)] bg-[linear-gradient(180deg,rgba(112,145,100,0.16),rgba(11,18,12,0.76))]";
+  const badgeClass =
+    tone === "critical"
+      ? "text-[rgb(241,171,149)]"
+      : tone === "warning"
+        ? "text-[color:var(--color-primary-strong)]"
+        : "text-[rgb(177,214,164)]";
+  const isCompact = density === "compact";
+  const valueClass =
+    emphasis === "primary"
+      ? isCompact
+        ? "mt-1.5 font-serif text-[2rem] uppercase tracking-[0.03em] text-foreground sm:text-[2.25rem]"
+        : "mt-2 font-serif text-3xl uppercase tracking-[0.04em] text-foreground sm:text-[2.5rem]"
+      : isCompact
+        ? "mt-1.5 font-serif text-[1.5rem] uppercase tracking-[0.05em] text-foreground"
+        : "mt-2 font-serif text-[1.75rem] uppercase tracking-[0.06em] text-foreground";
+  const shellClass =
+    emphasis === "primary"
+      ? isCompact
+        ? `rounded-[12px] border ${toneClass} p-3.5 shadow-[0_14px_24px_rgba(0,0,0,0.18)]`
+        : `rounded-[12px] border ${toneClass} p-4 shadow-[0_16px_30px_rgba(0,0,0,0.2)]`
+      : isCompact
+        ? `rounded-[12px] border ${toneClass} p-3 shadow-[0_10px_18px_rgba(0,0,0,0.12)]`
+        : `rounded-[12px] border ${toneClass} p-3.5 shadow-[0_12px_22px_rgba(0,0,0,0.14)]`;
+
+  return (
+    <div className={shellClass}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex items-start gap-1.5">
+          <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </p>
+          <RiskTooltip label={label} tooltip={tooltip} />
+        </div>
+        <span
+          className={`shrink-0 whitespace-nowrap rounded-full border border-current/14 px-1.5 py-0.5 font-mono text-[9px] leading-none font-semibold uppercase tracking-[0.14em] ${badgeClass}`}
+        >
+          {tone}
+        </span>
+      </div>
+      <p className={valueClass}>{value}</p>
+      <p className={isCompact ? "mt-1 text-[12px] text-foreground" : "mt-1.5 text-[13px] text-foreground"}>
+        {detail}
+      </p>
+      <p className={isCompact ? "mt-1.5 text-[10px] text-muted-foreground" : "mt-2 text-[11px] text-muted-foreground"}>
+        {footnote}
+      </p>
+    </div>
+  );
+}
+
+function RiskMiniMetric({
+  label,
+  value,
+  tooltip,
+  detail,
+  footnote,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tooltip: string;
+  detail: string;
+  footnote: string;
+  tone: "healthy" | "warning" | "critical";
+}) {
+  const toneClass =
+    tone === "critical"
+      ? "border-[rgba(176,88,63,0.34)] bg-[rgba(176,88,63,0.1)]"
+      : tone === "warning"
+        ? "border-primary/24 bg-primary/8"
+        : "border-[rgba(112,145,100,0.24)] bg-[rgba(112,145,100,0.08)]";
+  const badgeClass =
+    tone === "critical"
+      ? "text-[rgb(241,171,149)]"
+      : tone === "warning"
+        ? "text-[color:var(--color-primary-strong)]"
+        : "text-[rgb(177,214,164)]";
+
+  return (
+    <div className={`rounded-[10px] border ${toneClass} p-3`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex items-start gap-1.5">
+          <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </p>
+          <RiskTooltip label={label} tooltip={tooltip} />
+        </div>
+        <span
+          className={`shrink-0 whitespace-nowrap rounded-full border border-current/14 px-1.5 py-0.5 font-mono text-[9px] leading-none font-semibold uppercase tracking-[0.14em] ${badgeClass}`}
+        >
+          {tone}
+        </span>
+      </div>
+      <p className="mt-1.5 font-serif text-[1.5rem] uppercase tracking-[0.05em] text-foreground">{value}</p>
+      <p className="mt-1 text-[12px] text-foreground">{detail}</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">{footnote}</p>
+    </div>
+  );
+}
+
+function RiskTooltip({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <span className="group/tooltip relative mt-0.5 inline-flex">
+      <button
+        type="button"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`${label} score explanation`}
+      >
+        <CircleHelp className="h-3.5 w-3.5" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-[calc(100%+0.45rem)] z-10 w-52 rounded-[8px] border border-border/80 bg-popover/96 px-2.5 py-2 text-[11px] leading-4 text-popover-foreground opacity-0 shadow-[0_14px_28px_rgba(0,0,0,0.3)] transition-all duration-150 group-hover/tooltip:translate-y-0.5 group-hover/tooltip:opacity-100 group-focus-within/tooltip:translate-y-0.5 group-focus-within/tooltip:opacity-100"
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
+function RiskDriversStrip({
+  runId,
+  items,
+}: {
+  runId: string;
+  items: Array<{ label: string; value: string; detail: string }>;
+}) {
+  return (
+    <div className="w-full rounded-[10px] border border-border/70 bg-background/52 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Risk Drivers
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The strongest factors shaping the current public network view.
+          </p>
+        </div>
+        <p className="font-mono text-xs text-foreground">{runId}</p>
+      </div>
+
+      <div className="mt-4 grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="min-w-0 rounded-[8px] border border-border/70 bg-muted/24 px-3 py-3"
+          >
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {item.label}
+            </p>
+            <p className="mt-2 truncate font-mono text-lg text-foreground">{item.value}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{item.detail}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -592,6 +895,65 @@ function StatusPanel({
   );
 }
 
+function classifyScoreTone(
+  value: number,
+  thresholds: { healthy: number; warning: number },
+): "healthy" | "warning" | "critical" {
+  if (value >= thresholds.healthy) {
+    return "healthy";
+  }
+
+  if (value >= thresholds.warning) {
+    return "warning";
+  }
+
+  return "critical";
+}
+
+function classifyRiskTone(
+  value: number,
+  thresholds: { warning: number; critical: number },
+): "healthy" | "warning" | "critical" {
+  if (value >= thresholds.critical) {
+    return "critical";
+  }
+
+  if (value >= thresholds.warning) {
+    return "warning";
+  }
+
+  return "healthy";
+}
+
+function computeDiversityScore(values: number[]): number {
+  const counts = values.filter((value) => value > 0);
+  const total = counts.reduce((sum, value) => sum + value, 0);
+
+  if (counts.length <= 1 || total <= 0) {
+    return 0;
+  }
+
+  const entropy = counts.reduce((sum, value) => {
+    const share = value / total;
+    return sum - share * Math.log2(share);
+  }, 0);
+  const maxEntropy = Math.log2(counts.length);
+
+  if (maxEntropy <= 0) {
+    return 0;
+  }
+
+  return clampPercent((entropy / maxEntropy) * 100);
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, value));
+}
+
 function formatTimestamp(value: string): string {
   const parsed = new Date(value);
 
@@ -600,4 +962,20 @@ function formatTimestamp(value: string): string {
   }
 
   return parsed.toLocaleString();
+}
+
+function formatDuration(durationMs: number): string {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return "n/a";
+  }
+
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function truncateHash(value: string): string {
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
 }

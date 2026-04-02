@@ -298,7 +298,7 @@ describe("App sidebar shell", () => {
     });
   });
 
-  it("opens the crawler runs page when the header crawl preview is clicked", async () => {
+  it("opens the network analytics page when the header crawl preview is clicked", async () => {
     mockCrawlerPreviewRun();
 
     render(<App />);
@@ -311,19 +311,15 @@ describe("App sidebar shell", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Show latest snapshot preview" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open crawler runs from snapshot" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open network analytics from snapshot" }));
 
-    expect(await screen.findByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Network Analytics" })).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Hide Latest Snapshot" })).toHaveProperty(
-        "disabled",
-        false,
-      );
+      expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
     });
-    expect(await screen.findAllByText("Crawler Snapshot")).toHaveLength(1);
   });
 
-  it("keeps the crawl signal collapsed until the header pulse is opened", async () => {
+  it("keeps crawler runs focused on inspection while the snapshot stays in the header preview", async () => {
     mockCrawlerPreviewRun();
 
     render(<App />);
@@ -331,11 +327,11 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Open Latest Snapshot" })).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
     });
     expect(screen.queryByText("Crawler Snapshot")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open Latest Snapshot" }));
-    expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open Latest Snapshot" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hide Latest Snapshot" })).toBeNull();
   });
 
   it("shows page-specific sub-navigation for analytics pages", () => {

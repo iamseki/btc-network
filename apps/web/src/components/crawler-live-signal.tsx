@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Activity } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -6,6 +7,9 @@ import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@
 const PLAYBACK_IDLE_MS = 30 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
 const CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX = "btc-network:crawler-signal-cycle:v1:";
+const VISUAL_SWEEP_LOOP_MS = 18_000;
+const MAX_FUTURE_ANCHOR_DRIFT_MS = 60 * 1000;
+const MAX_PAST_ANCHOR_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const GLOBE_NODE_SEEDS = [
   { lat: 56, lon: -122 },
@@ -71,6 +75,8 @@ export type CrawlerSignalPlayback = {
   elapsedMs: number;
   loopDurationMs: number;
   loopRatio: number;
+  cycleElapsedMs: number;
+  visualLoopRatio: number;
   isLive: boolean;
   startedAt: string;
   completedAt: string;
@@ -189,6 +195,7 @@ export function useCrawlerSignalPlayback(detail: CrawlRunDetail | null): Crawler
   const isLive = cycleElapsedMs < loopDurationMs;
   const elapsedMs = isLive ? cycleElapsedMs : loopDurationMs;
   const loopRatio = loopDurationMs <= 0 ? 1 : elapsedMs / loopDurationMs;
+  const visualLoopRatio = (cycleElapsedMs % VISUAL_SWEEP_LOOP_MS) / VISUAL_SWEEP_LOOP_MS;
   const startedAtMs = now - cycleElapsedMs;
   const completedAtMs = startedAtMs + loopDurationMs;
   const playbackSnapshot = derivePlaybackSnapshot(anchors, elapsedMs, loopDurationMs);
@@ -208,6 +215,8 @@ export function useCrawlerSignalPlayback(detail: CrawlRunDetail | null): Crawler
     elapsedMs,
     loopDurationMs,
     loopRatio,
+    cycleElapsedMs,
+    visualLoopRatio,
     isLive,
     startedAt: new Date(startedAtMs).toISOString(),
     completedAt: new Date(completedAtMs).toISOString(),
@@ -217,9 +226,13 @@ export function useCrawlerSignalPlayback(detail: CrawlRunDetail | null): Crawler
 export function CrawlerLiveSignal({
   detail,
   playback,
+  variant = "default",
+  heroFooter,
 }: {
   detail: CrawlRunDetail;
   playback?: CrawlerSignalPlayback | null;
+  variant?: "default" | "hero";
+  heroFooter?: ReactNode;
 }) {
   const localPlayback = useCrawlerSignalPlayback(detail);
   const signalPlayback = playback ?? localPlayback;
@@ -231,6 +244,7 @@ export function CrawlerLiveSignal({
   const playbackSnapshot = signalPlayback.playbackSnapshot;
   const finalSnapshot = signalPlayback.finalSnapshot;
   const loopRatio = signalPlayback.loopRatio;
+  const visualLoopRatio = signalPlayback.visualLoopRatio;
   const discoveredNodeCount = clampCount(
     Math.round(
       progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * GLOBE_NODE_SEEDS.length,
@@ -245,7 +259,7 @@ export function CrawlerLiveSignal({
       ),
     ),
   );
-  const sweepRotation = -180 + loopRatio * 360;
+  const sweepRotation = -180 + visualLoopRatio * 360;
   const visibleNodes = GLOBE_NODE_SEEDS.map((seed, index) => {
     if (index >= discoveredNodeCount) {
       return null;
@@ -267,39 +281,52 @@ export function CrawlerLiveSignal({
     };
   }).filter((node) => node !== null);
   const markers = signalPlayback.markers;
+  const isHero = variant === "hero";
+  const shellClass = isHero
+    ? "space-y-4"
+    : "rounded-[8px] border border-border/80 bg-background/80 p-4";
+  const visualPanelClass = isHero
+    ? "rounded-[14px] border border-primary/16 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.18),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:p-5"
+    : "rounded-[8px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.13),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4";
+  const canvasClass = isHero
+    ? "mt-5 rounded-[10px] border border-primary/16 bg-background/45 p-3 sm:p-4 xl:p-5"
+    : "mt-4 rounded-[8px] border border-border/70 bg-background/55 p-3";
+  const svgClass = isHero ? "h-[320px] w-full sm:h-[360px] xl:h-[420px]" : "h-[240px] w-full";
 
   return (
-    <section className="rounded-[8px] border border-border/80 bg-background/80 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-            Crawler Snapshot
-          </p>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            A lightweight snapshot replay of frontier growth, worker fan-out, and verified nodes
-            using the checkpoint shape the API already exposes.
-          </p>
+    <section className={shellClass}>
+      {isHero ? null : (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+              Crawler Snapshot
+            </p>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              A lightweight snapshot replay of frontier growth, worker fan-out, and verified nodes
+              using the checkpoint shape the API already exposes.
+            </p>
+          </div>
+          <div className="rounded-[6px] border border-border/70 bg-muted/35 px-3 py-2 text-right">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Sweep Window
+            </p>
+            <p className="mt-1 font-mono text-sm text-foreground">
+              {formatTimestamp(signalPlayback.startedAt)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {formatDuration(signalPlayback.loopDurationMs)} active scan window
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {signalPlayback.isLive
+                ? "Live sweep is currently stepping through the frontier."
+                : `Last sweep closed at ${formatTime(signalPlayback.completedAt)}.`}
+            </p>
+          </div>
         </div>
-        <div className="rounded-[6px] border border-border/70 bg-muted/35 px-3 py-2 text-right">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Sweep Window
-          </p>
-          <p className="mt-1 font-mono text-sm text-foreground">
-            {formatTimestamp(signalPlayback.startedAt)}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {formatDuration(signalPlayback.loopDurationMs)} active scan window
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {signalPlayback.isLive
-              ? "Live sweep is currently stepping through the frontier."
-              : `Last sweep closed at ${formatTime(signalPlayback.completedAt)}.`}
-          </p>
-        </div>
-      </div>
+      )}
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)]">
-        <div className="rounded-[8px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.13),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4">
+      <div className={isHero ? "space-y-4" : "mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)]"}>
+        <div className={visualPanelClass}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -309,20 +336,31 @@ export function CrawlerLiveSignal({
                 {formatPhase(playbackSnapshot.phase)}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
-              <SignalPill label="Tracked" value={playbackSnapshot.uniqueNodes} />
-              <SignalPill label="Attempted" value={playbackSnapshot.scheduledTasks} />
-              <SignalPill label="Verified" value={playbackSnapshot.successfulHandshakes} />
-              <SignalPill label="Frontier" value={playbackSnapshot.frontierSize} />
-            </div>
+            {isHero ? (
+              <div className="rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-right">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Sweep State
+                </p>
+                <p className="mt-1 font-mono text-sm text-foreground">
+                  {signalPlayback.isLive ? "Background sweep active" : "Last sweep archived"}
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
+                <SignalPill label="Tracked" value={playbackSnapshot.uniqueNodes} />
+                <SignalPill label="Attempted" value={playbackSnapshot.scheduledTasks} />
+                <SignalPill label="Verified" value={playbackSnapshot.successfulHandshakes} />
+                <SignalPill label="Frontier" value={playbackSnapshot.frontierSize} />
+              </div>
+            )}
           </div>
 
-          <div className="mt-4 rounded-[8px] border border-border/70 bg-background/55 p-3">
+          <div className={canvasClass}>
             <svg
               viewBox="0 0 420 260"
               role="img"
               aria-label="Crawler execution playback around a projected globe"
-              className="h-[240px] w-full"
+              className={svgClass}
             >
               <defs>
                 <radialGradient id="globe-core" cx="50%" cy="45%" r="60%">
@@ -452,7 +490,7 @@ export function CrawlerLiveSignal({
                 ))}
 
                 {[0, 1, 2, 3, 4, 5].map((index) => {
-                  const orbitAngle = loopRatio * Math.PI * 2 + index * ((Math.PI * 2) / 6);
+                  const orbitAngle = visualLoopRatio * Math.PI * 2 + index * ((Math.PI * 2) / 6);
                   const x = 170 + Math.cos(orbitAngle) * 146;
                   const y = 122 + Math.sin(orbitAngle) * 116;
 
@@ -490,94 +528,100 @@ export function CrawlerLiveSignal({
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[8px] border border-border/70 bg-background/70 p-4">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Signal Focus
-            </p>
-            <p className="mt-3 font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
-              {playbackSnapshot.uniqueNodes}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              endpoints tracked while the sweep rotates through the current crawl window
-            </p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/45">
-              <div
-                className="h-full rounded-full bg-primary transition-[width]"
-                style={{
-                  width: `${Math.max(6, progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * 100)}%`,
-                }}
+        {isHero ? null : (
+          <div className="space-y-4">
+            <div className="rounded-[8px] border border-border/70 bg-background/70 p-4">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Signal Focus
+              </p>
+              <p className="mt-3 font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
+                {playbackSnapshot.uniqueNodes}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                endpoints tracked while the sweep rotates through the current crawl window
+              </p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/45">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width]"
+                  style={{
+                    width: `${Math.max(6, progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <SignalMetric
+                label="Verification Pressure"
+                value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
+                detail={`${playbackSnapshot.successfulHandshakes} successful handshakes out of ${playbackSnapshot.scheduledTasks} attempts`}
+              />
+              <SignalMetric
+                label="Frontier Conversion"
+                value={`${formatPercent(progressRatio(playbackSnapshot.scheduledTasks, playbackSnapshot.uniqueNodes))}%`}
+                detail={`${Math.max(0, playbackSnapshot.uniqueNodes - playbackSnapshot.scheduledTasks)} tracked endpoints still unscheduled`}
+              />
+              <SignalMetric
+                label="Failure Weight"
+                value={playbackSnapshot.failedTasks}
+                detail="failed connect, handshake, timeout, or peer-discovery attempts"
+              />
+              <SignalMetric
+                label="Sweep Completion"
+                value={`${formatPercent(loopRatio)}%`}
+                detail={`${markers.length} checkpoint anchors across the current playback rail`}
               />
             </div>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <SignalMetric
-              label="Verification Pressure"
-              value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
-              detail={`${playbackSnapshot.successfulHandshakes} successful handshakes out of ${playbackSnapshot.scheduledTasks} attempts`}
-            />
-            <SignalMetric
-              label="Frontier Conversion"
-              value={`${formatPercent(progressRatio(playbackSnapshot.scheduledTasks, playbackSnapshot.uniqueNodes))}%`}
-              detail={`${Math.max(0, playbackSnapshot.uniqueNodes - playbackSnapshot.scheduledTasks)} tracked endpoints still unscheduled`}
-            />
-            <SignalMetric
-              label="Failure Weight"
-              value={playbackSnapshot.failedTasks}
-              detail="failed connect, handshake, timeout, or peer-discovery attempts"
-            />
-            <SignalMetric
-              label="Sweep Completion"
-              value={`${formatPercent(loopRatio)}%`}
-              detail={`${markers.length} checkpoint anchors across the current playback rail`}
-            />
-          </div>
-        </div>
+        )}
       </div>
 
-      <div className="mt-5 rounded-[8px] border border-border/70 bg-background/55 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Checkpoint Rail
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              The visual loops across the same checkpoint progression the current API already returns.
-            </p>
+      {isHero ? (
+        heroFooter ?? null
+      ) : (
+        <div className="mt-5 rounded-[8px] border border-border/70 bg-background/55 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Checkpoint Rail
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The visual loops across the same checkpoint progression the current API already returns.
+              </p>
+            </div>
+            <p className="font-mono text-xs text-foreground">{detail.run.runId}</p>
           </div>
-          <p className="font-mono text-xs text-foreground">{detail.run.runId}</p>
-        </div>
 
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/40">
-          <div
-            className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.95))] transition-[width]"
-            style={{ width: `${Math.max(6, loopRatio * 100)}%` }}
-          />
-        </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/40">
+            <div
+              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.95))] transition-[width]"
+              style={{ width: `${Math.max(6, loopRatio * 100)}%` }}
+            />
+          </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {markers.map((marker) => {
-            const isActive = loopRatio >= marker.progressRatio;
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {markers.map((marker) => {
+              const isActive = loopRatio >= marker.progressRatio;
 
-            return (
-              <div
-                key={`${marker.sequence}-${marker.phase}`}
-                className={
-                  isActive
-                    ? "rounded-[6px] border border-primary/25 bg-primary/10 px-3 py-2"
-                    : "rounded-[6px] border border-border/70 bg-muted/25 px-3 py-2"
-                }
-              >
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Checkpoint {marker.sequence}
-                </p>
-                <p className="mt-1 font-mono text-sm text-foreground">{formatPhase(marker.phase)}</p>
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={`${marker.sequence}-${marker.phase}`}
+                  className={
+                    isActive
+                      ? "rounded-[6px] border border-primary/25 bg-primary/10 px-3 py-2"
+                      : "rounded-[6px] border border-border/70 bg-muted/25 px-3 py-2"
+                  }
+                >
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Checkpoint {marker.sequence}
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-foreground">{formatPhase(marker.phase)}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -594,7 +638,7 @@ function getOrCreateCycleAnchorMs(runId: string, now: number): number {
     const storedValue = window.localStorage.getItem(storageKey);
     const parsedValue = storedValue ? Number.parseInt(storedValue, 10) : Number.NaN;
 
-    if (Number.isFinite(parsedValue) && parsedValue > 0) {
+    if (isValidCycleAnchorMs(parsedValue, now)) {
       return parsedValue;
     }
 
@@ -604,6 +648,22 @@ function getOrCreateCycleAnchorMs(runId: string, now: number): number {
   }
 
   return initialAnchorMs;
+}
+
+function isValidCycleAnchorMs(value: number, now: number): boolean {
+  if (!Number.isFinite(value) || value <= 0) {
+    return false;
+  }
+
+  if (value > now + MAX_FUTURE_ANCHOR_DRIFT_MS) {
+    return false;
+  }
+
+  if (value < now - MAX_PAST_ANCHOR_AGE_MS) {
+    return false;
+  }
+
+  return true;
 }
 
 function hashSeed(value: string): number {

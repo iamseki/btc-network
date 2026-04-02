@@ -96,7 +96,6 @@ export function App() {
   const [isCrawlerPreviewOpen, setIsCrawlerPreviewOpen] = useState(false);
   const [isCrawlerPreviewRendered, setIsCrawlerPreviewRendered] = useState(false);
   const [isCrawlerPreviewVisible, setIsCrawlerPreviewVisible] = useState(false);
-  const [autoExpandCrawlerSignal, setAutoExpandCrawlerSignal] = useState(false);
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
@@ -139,7 +138,6 @@ export function App() {
   function selectPage(nextPage: AppPageId) {
     setSelectedPage(nextPage);
     setIsCrawlerPreviewOpen(false);
-    setAutoExpandCrawlerSignal(false);
 
     if (nextPage === "network-analytics") {
       setNetworkAnalyticsPanel("overview");
@@ -245,11 +243,10 @@ export function App() {
     };
   }, [isCrawlerPreviewOpen, isCrawlerPreviewRendered]);
 
-  function openCrawlerRunsFromPreview() {
+  function openNetworkAnalyticsFromPreview() {
     setIsCrawlerPreviewOpen(false);
-    setAutoExpandCrawlerSignal(true);
-    setSelectedPage("crawler-runs");
-    setCrawlerRunsPanel("overview");
+    setSelectedPage("network-analytics");
+    setNetworkAnalyticsPanel("overview");
 
     if (window.innerWidth < 768) {
       setSidebarCollapsed(true);
@@ -385,17 +382,17 @@ export function App() {
             <div
               role="button"
               tabIndex={0}
-              aria-label="Open crawler runs from snapshot"
+              aria-label="Open network analytics from snapshot"
               className={`relative z-10 w-full max-w-5xl cursor-pointer rounded-[12px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] outline-none transform-gpu transition-[opacity,transform,filter] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-ring ${
                 isCrawlerPreviewVisible
                   ? "translate-y-0 scale-100 opacity-100 blur-0"
                   : "translate-y-6 scale-[0.96] opacity-0 blur-[6px]"
               }`}
-              onClick={openCrawlerRunsFromPreview}
+              onClick={openNetworkAnalyticsFromPreview}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  openCrawlerRunsFromPreview();
+                  openNetworkAnalyticsFromPreview();
                 }
               }}
             >
@@ -593,8 +590,6 @@ export function App() {
                   client={client}
                   activePanel={crawlerRunsPanel}
                   onPanelChange={setCrawlerRunsPanel}
-                  autoExpandSignal={autoExpandCrawlerSignal}
-                  onAutoExpandSignalApplied={() => setAutoExpandCrawlerSignal(false)}
                   showPanelNav={false}
                 />
               ) : null}

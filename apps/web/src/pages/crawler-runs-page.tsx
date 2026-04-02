@@ -4,10 +4,6 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  CrawlerLiveSignal,
-  useCrawlerSignalPlayback,
-} from "@/components/crawler-live-signal";
 import { DataList } from "@/components/ui/data-list";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -21,8 +17,6 @@ type CrawlerRunsPageProps = {
   client: BtcAppClient;
   activePanel?: CrawlerRunsPanel;
   onPanelChange?: (panel: CrawlerRunsPanel) => void;
-  autoExpandSignal?: boolean;
-  onAutoExpandSignalApplied?: () => void;
   showPanelNav?: boolean;
 };
 
@@ -30,8 +24,6 @@ export function CrawlerRunsPage({
   client,
   activePanel: controlledActivePanel,
   onPanelChange,
-  autoExpandSignal = false,
-  onAutoExpandSignalApplied,
   showPanelNav = true,
 }: CrawlerRunsPageProps) {
   const demoMode = isDemoModeEnabled();
@@ -41,25 +33,14 @@ export function CrawlerRunsPage({
   const [internalActivePanel, setInternalActivePanel] = useState<CrawlerRunsPanel>("overview");
   const [isLoadingRuns, setIsLoadingRuns] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [isSignalExpanded, setIsSignalExpanded] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const activePanel = controlledActivePanel ?? internalActivePanel;
-  const signalPlayback = useCrawlerSignalPlayback(selectedDetail);
 
   useEffect(() => {
     void refreshRuns();
   }, []);
-
-  useEffect(() => {
-    if (!autoExpandSignal || !selectedDetail) {
-      return;
-    }
-
-    setIsSignalExpanded(true);
-    onAutoExpandSignalApplied?.();
-  }, [autoExpandSignal, onAutoExpandSignalApplied, selectedDetail]);
 
   function selectPanel(panel: CrawlerRunsPanel) {
     onPanelChange?.(panel);
@@ -84,7 +65,6 @@ export function CrawlerRunsPage({
       setSelectedRunId(nextSelectedRunId);
       setSelectedDetail(null);
       setDetailError(null);
-      setIsSignalExpanded(false);
       selectPanel("overview");
 
       if (nextSelectedRunId) {
@@ -104,7 +84,6 @@ export function CrawlerRunsPage({
     setIsLoadingDetail(true);
     setDetailError(null);
     setSelectedRunId(runId);
-    setIsSignalExpanded(false);
     selectPanel("overview");
 
     try {
@@ -196,59 +175,6 @@ export function CrawlerRunsPage({
           }
         />
 
-        {selectedDetail ? (
-          <div className="rounded-[10px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,179,1,0.08),rgba(255,255,255,0.02))] p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
-                  Latest Snapshot
-                </p>
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                  Replay the latest crawler snapshot here, then drop straight into checkpoints,
-                  failures, and network outcome tables below.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant={isSignalExpanded ? "default" : "secondary"}
-                  onClick={() => setIsSignalExpanded((current) => !current)}
-                >
-                  {isSignalExpanded ? "Hide Latest Snapshot" : "Open Latest Snapshot"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <MetricCard
-                label="Snapshot Status"
-                value={signalPlayback?.isLive ? "Live" : "Archived"}
-                detail={
-                  signalPlayback?.isLive
-                    ? "The browser is replaying the current public snapshot cycle."
-                    : "The last public snapshot is ready to inspect."
-                }
-              />
-              <MetricCard
-                label="Duration"
-                value={formatRunDuration(selectedDetail.run.startedAt, selectedDetail.run.lastCheckpointedAt)}
-                detail={`Started ${formatTimestamp(selectedDetail.run.startedAt)}`}
-              />
-              <MetricCard
-                label="Tracked Nodes"
-                value={selectedDetail.run.uniqueNodes.toLocaleString()}
-                detail={`${selectedDetail.run.successfulHandshakes.toLocaleString()} verified observations in the last run`}
-              />
-            </div>
-
-            {isSignalExpanded ? (
-              <div className="mt-5">
-                <CrawlerLiveSignal detail={selectedDetail} playback={signalPlayback} />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
         <div className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           <section className="space-y-4">
             <div className="flex items-center gap-3">
@@ -287,7 +213,7 @@ export function CrawlerRunsPage({
                       className={
                         isSelected
                           ? "block w-full rounded-[8px] border border-primary/30 bg-primary/10 p-3 text-left shadow-[0_0_0_1px_rgba(245,179,1,0.08)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          : "block w-full rounded-[8px] border border-border/80 bg-background/70 p-3 text-left transition-colors outline-none hover:border-primary/20 hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring"
+                          : "block w-full cursor-pointer rounded-[8px] border border-border/80 bg-background/70 p-3 text-left transition-colors outline-none hover:border-primary/20 hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring"
                       }
                       onClick={() => void loadRunDetail(run.runId)}
                     >
@@ -500,26 +426,6 @@ function HeaderStat({
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-3 break-all font-mono text-base text-foreground">{value}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
 function DetailTable({
   title,
   columns,
@@ -592,21 +498,6 @@ function formatTimestamp(value: string): string {
   }
 
   return parsed.toLocaleString();
-}
-
-function formatRunDuration(startedAt: string, completedAt: string): string {
-  const start = new Date(startedAt).getTime();
-  const end = new Date(completedAt).getTime();
-
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
-    return "n/a";
-  }
-
-  const totalSeconds = Math.round((end - start) / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function phaseBadgeVariant(phase: string): "default" | "muted" {

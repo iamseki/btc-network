@@ -134,10 +134,8 @@ describe("CrawlerRunsPage", () => {
     await waitFor(() => {
       expect(getRun).toHaveBeenCalledWith("crawl-2");
     });
+    expect(screen.queryByText("Latest Snapshot")).toBeNull();
     expect(screen.queryByText("Crawler Snapshot")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open Latest Snapshot" }));
-    expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
-    expect(await screen.findByText("Checkpoint Rail")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Failures" }));
     expect(await screen.findByText("Failure Mix")).toBeTruthy();
     expect((await screen.findAllByText("connect")).length).toBeGreaterThan(0);
@@ -253,7 +251,7 @@ describe("CrawlerRunsPage", () => {
     expect((await screen.findAllByText("handshake")).length).toBeGreaterThan(0);
   });
 
-  it("auto-expands the crawl signal when requested by the shell", async () => {
+  it("keeps crawler runs focused on run inspection without a duplicate snapshot section", async () => {
     const getRun = vi.fn().mockResolvedValue({
       run: {
         runId: "crawl-3",
@@ -291,7 +289,6 @@ describe("CrawlerRunsPage", () => {
       failureCounts: [],
       networkOutcomes: [],
     });
-    const onAutoExpandSignalApplied = vi.fn();
     const client = makeClient({
       listCrawlRuns: vi.fn().mockResolvedValue([
         {
@@ -315,19 +312,14 @@ describe("CrawlerRunsPage", () => {
     });
 
     render(
-      <CrawlerRunsPage
-        client={client}
-        autoExpandSignal
-        onAutoExpandSignalApplied={onAutoExpandSignalApplied}
-      />,
+      <CrawlerRunsPage client={client} />,
     );
 
-    expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Hide Latest Snapshot" })).toHaveProperty(
-      "disabled",
-      false,
-    );
-    expect(onAutoExpandSignalApplied).toHaveBeenCalledTimes(1);
+    expect((await screen.findAllByText("Selected Run")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Latest Snapshot")).toBeNull();
+    expect(screen.queryByText("Crawler Snapshot")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Latest Snapshot" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hide Latest Snapshot" })).toBeNull();
   });
 });
 

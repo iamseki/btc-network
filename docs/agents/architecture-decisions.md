@@ -43,6 +43,8 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Hosted demo mode may replay a client-only latest-snapshot cycle from the most recent run and persist that cycle anchor in local storage
 - Do not add crawler analytics Tauri commands in the current slice
 - The plain web runtime remains placeholder-backed only for the single-peer flows that still lack a browser-safe backend
+- The public product home now lives on `Network Analytics` overview; header snapshot preview should route there, not to a duplicate crawler-only surface
+- The public product home should stay globe-first, keep `Risk Brief` as the secondary companion panel, and use a full-width `Risk Drivers` strip instead of crawler-internal checkpoint rails
 
 ## Frontend Composition Rule
 
@@ -51,6 +53,8 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Use lower-level shadcn primitives only when no suitable block exists or the block is materially heavier than needed
 - Keep analytics summaries compact and aligned with page actions when the main section already shows the important state
 - Avoid duplicating the same run context in both a summary box and a primary section on the same screen
+- Keep score-like product signals derived from the current API contract explicit and easy to trace back to source fields
+- Keep the mobile ordering deliberate: globe first, `Risk Brief` second, evidence strips after the hero row
 - Prefer lightweight custom charts before adding chart or map dependencies; add heavier tooling only when the product or API shape requires it
 
 ## Frontend Visual Direction

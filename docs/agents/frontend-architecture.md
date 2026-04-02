@@ -40,10 +40,15 @@ Practical rule:
 
 ## Analytics UI Rules
 
-- Keep analytics pages focused on one primary story at a time: latest snapshot, ASN concentration, or verification outcomes
+- Keep analytics pages focused on one primary story at a time: score-first network risk, ASN concentration, or verification outcomes
 - Keep run and page status summaries compact in `SectionHeading.actions` when the main content is already visible
 - Avoid repeating the same run context in large boxes below the heading if the header row already carries it
 - Treat `Latest Snapshot` as the primary crawler-facing entry point for hosted demo builds
+- Treat `Network Analytics` overview as the public product home page and keep `Crawler Runs` as the inspection page
+- Keep the public home globe-first: snapshot hero first, compact `Risk Brief` second, and full-width `Risk Drivers` beneath the hero row
+- On narrow screens keep the snapshot hero first and the `Risk Brief` second; do not flip that order just to preserve desktop composition
+- Keep `Risk Drivers` product-facing and evidence-oriented; do not reuse crawler-internal checkpoint rails on the public home
+- Prefer product-facing derived signals that are explicitly computed from the current API over decorative KPI filler
 - Prefer lightweight custom charts over chart or map dependencies when the current API only needs simple comparative views
 
 ## High-Level Shape
@@ -134,6 +139,8 @@ Already in place:
 - browser-safe Rust API app under `apps/api/` for public crawler analytics reads
 - analytics-first pages for `Crawler Runs` and `Network Analytics`
 - global header `Latest Snapshot` entry point with a centered preview overlay for the latest crawler replay
+- score-first `Network Analytics` landing page with derived network-risk signals built from the current read-only contract
+- globe-first `Network Analytics` home composition with compact `Risk Brief` and a full-width `Risk Drivers` strip beneath the hero row
 - compact analytics header stats aligned with page refresh actions instead of large summary grids
 - lightweight ASN concentration and verification charts built directly from the current analytics API shape
 - render tests for the app shell, sidebar behavior, and current page actions
