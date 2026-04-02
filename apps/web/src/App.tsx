@@ -1,8 +1,13 @@
-import { Blocks, Coffee, Network, Radio, Waypoints } from "lucide-react";
+import { Activity, Blocks, ChartColumn, Coffee, Network, Radio, Waypoints } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
 import { prependLogEvent } from "./app/log-events";
+import {
+  CrawlerLiveSignal,
+  CrawlerPulseButton,
+  useCrawlerSignalPlayback,
+} from "./components/crawler-live-signal";
 import { SessionLogPanel } from "./components/session-log-panel";
 import {
   Sidebar,
@@ -14,31 +19,44 @@ import {
 } from "./components/ui/sidebar";
 import { BlocksPage } from "./pages/blocks-page";
 import { ConnectionPage } from "./pages/connection-page";
+import { CrawlerRunsPage, type CrawlerRunsPanel } from "./pages/crawler-runs-page";
 import { HeadersPage } from "./pages/headers-page";
+import {
+  NetworkAnalyticsPage,
+  type NetworkAnalyticsPanel,
+} from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { getAppClient } from "./lib/api";
 import type {
   AddrResult,
   BlockDownloadResult,
   BlockSummary,
+  CrawlRunDetail,
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
   PingResult,
   UiLogEvent,
 } from "./lib/api/types";
+import { analyticsModeLabel } from "./lib/runtime-config";
 
 const defaultNode = "seed.bitnodes.io:8333";
 const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
 const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim();
+const analyticsLabel = analyticsModeLabel();
 
 export function App() {
-  const [selectedPage, setSelectedPage] = useState<AppPageId>("connection");
+  const [selectedPage, setSelectedPage] = useState<AppPageId>("network-analytics");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
+  const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
+    useState<NetworkAnalyticsPanel>("overview");
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
+    "crawler-runs": Activity,
+    "network-analytics": ChartColumn,
     connection: Radio,
     "peer-tools": Network,
     headers: Waypoints,
@@ -73,13 +91,66 @@ export function App() {
   const [downloadResult, setDownloadResult] = useState<BlockDownloadResult | null>(null);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [isDownloadingBlock, setIsDownloadingBlock] = useState(false);
+  const [latestCrawlerPreview, setLatestCrawlerPreview] = useState<CrawlRunDetail | null>(null);
+  const [isLoadingCrawlerPreview, setIsLoadingCrawlerPreview] = useState(false);
+  const [isCrawlerPreviewOpen, setIsCrawlerPreviewOpen] = useState(false);
+  const [isCrawlerPreviewRendered, setIsCrawlerPreviewRendered] = useState(false);
+  const [isCrawlerPreviewVisible, setIsCrawlerPreviewVisible] = useState(false);
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
   const isMobileSidebarOpen = !sidebarCollapsed;
+  const analyticsPages = appPages.filter((entry) => entry.group === "network-analytics");
+  const peerPages = appPages.filter((entry) => entry.group === "peer-tools");
+  const showsNodeContext = page.group === "peer-tools";
   const desktopShellClass = sidebarCollapsed
     ? "md:grid-cols-[72px_minmax(0,1fr)]"
     : "md:grid-cols-[252px_minmax(0,1fr)]";
+  const currentSubnav =
+    selectedPage === "network-analytics"
+      ? {
+          label: "Network Analytics Views",
+          items: [
+            { id: "overview", title: "Overview" },
+            { id: "asn", title: "Top ASNs" },
+            { id: "verification", title: "Verification" },
+          ] satisfies { id: NetworkAnalyticsPanel; title: string }[],
+          activeItem: networkAnalyticsPanel,
+          onSelect: (panel: string) => setNetworkAnalyticsPanel(panel as NetworkAnalyticsPanel),
+        }
+      : selectedPage === "crawler-runs"
+        ? {
+            label: "Crawler Runs Views",
+            items: [
+              { id: "overview", title: "Overview" },
+              { id: "checkpoints", title: "Checkpoints" },
+              { id: "failures", title: "Failures" },
+              { id: "network", title: "Network" },
+            ] satisfies { id: CrawlerRunsPanel; title: string }[],
+            activeItem: crawlerRunsPanel,
+            onSelect: (panel: string) => setCrawlerRunsPanel(panel as CrawlerRunsPanel),
+          }
+        : null;
+  const currentSubnavItemTitle =
+    currentSubnav?.items.find((item) => item.id === currentSubnav.activeItem)?.title ?? "Overview";
+  const crawlerPreviewPlayback = useCrawlerSignalPlayback(latestCrawlerPreview);
+
+  function selectPage(nextPage: AppPageId) {
+    setSelectedPage(nextPage);
+    setIsCrawlerPreviewOpen(false);
+
+    if (nextPage === "network-analytics") {
+      setNetworkAnalyticsPanel("overview");
+    }
+
+    if (nextPage === "crawler-runs") {
+      setCrawlerRunsPanel("overview");
+    }
+
+    if (window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }
 
   function pushEvent(level: "info" | "warn" | "error", message: string) {
     setEvents((current) =>
@@ -108,6 +179,79 @@ export function App() {
       cancelled = true;
     };
   }, [blockHash, client]);
+
+  useEffect(() => {
+    if (showsNodeContext) {
+      setIsCrawlerPreviewOpen(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingCrawlerPreview(true);
+
+    void (async () => {
+      try {
+        const runs = await client.listCrawlRuns(1);
+        const latestRun = runs[0] ?? null;
+        const nextDetail = latestRun ? await client.getCrawlRun(latestRun.runId) : null;
+
+        if (!cancelled) {
+          setLatestCrawlerPreview(nextDetail);
+        }
+      } catch {
+        if (!cancelled) {
+          setLatestCrawlerPreview(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCrawlerPreview(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, showsNodeContext]);
+
+  useEffect(() => {
+    if (isCrawlerPreviewOpen) {
+      setIsCrawlerPreviewRendered(true);
+      setIsCrawlerPreviewVisible(false);
+
+      const timeout = window.setTimeout(() => {
+        setIsCrawlerPreviewVisible(true);
+      }, 24);
+
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+
+    setIsCrawlerPreviewVisible(false);
+
+    if (!isCrawlerPreviewRendered) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setIsCrawlerPreviewRendered(false);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [isCrawlerPreviewOpen, isCrawlerPreviewRendered]);
+
+  function openNetworkAnalyticsFromPreview() {
+    setIsCrawlerPreviewOpen(false);
+    setSelectedPage("network-analytics");
+    setNetworkAnalyticsPanel("overview");
+
+    if (window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }
 
   async function handleHandshake() {
     setIsHandshaking(true);
@@ -225,6 +369,38 @@ export function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className={`relative min-h-screen md:grid md:w-full ${desktopShellClass}`}>
+        {isCrawlerPreviewRendered && latestCrawlerPreview ? (
+          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 md:p-6">
+            <button
+              type="button"
+              aria-label="Close latest snapshot preview"
+              className={`absolute inset-0 bg-background/55 backdrop-blur-sm transition-opacity duration-300 ${
+                isCrawlerPreviewVisible ? "opacity-100" : "opacity-0"
+              }`}
+              onClick={() => setIsCrawlerPreviewOpen(false)}
+            />
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Open network analytics from snapshot"
+              className={`relative z-10 w-full max-w-5xl cursor-pointer rounded-[12px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] outline-none transform-gpu transition-[opacity,transform,filter] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-ring ${
+                isCrawlerPreviewVisible
+                  ? "translate-y-0 scale-100 opacity-100 blur-0"
+                  : "translate-y-6 scale-[0.96] opacity-0 blur-[6px]"
+              }`}
+              onClick={openNetworkAnalyticsFromPreview}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openNetworkAnalyticsFromPreview();
+                }
+              }}
+            >
+              <CrawlerLiveSignal detail={latestCrawlerPreview} playback={crawlerPreviewPlayback} />
+            </div>
+          </div>
+        ) : null}
+
         {isMobileSidebarOpen ? (
           <button
             type="button"
@@ -259,28 +435,34 @@ export function App() {
                   onClick={() => setSidebarCollapsed((current) => !current)}
                 />
               </div>
-              <nav className="grid gap-1.5" aria-label="Primary">
-                {appPages.map((entry) => {
-                  const Icon = pageIcons[entry.id];
-                  return (
-                    <SidebarNavButton
+              <SidebarGroup label={sidebarCollapsed ? undefined : "Network Analytics"}>
+                <nav className="grid gap-1.5" aria-label="Network analytics">
+                  {analyticsPages.map((entry) => (
+                    <PageNavButton
                       key={entry.id}
-                      type="button"
-                      active={entry.id === selectedPage}
-                      icon={<Icon className="h-4 w-4" />}
+                      entry={entry}
                       collapsed={sidebarCollapsed}
-                      title={entry.title}
-                      tooltip={entry.title}
-                      onClick={() => {
-                        setSelectedPage(entry.id);
-                        if (window.innerWidth < 768) {
-                          setSidebarCollapsed(true);
-                        }
-                      }}
+                      selectedPage={selectedPage}
+                      pageIcons={pageIcons}
+                      onSelect={selectPage}
                     />
-                  );
-                })}
-              </nav>
+                  ))}
+                </nav>
+              </SidebarGroup>
+              <SidebarGroup label={sidebarCollapsed ? undefined : "Peer Tools"}>
+                <nav className="grid gap-1.5" aria-label="Peer tools">
+                  {peerPages.map((entry) => (
+                    <PageNavButton
+                      key={entry.id}
+                      entry={entry}
+                      collapsed={sidebarCollapsed}
+                      selectedPage={selectedPage}
+                      pageIcons={pageIcons}
+                      onSelect={selectPage}
+                    />
+                  ))}
+                </nav>
+              </SidebarGroup>
             </SidebarGroup>
           </SidebarContent>
 
@@ -318,37 +500,109 @@ export function App() {
 
         <main className="flex min-h-screen min-w-0 flex-col bg-background md:col-start-2">
           <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-3 py-3 backdrop-blur md:px-4">
-            <div className="flex flex-col gap-3 md:h-14 md:flex-row md:items-center">
+            <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,max-content)_minmax(0,1fr)_max-content] md:items-center md:gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <SidebarTrigger
-                  collapsed={sidebarCollapsed}
-                  className="shrink-0 md:hidden"
-                  aria-label={sidebarCollapsed ? "Open navigation" : "Close navigation"}
-                  onClick={() => setSidebarCollapsed((current) => !current)}
-                />
-                <div className="rounded-md border border-border bg-muted/60 p-2 text-muted-foreground">
-                  {(() => {
-                    const PageIcon = currentPageIcon;
-                    return <PageIcon className="h-4 w-4" />;
-                  })()}
+                  <SidebarTrigger
+                    collapsed={sidebarCollapsed}
+                    className="shrink-0 md:hidden"
+                    aria-label={sidebarCollapsed ? "Open navigation" : "Close navigation"}
+                    onClick={() => setSidebarCollapsed((current) => !current)}
+                  />
+                  <div className="rounded-md border border-border bg-muted/60 p-2 text-muted-foreground">
+                    {(() => {
+                      const PageIcon = currentPageIcon;
+                      return <PageIcon className="h-4 w-4" />;
+                    })()}
+                  </div>
+                  <div className="min-w-0">
+                    <p
+                      data-testid="page-subview-label"
+                      className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+                    >
+                      {currentSubnavItemTitle}
+                    </p>
+                    <p className="truncate text-sm text-foreground">{page.title}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    Overview
-                  </p>
-                  <p className="truncate text-sm text-foreground">{page.title}</p>
-                </div>
-              </div>
+              {currentSubnav ? (
+                <nav
+                  aria-label={currentSubnav.label}
+                  className="min-w-0 overflow-x-auto md:flex md:justify-center"
+                >
+                  <div className="inline-flex min-w-max items-center gap-1.5 rounded-xl bg-card/80 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                    {currentSubnav.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={
+                          item.id === currentSubnav.activeItem
+                            ? "inline-flex h-10 cursor-pointer items-center rounded-lg border border-primary/25 bg-primary/10 px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary shadow-[0_0_0_1px_rgba(245,158,11,0.10)]"
+                            : "inline-flex h-10 cursor-pointer items-center rounded-lg border border-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-border/70 hover:bg-muted/70 hover:text-primary"
+                        }
+                        onClick={() => currentSubnav.onSelect(item.id)}
+                      >
+                        {item.title}
+                      </button>
+                    ))}
+                  </div>
+                </nav>
+              ) : null}
               <div className="md:ml-auto">
-                <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground break-all md:max-w-[24rem]">
-                  {node}
-                </div>
+                {showsNodeContext ? (
+                  <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground break-all md:max-w-[24rem]">
+                    {node}
+                  </div>
+                ) : latestCrawlerPreview || isLoadingCrawlerPreview ? (
+                  <CrawlerPulseButton
+                    summary={
+                      crawlerPreviewPlayback?.currentSummary ??
+                      crawlerPreviewPlayback?.finalSummary ??
+                      latestCrawlerPreview?.run ??
+                      null
+                    }
+                    live={crawlerPreviewPlayback?.isLive ?? false}
+                    expanded={isCrawlerPreviewOpen}
+                    disabled={!latestCrawlerPreview}
+                    ariaLabel={
+                      isCrawlerPreviewOpen
+                        ? "Hide latest snapshot preview"
+                        : "Show latest snapshot preview"
+                    }
+                    onClick={() => {
+                      if (latestCrawlerPreview) {
+                        setIsCrawlerPreviewOpen((current) => !current);
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                    {analyticsLabel}
+                  </div>
+                )}
               </div>
             </div>
           </header>
 
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="grid flex-1 gap-4 p-3 md:gap-6 md:p-4 lg:p-6">
+              {selectedPage === "crawler-runs" ? (
+                <CrawlerRunsPage
+                  client={client}
+                  activePanel={crawlerRunsPanel}
+                  onPanelChange={setCrawlerRunsPanel}
+                  showPanelNav={false}
+                />
+              ) : null}
+
+              {selectedPage === "network-analytics" ? (
+                <NetworkAnalyticsPage
+                  client={client}
+                  activePanel={networkAnalyticsPanel}
+                  onPanelChange={setNetworkAnalyticsPanel}
+                  showPanelNav={false}
+                />
+              ) : null}
+
               {selectedPage === "connection" ? (
                 <ConnectionPage
                   node={node}
@@ -398,15 +652,45 @@ export function App() {
               ) : null}
             </div>
 
-            <SessionLogPanel
-              events={events}
-              isOpen={isSessionLogOpen}
-              onToggle={() => setIsSessionLogOpen((current) => !current)}
-              onClear={clearEvents}
-            />
+            {showsNodeContext ? (
+              <SessionLogPanel
+                events={events}
+                isOpen={isSessionLogOpen}
+                onToggle={() => setIsSessionLogOpen((current) => !current)}
+                onClear={clearEvents}
+              />
+            ) : null}
           </div>
         </main>
       </div>
     </div>
+  );
+}
+
+function PageNavButton({
+  entry,
+  collapsed,
+  selectedPage,
+  pageIcons,
+  onSelect,
+}: {
+  entry: (typeof appPages)[number];
+  collapsed: boolean;
+  selectedPage: AppPageId;
+  pageIcons: Record<AppPageId, typeof Radio>;
+  onSelect: (pageId: AppPageId) => void;
+}) {
+  const Icon = pageIcons[entry.id];
+
+  return (
+    <SidebarNavButton
+      type="button"
+      active={entry.id === selectedPage}
+      icon={<Icon className="h-4 w-4" />}
+      collapsed={collapsed}
+      title={entry.title}
+      tooltip={entry.title}
+      onClick={() => onSelect(entry.id)}
+    />
   );
 }

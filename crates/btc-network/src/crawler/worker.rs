@@ -169,11 +169,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     return;
                 }
 
-                state
-                    .lock()
-                    .await
-                    .in_flight_nodes
-                    .remove(&endpoint);
+                state.lock().await.in_flight_nodes.remove(&endpoint);
 
                 if config.verbose {
                     info!(

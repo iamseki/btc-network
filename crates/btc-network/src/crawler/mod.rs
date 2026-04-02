@@ -1,3 +1,4 @@
+mod analytics;
 mod domain;
 mod lifecycle;
 mod node;
@@ -16,6 +17,10 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::task::{JoinError, JoinHandle};
 use tracing::{info, warn};
 
+pub use analytics::{
+    AsnNodeCountItem, CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem,
+    FailureClassificationCount, NetworkOutcomeCount,
+};
 pub use domain::{
     BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
     CrawlRunId, CrawlRunMetrics, FailureClassification, HandshakeStatus, IpEnrichment,
@@ -28,7 +33,8 @@ use lifecycle::{
 };
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 pub use ports::{
-    CrawlerRepository, CrawlerRepositoryError, IpEnrichmentProvider, RepositoryFuture,
+    CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError, IpEnrichmentProvider,
+    RepositoryFuture,
 };
 use types::{CrawlState, CrawlerStats};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};

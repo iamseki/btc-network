@@ -7,6 +7,7 @@ use super::domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunId, IpEnrichment,
     PersistedNodeObservation,
 };
+use super::{AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem};
 
 pub type RepositoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -74,12 +75,33 @@ pub trait CrawlerRepository: Send + Sync {
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>>;
 }
 
+/// Read-only analytics contract for browser-safe crawler UI surfaces.
+pub trait CrawlerAnalyticsReader: Send + Sync {
+    fn list_crawl_runs<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<CrawlRunListItem>, CrawlerRepositoryError>>;
+
+    fn get_crawl_run<'a>(
+        &'a self,
+        run_id: &'a CrawlRunId,
+        checkpoint_limit: usize,
+    ) -> RepositoryFuture<'a, Result<Option<CrawlRunDetail>, CrawlerRepositoryError>>;
+
+    fn count_nodes_by_asn<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::crawler::{
-        BatchId, CrawlNetwork, CrawlPhase, CrawlRunMetrics, HandshakeStatus, ObservationConfidence,
-        ObservationId, RawNodeObservation,
+        AsnNodeCountItem, BatchId, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem,
+        CrawlRunDetail, CrawlRunListItem, CrawlRunMetrics, FailureClassificationCount,
+        HandshakeStatus, NetworkOutcomeCount, ObservationConfidence, ObservationId,
+        RawNodeObservation,
     };
     use chrono::Utc;
     use std::net::{IpAddr, Ipv4Addr};
@@ -102,6 +124,8 @@ mod tests {
         observations: Mutex<Vec<PersistedNodeObservation>>,
         checkpoints: Mutex<Vec<CrawlRunCheckpoint>>,
         counts: Mutex<Vec<CountNodesByAsnRow>>,
+        crawl_runs: Mutex<Vec<CrawlRunListItem>>,
+        crawl_run_detail: Mutex<Option<CrawlRunDetail>>,
     }
 
     impl CrawlerRepository for InMemoryCrawlerRepository {
@@ -172,6 +196,45 @@ mod tests {
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
             Box::pin(async move { Ok(self.counts.lock().expect("counts lock").clone()) })
+        }
+    }
+
+    impl CrawlerAnalyticsReader for InMemoryCrawlerRepository {
+        fn list_crawl_runs<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<CrawlRunListItem>, CrawlerRepositoryError>> {
+            Box::pin(async move { Ok(self.crawl_runs.lock().expect("crawl runs lock").clone()) })
+        }
+
+        fn get_crawl_run<'a>(
+            &'a self,
+            _run_id: &'a CrawlRunId,
+            _checkpoint_limit: usize,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunDetail>, CrawlerRepositoryError>> {
+            Box::pin(async move {
+                Ok(self
+                    .crawl_run_detail
+                    .lock()
+                    .expect("crawl run detail lock")
+                    .clone())
+            })
+        }
+
+        fn count_nodes_by_asn<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>> {
+            Box::pin(async move {
+                Ok(self
+                    .counts
+                    .lock()
+                    .expect("counts lock")
+                    .clone()
+                    .into_iter()
+                    .map(Into::into)
+                    .collect())
+            })
         }
     }
 
@@ -274,5 +337,71 @@ mod tests {
             .insert_observations_stream(vec![persisted.clone()])
             .await
             .expect("insert stream");
+    }
+
+    #[tokio::test]
+    async fn analytics_reader_trait_supports_test_double_for_run_reads() {
+        let checkpoint_item = CrawlRunCheckpointItem {
+            phase: "completed".to_string(),
+            checkpointed_at: "2026-03-30T12:00:00+00:00".to_string(),
+            checkpoint_sequence: 2,
+            stop_reason: Some("idle timeout".to_string()),
+            failure_reason: None,
+            frontier_size: 0,
+            in_flight_work: 0,
+            scheduled_tasks: 10,
+            successful_handshakes: 4,
+            failed_tasks: 6,
+            unique_nodes: 12,
+            persisted_observation_rows: 10,
+            writer_backlog: 0,
+        };
+        let run = CrawlRunListItem {
+            run_id: "run-1".to_string(),
+            phase: "completed".to_string(),
+            started_at: "2026-03-30T11:00:00+00:00".to_string(),
+            last_checkpointed_at: "2026-03-30T12:00:00+00:00".to_string(),
+            stop_reason: Some("idle timeout".to_string()),
+            failure_reason: None,
+            scheduled_tasks: 10,
+            successful_handshakes: 4,
+            failed_tasks: 6,
+            unique_nodes: 12,
+            persisted_observation_rows: 10,
+            success_pct: 40.0,
+            scheduled_pct: 83.33,
+            unscheduled_gap: 2,
+        };
+        let detail = CrawlRunDetail {
+            run: run.clone(),
+            checkpoints: vec![checkpoint_item],
+            failure_counts: vec![FailureClassificationCount {
+                classification: "connect".to_string(),
+                observations: 6,
+            }],
+            network_outcomes: vec![NetworkOutcomeCount {
+                network_type: "ipv4".to_string(),
+                observations: 10,
+                verified_nodes: 4,
+                failed_nodes: 6,
+                verified_pct: 40.0,
+            }],
+        };
+        let repository = InMemoryCrawlerRepository {
+            crawl_runs: Mutex::new(vec![run.clone()]),
+            crawl_run_detail: Mutex::new(Some(detail.clone())),
+            ..InMemoryCrawlerRepository::default()
+        };
+        let reader: &dyn CrawlerAnalyticsReader = &repository;
+
+        let runs = reader.list_crawl_runs(10).await.expect("list runs");
+        let fetched_detail = reader
+            .get_crawl_run(&CrawlRunId::new("run-1"), 10)
+            .await
+            .expect("get run")
+            .expect("run detail");
+
+        assert_eq!(runs, vec![run]);
+        assert_eq!(fetched_detail, detail);
     }
 }

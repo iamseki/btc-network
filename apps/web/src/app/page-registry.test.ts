@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { appPages } from "./page-registry";
 
 describe("appPages", () => {
-  it("lists the current CLI-aligned pages in order", () => {
+  it("lists analytics-first pages before the existing peer tools", () => {
     expect(appPages.map((page) => page.id)).toEqual([
+      "network-analytics",
+      "crawler-runs",
       "connection",
       "peer-tools",
       "headers",
@@ -12,10 +14,11 @@ describe("appPages", () => {
     ]);
   });
 
-  it("provides titles and descriptions for navigation", () => {
+  it("provides titles, descriptions, and groups for navigation", () => {
     for (const page of appPages) {
       expect(page.title.length).toBeGreaterThan(0);
       expect(page.description.length).toBeGreaterThan(0);
+      expect(page.group.length).toBeGreaterThan(0);
     }
   });
 });

@@ -1,8 +1,9 @@
 use super::*;
 use btc_network::crawler::{
     BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
-    CrawlRunId, CrawlRunMetrics, HandshakeStatus, IpEnrichment, ObservationConfidence,
-    ObservationId, PersistedNodeObservation, RawNodeObservation,
+    CrawlRunId, CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, HandshakeStatus,
+    IpEnrichment, ObservationConfidence, ObservationId, PersistedNodeObservation,
+    RawNodeObservation,
 };
 use chrono::Utc;
 use clickhouse::test::{self, handlers};
@@ -131,8 +132,7 @@ async fn repository_counts_latest_verified_nodes_by_asn() {
         },
     ]));
 
-    let rows = repository
-        .count_nodes_by_asn()
+    let rows = CrawlerRepository::count_nodes_by_asn(&repository)
         .await
         .expect("count nodes by asn");
 
@@ -167,4 +167,20 @@ async fn repository_list_runs_query_includes_argmax_latest_checkpoint_shape() {
     assert!(query.contains("latest_checkpoint_sequence AS checkpoint_sequence"));
     assert!(query.contains("GROUP BY run_id"));
     assert!(query.contains("crawler_run_checkpoints"));
+}
+
+#[tokio::test]
+async fn analytics_reader_list_runs_query_applies_limit() {
+    let mock = test::Mock::new();
+    let client = Client::default().with_mock(&mock);
+    let repository = ClickHouseCrawlerRepository::with_client(client.clone());
+    let recording = mock.add(handlers::record_ddl());
+
+    CrawlerAnalyticsReader::list_crawl_runs(&repository, 10)
+        .await
+        .expect("list crawl runs");
+
+    let query = recording.query().await;
+    assert!(query.contains("LIMIT"));
+    assert!(query.contains("ORDER BY checkpointed_at DESC"));
 }

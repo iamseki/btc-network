@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -11,12 +11,18 @@ const mockGetAddr = vi.fn();
 const mockGetLastBlockHeight = vi.fn();
 const mockGetBlock = vi.fn();
 const mockDownloadBlock = vi.fn();
+const mockListCrawlRuns = vi.fn();
+const mockGetCrawlRun = vi.fn();
+const mockCountNodesByAsn = vi.fn();
 const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
 const originalInnerWidth = window.innerWidth;
 
 vi.mock("./lib/api", () => ({
   getAppClient: () => ({
+    listCrawlRuns: mockListCrawlRuns,
+    getCrawlRun: mockGetCrawlRun,
+    countNodesByAsn: mockCountNodesByAsn,
     handshake: mockHandshake,
     ping: mockPing,
     getAddr: mockGetAddr,
@@ -30,20 +36,48 @@ vi.mock("./lib/api", () => ({
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   mockHandshake.mockReset();
   mockPing.mockReset();
   mockGetAddr.mockReset();
   mockGetLastBlockHeight.mockReset();
   mockGetBlock.mockReset();
   mockDownloadBlock.mockReset();
+  mockListCrawlRuns.mockReset();
+  mockGetCrawlRun.mockReset();
+  mockCountNodesByAsn.mockReset();
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
+  mockListCrawlRuns.mockResolvedValue([]);
+  mockGetCrawlRun.mockResolvedValue({
+    run: {
+      runId: "crawl-1",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 100,
+      successfulHandshakes: 25,
+      failedTasks: 75,
+      uniqueNodes: 120,
+      persistedObservationRows: 100,
+      successPct: 25,
+      scheduledPct: 83.33,
+      unscheduledGap: 20,
+    },
+    checkpoints: [],
+    failureCounts: [],
+    networkOutcomes: [],
+  });
+  mockCountNodesByAsn.mockResolvedValue([]);
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
 });
 
 beforeEach(() => {
+  window.localStorage.clear();
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
     writable: true,
@@ -52,6 +86,29 @@ beforeEach(() => {
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
+  mockListCrawlRuns.mockResolvedValue([]);
+  mockGetCrawlRun.mockResolvedValue({
+    run: {
+      runId: "crawl-1",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 100,
+      successfulHandshakes: 25,
+      failedTasks: 75,
+      uniqueNodes: 120,
+      persistedObservationRows: 100,
+      successPct: 25,
+      scheduledPct: 83.33,
+      unscheduledGap: 20,
+    },
+    checkpoints: [],
+    failureCounts: [],
+    networkOutcomes: [],
+  });
+  mockCountNodesByAsn.mockResolvedValue([]);
 });
 
 function setViewportWidth(width: number) {
@@ -62,16 +119,77 @@ function setViewportWidth(width: number) {
   });
 }
 
+function mockCrawlerPreviewRun() {
+  mockListCrawlRuns.mockResolvedValue([
+    {
+      runId: "crawl-2",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 120,
+      successfulHandshakes: 40,
+      failedTasks: 80,
+      uniqueNodes: 150,
+      persistedObservationRows: 120,
+      successPct: 33.33,
+      scheduledPct: 80,
+      unscheduledGap: 30,
+    },
+  ]);
+  mockGetCrawlRun.mockResolvedValue({
+    run: {
+      runId: "crawl-2",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 120,
+      successfulHandshakes: 40,
+      failedTasks: 80,
+      uniqueNodes: 150,
+      persistedObservationRows: 120,
+      successPct: 33.33,
+      scheduledPct: 80,
+      unscheduledGap: 30,
+    },
+    checkpoints: [
+      {
+        phase: "completed",
+        checkpointedAt: "2026-03-30T12:10:00Z",
+        checkpointSequence: 4,
+        stopReason: "idle timeout",
+        failureReason: null,
+        frontierSize: 0,
+        inFlightWork: 0,
+        scheduledTasks: 120,
+        successfulHandshakes: 40,
+        failedTasks: 80,
+        uniqueNodes: 150,
+        persistedObservationRows: 120,
+        writerBacklog: 0,
+      },
+    ],
+    failureCounts: [],
+    networkOutcomes: [],
+  });
+}
+
 describe("App sidebar shell", () => {
   it("renders collapsed by default", () => {
     render(<App />);
 
     expect(screen.queryByText("Menu")).toBeNull();
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Connection" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Connection" })).toBeTruthy();
-    expect(screen.getByText("Session Log")).toBeTruthy();
-    expect(screen.getByText(/Frontend loaded\./)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Network Analytics" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Network Analytics" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Network Analytics Views" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Verification" })).toBeTruthy();
+    expect(screen.queryByText("Session Log")).toBeNull();
+    expect(screen.queryByText(/Frontend loaded\./)).toBeNull();
   });
 
   it("expands the sidebar when the trigger is clicked", () => {
@@ -131,10 +249,115 @@ describe("App sidebar shell", () => {
   it("switches the visible page from the sidebar", () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Chain Height" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
 
-    expect(screen.getByRole("heading", { name: "Chain Height" })).toBeTruthy();
-    expect(screen.getByText("Fetch the current chain height for this peer.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Crawler Runs Views" })).toBeTruthy();
+    expect(screen.getByText(/latest public snapshot/i)).toBeTruthy();
+  });
+
+  it("opens and closes the header crawl preview from the pulse in the header rail", async () => {
+    mockCrawlerPreviewRun();
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Show latest snapshot preview" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show latest snapshot preview" }));
+    expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close latest snapshot preview" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Crawler Snapshot")).toBeNull();
+    });
+  });
+
+  it("persists the crawl pulse cycle anchor in local storage", async () => {
+    mockCrawlerPreviewRun();
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Show latest snapshot preview" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+    });
+
+    await waitFor(() => {
+      const storedAnchor = window.localStorage.getItem(
+        "btc-network:crawler-signal-cycle:v1:crawl-2",
+      );
+      expect(storedAnchor).toBeTruthy();
+      expect(Number.parseInt(storedAnchor ?? "", 10)).toBeGreaterThan(0);
+    });
+  });
+
+  it("opens the network analytics page when the header crawl preview is clicked", async () => {
+    mockCrawlerPreviewRun();
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Show latest snapshot preview" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show latest snapshot preview" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open network analytics from snapshot" }));
+
+    expect(await screen.findByRole("heading", { name: "Network Analytics" })).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
+    });
+  });
+
+  it("keeps crawler runs focused on inspection while the snapshot stays in the header preview", async () => {
+    mockCrawlerPreviewRun();
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
+    });
+    expect(screen.queryByText("Crawler Snapshot")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Latest Snapshot" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hide Latest Snapshot" })).toBeNull();
+  });
+
+  it("shows page-specific sub-navigation for analytics pages", () => {
+    render(<App />);
+
+    expect(screen.getAllByRole("button", { name: "Network Analytics" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Crawler Runs" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+
+    expect(screen.getByRole("button", { name: "Checkpoints" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Failures" })).toBeTruthy();
+  });
+
+  it("updates the header eyebrow when the analytics sub-navigation changes", () => {
+    render(<App />);
+
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Overview");
+
+    fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Top ASNs");
+
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Failures" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Failures");
   });
 
   it("requests the last block height from the headers page", async () => {
@@ -248,6 +471,7 @@ describe("App sidebar shell", () => {
 
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Connection" }));
     fireEvent.click(screen.getByRole("button", { name: "Run Handshake" }));
     fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
 
@@ -292,6 +516,7 @@ describe("App sidebar shell", () => {
   it("clears the session log from the global panel", () => {
     render(<App />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Connection" }));
     fireEvent.click(screen.getByRole("button", { name: "Expand session log" }));
     fireEvent.click(screen.getByRole("button", { name: "Clear session log" }));
 

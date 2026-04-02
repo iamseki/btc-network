@@ -27,6 +27,12 @@ The current real desktop-backed flows are implemented:
 - `get_block_summary`
 - `download_block`
 
+Crawler analytics is intentionally different in the current slice:
+
+- `Crawler Runs` and `Network Analytics` are shared React pages
+- they use the same HTTP API contract as the web app
+- there are no crawler-analytics-specific Tauri commands in this phase
+
 These commands are exposed from `src-tauri/src/commands.rs` and call the shared Rust client workflow layer in `crates/btc-network/src/client/peer.rs`.
 
 The desktop icon set is generated from:

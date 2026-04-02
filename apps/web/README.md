@@ -29,8 +29,11 @@ Current state:
 - app shell and page navigation are implemented
 - the sidebar shell is covered by render tests in `src/App.test.tsx`
 - runtime selection between `web-client` and `tauri-client` is in place
+- `Crawler Runs` and `Network Analytics` are now real analytics pages backed by the HTTP API
 - desktop-backed handshake, ping, peer address lookup, chain height, block summary, and block download are wired through Tauri
-- plain web mode still uses placeholder/mock responses where a browser-safe backend does not yet exist
+- both web and desktop analytics reads now use the browser-safe HTTP helper
+- plain web mode still uses placeholder/mock responses only for the single-peer flows that do not yet have a browser-safe backend
+- optional demo mode can mock analytics pages too for hosted browser-only deploys that are not ready to expose the API yet
 
 ## Local commands
 
@@ -41,12 +44,15 @@ Current state:
 
 Optional environment:
 
+- `VITE_API_BASE_URL` — base URL for crawler analytics reads; defaults to `http://127.0.0.1:8080` in local development and `https://api.btcnetwork.info` in production
+- `VITE_DEMO_MODE` — when set to `true`, `1`, `yes`, or `on`, the hosted web app serves deterministic mock data for `Crawler Runs` and `Network Analytics` instead of calling the HTTP API
 - `VITE_SUPPORT_URL` — Buy Me a Coffee or other support link shown in the sidebar footer
 
 Important:
 
 - Vite reads `VITE_*` values at build time, not after the page has already loaded
 - local development: set `VITE_SUPPORT_URL` in your shell or a local Vite env file before `npm run dev`
+- demo deploys: set `VITE_DEMO_MODE=true` in the build environment when you want the public site to stay fully browser-only
 - production deploys: set `VITE_SUPPORT_URL` as a GitHub repository variable so the GitHub Actions build injects it into the static site
 
 ## Production deploy
@@ -70,7 +76,7 @@ Important:
 
 Next implementation priorities:
 
-- keep the browser-safe adapter boundary ready for a future HTTP/backend implementation
+- extend the browser-safe backend beyond crawler analytics if more single-peer flows need real web support
 - improve progress and streaming feedback for longer-running protocol actions
 - decide whether one-shot `getheaders` belongs in the product surface beyond the current chain-height view
 - keep the web runtime behind a browser-safe adapter boundary

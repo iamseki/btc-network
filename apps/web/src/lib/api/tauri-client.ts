@@ -1,4 +1,9 @@
 import type { BtcAppClient } from "./client";
+import {
+  countNodesByAsn as countNodesByAsnHttp,
+  getCrawlRun as getCrawlRunHttp,
+  listCrawlRuns as listCrawlRunsHttp,
+} from "./analytics-http";
 import type {
   AddrResult,
   BlockDownloadRequest,
@@ -31,6 +36,15 @@ async function invoke<T>(
 }
 
 export const tauriClient: BtcAppClient = {
+  listCrawlRuns(limit) {
+    return listCrawlRunsHttp(limit);
+  },
+  getCrawlRun(runId) {
+    return getCrawlRunHttp(runId);
+  },
+  countNodesByAsn(limit) {
+    return countNodesByAsnHttp(limit);
+  },
   handshake(request: ConnectionRequest): Promise<HandshakeResult> {
     return invoke<HandshakeResult>("handshake", { request });
   },

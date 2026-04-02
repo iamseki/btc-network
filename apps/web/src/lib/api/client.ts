@@ -1,9 +1,12 @@
 import type {
   AddrResult,
+  AsnNodeCountItem,
   BlockDownloadRequest,
   BlockDownloadResult,
   BlockSummary,
   ConnectionRequest,
+  CrawlRunDetail,
+  CrawlRunListItem,
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
@@ -14,6 +17,9 @@ import type {
 export type LastBlockHeightProgressListener = (progress: LastBlockHeightProgress) => void;
 
 export interface BtcAppClient {
+  listCrawlRuns(limit?: number): Promise<CrawlRunListItem[]>;
+  getCrawlRun(runId: string): Promise<CrawlRunDetail>;
+  countNodesByAsn(limit?: number): Promise<AsnNodeCountItem[]>;
   handshake(request: ConnectionRequest): Promise<HandshakeResult>;
   ping(node: string): Promise<PingResult>;
   getAddr(node: string): Promise<AddrResult>;

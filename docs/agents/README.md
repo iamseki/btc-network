@@ -11,6 +11,7 @@ Compact implementation-facing documentation for coding agents and maintainers.
 ## Task Routing
 
 - Frontend shell or page task: `frontend-architecture.md`, then the specific page or component
+- Analytics UI refinement: `frontend-architecture.md`; read [BNDD-0006](../design_docs/BNDD-0006/BNDD-0006.md) only when the product shape or deployment behavior changes
 - Frontend API or runtime task: `architecture-decisions.md`, then `apps/web/src/lib/api/`
 - Shared Rust protocol or session task: `architecture-decisions.md`, then the target module and its tests
 - Desktop bridge task: `architecture-decisions.md`, then `apps/desktop/src-tauri/src/commands.rs`
@@ -27,6 +28,7 @@ Compact implementation-facing documentation for coding agents and maintainers.
 - Do not read `apps/crawler/` for frontend work.
 - Do not read `apps/web/` for wire parser work.
 - Do not reread unrelated app surfaces just to confirm boundaries already stated here.
+- When a compact agent doc is stale, update it instead of adding repeated guidance in multiple places.
 - Use `agent-safety.md` to decide whether a command should be inspected, narrowed, or escalated before running it.
 
 ## Purpose
