@@ -139,6 +139,7 @@ Already in place:
 - browser-safe Rust API app under `apps/api/` for public crawler analytics reads
 - analytics-first pages for `Crawler Runs` and `Network Analytics`
 - global header `Latest Snapshot` entry point with a centered preview overlay for the latest crawler replay
+- hosted snapshot replay state persisted in local storage so short reloads stay stable while longer absences can restart a fresh live cycle
 - score-first `Network Analytics` landing page with derived network-risk signals built from the current read-only contract
 - globe-first `Network Analytics` home composition with compact `Risk Brief` and a full-width `Risk Drivers` strip beneath the hero row
 - compact analytics header stats aligned with page refresh actions instead of large summary grids
