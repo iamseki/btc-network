@@ -3,6 +3,11 @@ import { useEffect, useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
 import { prependLogEvent } from "./app/log-events";
+import {
+  CrawlerLiveSignal,
+  CrawlerPulseButton,
+  useCrawlerSignalPlayback,
+} from "./components/crawler-live-signal";
 import { SessionLogPanel } from "./components/session-log-panel";
 import {
   Sidebar,
@@ -26,6 +31,7 @@ import type {
   AddrResult,
   BlockDownloadResult,
   BlockSummary,
+  CrawlRunDetail,
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
@@ -85,6 +91,12 @@ export function App() {
   const [downloadResult, setDownloadResult] = useState<BlockDownloadResult | null>(null);
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [isDownloadingBlock, setIsDownloadingBlock] = useState(false);
+  const [latestCrawlerPreview, setLatestCrawlerPreview] = useState<CrawlRunDetail | null>(null);
+  const [isLoadingCrawlerPreview, setIsLoadingCrawlerPreview] = useState(false);
+  const [isCrawlerPreviewOpen, setIsCrawlerPreviewOpen] = useState(false);
+  const [isCrawlerPreviewRendered, setIsCrawlerPreviewRendered] = useState(false);
+  const [isCrawlerPreviewVisible, setIsCrawlerPreviewVisible] = useState(false);
+  const [autoExpandCrawlerSignal, setAutoExpandCrawlerSignal] = useState(false);
 
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
@@ -122,9 +134,12 @@ export function App() {
         : null;
   const currentSubnavItemTitle =
     currentSubnav?.items.find((item) => item.id === currentSubnav.activeItem)?.title ?? "Overview";
+  const crawlerPreviewPlayback = useCrawlerSignalPlayback(latestCrawlerPreview);
 
   function selectPage(nextPage: AppPageId) {
     setSelectedPage(nextPage);
+    setIsCrawlerPreviewOpen(false);
+    setAutoExpandCrawlerSignal(false);
 
     if (nextPage === "network-analytics") {
       setNetworkAnalyticsPanel("overview");
@@ -166,6 +181,80 @@ export function App() {
       cancelled = true;
     };
   }, [blockHash, client]);
+
+  useEffect(() => {
+    if (showsNodeContext) {
+      setIsCrawlerPreviewOpen(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingCrawlerPreview(true);
+
+    void (async () => {
+      try {
+        const runs = await client.listCrawlRuns(1);
+        const latestRun = runs[0] ?? null;
+        const nextDetail = latestRun ? await client.getCrawlRun(latestRun.runId) : null;
+
+        if (!cancelled) {
+          setLatestCrawlerPreview(nextDetail);
+        }
+      } catch {
+        if (!cancelled) {
+          setLatestCrawlerPreview(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCrawlerPreview(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, showsNodeContext]);
+
+  useEffect(() => {
+    if (isCrawlerPreviewOpen) {
+      setIsCrawlerPreviewRendered(true);
+      setIsCrawlerPreviewVisible(false);
+
+      const timeout = window.setTimeout(() => {
+        setIsCrawlerPreviewVisible(true);
+      }, 24);
+
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+
+    setIsCrawlerPreviewVisible(false);
+
+    if (!isCrawlerPreviewRendered) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setIsCrawlerPreviewRendered(false);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [isCrawlerPreviewOpen, isCrawlerPreviewRendered]);
+
+  function openCrawlerRunsFromPreview() {
+    setIsCrawlerPreviewOpen(false);
+    setAutoExpandCrawlerSignal(true);
+    setSelectedPage("crawler-runs");
+    setCrawlerRunsPanel("overview");
+
+    if (window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
+  }
 
   async function handleHandshake() {
     setIsHandshaking(true);
@@ -283,6 +372,38 @@ export function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className={`relative min-h-screen md:grid md:w-full ${desktopShellClass}`}>
+        {isCrawlerPreviewRendered && latestCrawlerPreview ? (
+          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 md:p-6">
+            <button
+              type="button"
+              aria-label="Close latest snapshot preview"
+              className={`absolute inset-0 bg-background/55 backdrop-blur-sm transition-opacity duration-300 ${
+                isCrawlerPreviewVisible ? "opacity-100" : "opacity-0"
+              }`}
+              onClick={() => setIsCrawlerPreviewOpen(false)}
+            />
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Open crawler runs from snapshot"
+              className={`relative z-10 w-full max-w-5xl cursor-pointer rounded-[12px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] outline-none transform-gpu transition-[opacity,transform,filter] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-ring ${
+                isCrawlerPreviewVisible
+                  ? "translate-y-0 scale-100 opacity-100 blur-0"
+                  : "translate-y-6 scale-[0.96] opacity-0 blur-[6px]"
+              }`}
+              onClick={openCrawlerRunsFromPreview}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openCrawlerRunsFromPreview();
+                }
+              }}
+            >
+              <CrawlerLiveSignal detail={latestCrawlerPreview} playback={crawlerPreviewPlayback} />
+            </div>
+          </div>
+        ) : null}
+
         {isMobileSidebarOpen ? (
           <button
             type="button"
@@ -434,6 +555,28 @@ export function App() {
                   <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground break-all md:max-w-[24rem]">
                     {node}
                   </div>
+                ) : latestCrawlerPreview || isLoadingCrawlerPreview ? (
+                  <CrawlerPulseButton
+                    summary={
+                      crawlerPreviewPlayback?.currentSummary ??
+                      crawlerPreviewPlayback?.finalSummary ??
+                      latestCrawlerPreview?.run ??
+                      null
+                    }
+                    live={crawlerPreviewPlayback?.isLive ?? false}
+                    expanded={isCrawlerPreviewOpen}
+                    disabled={!latestCrawlerPreview}
+                    ariaLabel={
+                      isCrawlerPreviewOpen
+                        ? "Hide latest snapshot preview"
+                        : "Show latest snapshot preview"
+                    }
+                    onClick={() => {
+                      if (latestCrawlerPreview) {
+                        setIsCrawlerPreviewOpen((current) => !current);
+                      }
+                    }}
+                  />
                 ) : (
                   <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                     {analyticsLabel}
@@ -450,6 +593,8 @@ export function App() {
                   client={client}
                   activePanel={crawlerRunsPanel}
                   onPanelChange={setCrawlerRunsPanel}
+                  autoExpandSignal={autoExpandCrawlerSignal}
+                  onAutoExpandSignalApplied={() => setAutoExpandCrawlerSignal(false)}
                   showPanelNav={false}
                 />
               ) : null}

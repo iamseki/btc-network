@@ -9,6 +9,7 @@ import { CrawlerRunsPage } from "./crawler-runs-page";
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
 });
 
 function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
@@ -133,8 +134,11 @@ describe("CrawlerRunsPage", () => {
     await waitFor(() => {
       expect(getRun).toHaveBeenCalledWith("crawl-2");
     });
+    expect(screen.queryByText("Crawler Snapshot")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Latest Snapshot" }));
+    expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
+    expect(await screen.findByText("Checkpoint Rail")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Failures" }));
-    expect(await screen.findByText("Dominant Failure")).toBeTruthy();
     expect(await screen.findByText("Failure Mix")).toBeTruthy();
     expect((await screen.findAllByText("connect")).length).toBeGreaterThan(0);
   });
@@ -151,7 +155,7 @@ describe("CrawlerRunsPage", () => {
     ).toBeTruthy();
   });
 
-  it("loads a different run when the table selection changes", async () => {
+  it("loads a different run when the compact run picker selection changes", async () => {
     const getRun = vi
       .fn()
       .mockResolvedValueOnce({
@@ -245,13 +249,88 @@ describe("CrawlerRunsPage", () => {
       expect(getRun).toHaveBeenCalledWith("crawl-2");
     });
     fireEvent.click(screen.getByRole("button", { name: "Failures" }));
-    expect(await screen.findByText("Dominant Failure")).toBeTruthy();
+    expect(await screen.findByText("Failure Mix")).toBeTruthy();
     expect((await screen.findAllByText("handshake")).length).toBeGreaterThan(0);
+  });
+
+  it("auto-expands the crawl signal when requested by the shell", async () => {
+    const getRun = vi.fn().mockResolvedValue({
+      run: {
+        runId: "crawl-3",
+        phase: "completed",
+        startedAt: "2026-03-30T14:00:00Z",
+        lastCheckpointedAt: "2026-03-30T14:05:00Z",
+        stopReason: "idle timeout",
+        failureReason: null,
+        scheduledTasks: 140,
+        successfulHandshakes: 52,
+        failedTasks: 88,
+        uniqueNodes: 170,
+        persistedObservationRows: 140,
+        successPct: 37.14,
+        scheduledPct: 82.35,
+        unscheduledGap: 30,
+      },
+      checkpoints: [
+        {
+          phase: "completed",
+          checkpointedAt: "2026-03-30T14:05:00Z",
+          checkpointSequence: 5,
+          stopReason: "idle timeout",
+          failureReason: null,
+          frontierSize: 0,
+          inFlightWork: 0,
+          scheduledTasks: 140,
+          successfulHandshakes: 52,
+          failedTasks: 88,
+          uniqueNodes: 170,
+          persistedObservationRows: 140,
+          writerBacklog: 0,
+        },
+      ],
+      failureCounts: [],
+      networkOutcomes: [],
+    });
+    const onAutoExpandSignalApplied = vi.fn();
+    const client = makeClient({
+      listCrawlRuns: vi.fn().mockResolvedValue([
+        {
+          runId: "crawl-3",
+          phase: "completed",
+          startedAt: "2026-03-30T14:00:00Z",
+          lastCheckpointedAt: "2026-03-30T14:05:00Z",
+          stopReason: "idle timeout",
+          failureReason: null,
+          scheduledTasks: 140,
+          successfulHandshakes: 52,
+          failedTasks: 88,
+          uniqueNodes: 170,
+          persistedObservationRows: 140,
+          successPct: 37.14,
+          scheduledPct: 82.35,
+          unscheduledGap: 30,
+        },
+      ]),
+      getCrawlRun: getRun,
+    });
+
+    render(
+      <CrawlerRunsPage
+        client={client}
+        autoExpandSignal
+        onAutoExpandSignalApplied={onAutoExpandSignalApplied}
+      />,
+    );
+
+    expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide Latest Snapshot" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(onAutoExpandSignalApplied).toHaveBeenCalledTimes(1);
   });
 });
 
 function getRunSelectionButton(runId: string): HTMLButtonElement {
-  return screen
-    .getAllByRole("button")
-    .find((button): button is HTMLButtonElement => button.textContent?.includes(runId) ?? false)!;
+  return screen.getByRole("button", { name: `Select run ${runId}` }) as HTMLButtonElement;
 }

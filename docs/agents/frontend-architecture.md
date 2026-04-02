@@ -38,6 +38,14 @@ Practical rule:
 - Keep adapted blocks clean by removing extra marketing copy, oversized panels, or dashboard filler
 - Do not rebuild a known shadcn block pattern from scratch unless there is a clear functional reason
 
+## Analytics UI Rules
+
+- Keep analytics pages focused on one primary story at a time: latest snapshot, ASN concentration, or verification outcomes
+- Keep run and page status summaries compact in `SectionHeading.actions` when the main content is already visible
+- Avoid repeating the same run context in large boxes below the heading if the header row already carries it
+- Treat `Latest Snapshot` as the primary crawler-facing entry point for hosted demo builds
+- Prefer lightweight custom charts over chart or map dependencies when the current API only needs simple comparative views
+
 ## High-Level Shape
 
 ```text
@@ -125,6 +133,9 @@ Already in place:
 - shared HTTP analytics helper used by both runtime adapters for crawler run and ASN reads
 - browser-safe Rust API app under `apps/api/` for public crawler analytics reads
 - analytics-first pages for `Crawler Runs` and `Network Analytics`
+- global header `Latest Snapshot` entry point with a centered preview overlay for the latest crawler replay
+- compact analytics header stats aligned with page refresh actions instead of large summary grids
+- lightweight ASN concentration and verification charts built directly from the current analytics API shape
 - render tests for the app shell, sidebar behavior, and current page actions
 
 Still intentionally incomplete:

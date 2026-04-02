@@ -97,7 +97,7 @@ export function NetworkAnalyticsPage({
         : demoMode
           ? "Compare demo observed, verified, and failed nodes by network type for the latest run."
           : "Compare observed, verified, and failed nodes by network type for the latest run.";
-  const summaryCards =
+  const headerStats =
     activePanel === "overview"
       ? [
           {
@@ -108,16 +108,20 @@ export function NetworkAnalyticsPage({
           {
             label: "Verified Success",
             value: latestRun ? `${latestRun.successPct.toFixed(2)}%` : "n/a",
-            detail: latestRun ? `${latestRun.successfulHandshakes} successful visits` : "No run loaded",
+            detail: latestRun
+              ? `${latestRun.successfulHandshakes.toLocaleString()} successful visits`
+              : "No run loaded",
           },
           {
             label: "Tracked Nodes",
-            value: latestRun?.uniqueNodes ?? "n/a",
-            detail: latestRun ? `${latestRun.unscheduledGap} still unscheduled` : "No frontier context",
+            value: latestRun ? latestRun.uniqueNodes.toLocaleString() : "n/a",
+            detail: latestRun
+              ? `${latestRun.unscheduledGap.toLocaleString()} still unscheduled`
+              : "No frontier context",
           },
           {
             label: "Persisted Rows",
-            value: latestRun?.persistedObservationRows ?? "n/a",
+            value: latestRun ? latestRun.persistedObservationRows.toLocaleString() : "n/a",
             detail: latestRun ? formatTimestamp(latestRun.lastCheckpointedAt) : "No checkpoint timestamp",
           },
         ]
@@ -171,40 +175,40 @@ export function NetworkAnalyticsPage({
 
   return (
     <Card>
-      <CardContent className="space-y-8 p-6">
+      <CardContent className="space-y-8 p-4 sm:p-6">
         <SectionHeading
           eyebrow="Network Analytics"
           title="Network Analytics"
           description={panelDescription}
           actions={
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void refreshAnalytics()}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <RotateCw className="h-4 w-4" />
-              )}
-              Refresh
-            </Button>
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+              {headerStats.map((stat) => (
+                <HeaderStat
+                  key={stat.label}
+                  label={stat.label}
+                  value={stat.value}
+                  detail={stat.detail}
+                />
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 rounded-md px-0"
+                aria-label="Refresh network analytics"
+                title="Refresh network analytics"
+                onClick={() => void refreshAnalytics()}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCw className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           }
         />
-
-        {latestRun ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {summaryCards.map((card) => (
-              <MetricCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                detail={card.detail}
-              />
-            ))}
-          </div>
-        ) : null}
 
         {isLoading ? (
           <StatusPanel
@@ -226,18 +230,6 @@ export function NetworkAnalyticsPage({
           />
         ) : (
           <div className="space-y-6">
-            <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="font-mono text-sm text-foreground">
-                  {latestRun ? latestRun.runId : "No recent run"}
-                </p>
-                <Badge variant="muted">{latestRun ? latestRun.phase : "Analytics snapshot"}</Badge>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Pick one slice instead of rendering every analytics table at once.
-              </p>
-            </div>
-
             {showPanelNav ? (
               <div className="flex flex-wrap gap-2">
                 <PanelButton
@@ -259,51 +251,57 @@ export function NetworkAnalyticsPage({
             ) : null}
 
             {activePanel === "overview" ? (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <OverviewCard
-                  title="Latest Run Focus"
-                  items={[
-                    {
-                      label: "Latest run",
-                      value: latestRun?.runId ?? "No recent run",
-                    },
-                    {
-                      label: "Visit success",
-                      value: latestRun ? `${latestRun.successPct.toFixed(2)}%` : "n/a",
-                    },
-                    {
-                      label: "Lead ASN",
-                      value: leadAsn
-                        ? `${leadAsn.asn ?? "n/a"} · ${leadAsn.asnOrganization ?? "Unknown ASN"}`
-                        : "No ASN concentration returned",
-                    },
-                    {
-                      label: "Top network",
-                      value: topNetwork
-                        ? `${topNetwork.networkType} · ${topNetwork.verifiedPct.toFixed(2)}% verified`
-                        : "No network outcome breakdown returned",
-                    },
-                  ]}
-                />
-                <OverviewCard
-                  title="What This View Shows"
-                  items={[
-                    {
-                      label: "ASN concentration",
-                      value: "Use Top ASNs to inspect where verified nodes cluster.",
-                    },
-                    {
-                      label: "Verification mix",
-                      value: "Use Verification to compare observed, verified, and failed nodes by network.",
-                    },
-                    {
-                      label: "Run context",
-                      value: latestRun
-                        ? `${latestRun.uniqueNodes} tracked nodes with ${latestRun.unscheduledGap} still unscheduled.`
-                        : "No latest run context is available.",
-                    },
-                  ]}
-                />
+              <div className="space-y-6">
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <OverviewCard
+                    title="Latest Run Focus"
+                    items={[
+                      {
+                        label: "Latest run",
+                        value: latestRun?.runId ?? "No recent run",
+                      },
+                      {
+                        label: "Visit success",
+                        value: latestRun ? `${latestRun.successPct.toFixed(2)}%` : "n/a",
+                      },
+                      {
+                        label: "Lead ASN",
+                        value: leadAsn
+                          ? `${leadAsn.asn ?? "n/a"} · ${leadAsn.asnOrganization ?? "Unknown ASN"}`
+                          : "No ASN concentration returned",
+                      },
+                      {
+                        label: "Top network",
+                        value: topNetwork
+                          ? `${topNetwork.networkType} · ${topNetwork.verifiedPct.toFixed(2)}% verified`
+                          : "No network outcome breakdown returned",
+                      },
+                    ]}
+                  />
+                  <OverviewCard
+                    title="What This View Shows"
+                    items={[
+                      {
+                        label: "ASN concentration",
+                        value: "Use Top ASNs to inspect where verified nodes cluster.",
+                      },
+                      {
+                        label: "Verification mix",
+                        value: "Use Verification to compare observed, verified, and failed nodes by network.",
+                      },
+                      {
+                        label: "Run context",
+                        value: latestRun
+                          ? `${latestRun.uniqueNodes.toLocaleString()} tracked nodes with ${latestRun.unscheduledGap.toLocaleString()} still unscheduled.`
+                          : "No latest run context is available.",
+                      },
+                    ]}
+                  />
+                </div>
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
+                  <VerificationMixChart title="Verification Distribution" rows={networkOutcomes} />
+                </div>
               </div>
             ) : null}
 
@@ -318,25 +316,30 @@ export function NetworkAnalyticsPage({
                 {asnRows.length === 0 ? (
                   <StatusPanel message="No ASN matches were returned yet." />
                 ) : (
-                  <div className="overflow-x-auto rounded-[8px] border border-border/80 bg-background/70">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ASN</TableHead>
-                          <TableHead>Organization</TableHead>
-                          <TableHead className="text-right">Verified Nodes</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {asnRows.map((row) => (
-                          <TableRow key={`${row.asn ?? "none"}-${row.asnOrganization ?? "unknown"}`}>
-                            <TableCell className="font-mono">{row.asn ?? "n/a"}</TableCell>
-                            <TableCell>{row.asnOrganization ?? "Unknown ASN"}</TableCell>
-                            <TableCell className="text-right font-mono">{row.verifiedNodes}</TableCell>
+                  <div className="space-y-4">
+                    <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
+                    <div className="overflow-x-auto rounded-[8px] border border-border/80 bg-background/70">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ASN</TableHead>
+                            <TableHead>Organization</TableHead>
+                            <TableHead className="text-right">Verified Nodes</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {asnRows.map((row) => (
+                            <TableRow key={`${row.asn ?? "none"}-${row.asnOrganization ?? "unknown"}`}>
+                              <TableCell className="font-mono">{row.asn ?? "n/a"}</TableCell>
+                              <TableCell>{row.asnOrganization ?? "Unknown ASN"}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.verifiedNodes.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </section>
@@ -356,31 +359,40 @@ export function NetworkAnalyticsPage({
                 {networkOutcomes.length === 0 ? (
                   <StatusPanel message="No network outcome breakdown is available for the latest run." />
                 ) : (
-                  <div className="overflow-x-auto rounded-[8px] border border-border/80 bg-background/70">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Network</TableHead>
-                          <TableHead className="text-right">Observed</TableHead>
-                          <TableHead className="text-right">Verified</TableHead>
-                          <TableHead className="text-right">Failed</TableHead>
-                          <TableHead className="text-right">Verified %</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {networkOutcomes.map((row) => (
-                          <TableRow key={row.networkType}>
-                            <TableCell className="font-mono">{row.networkType}</TableCell>
-                            <TableCell className="text-right font-mono">{row.observations}</TableCell>
-                            <TableCell className="text-right font-mono">{row.verifiedNodes}</TableCell>
-                            <TableCell className="text-right font-mono">{row.failedNodes}</TableCell>
-                            <TableCell className="text-right font-mono">
-                              {row.verifiedPct.toFixed(2)}%
-                            </TableCell>
+                  <div className="space-y-4">
+                    <VerificationMixChart title="Verification Distribution" rows={networkOutcomes} />
+                    <div className="overflow-x-auto rounded-[8px] border border-border/80 bg-background/70">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Network</TableHead>
+                            <TableHead className="text-right">Observed</TableHead>
+                            <TableHead className="text-right">Verified</TableHead>
+                            <TableHead className="text-right">Failed</TableHead>
+                            <TableHead className="text-right">Verified %</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {networkOutcomes.map((row) => (
+                            <TableRow key={row.networkType}>
+                              <TableCell className="font-mono">{row.networkType}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.observations.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.verifiedNodes.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.failedNodes.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                {row.verifiedPct.toFixed(2)}%
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </section>
@@ -432,7 +444,7 @@ function OverviewCard({
   );
 }
 
-function MetricCard({
+function HeaderStat({
   label,
   value,
   detail,
@@ -442,13 +454,121 @@ function MetricCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+    <div className="min-w-[8rem] rounded-[8px] border border-border/70 bg-background/75 px-2.5 py-2 text-left sm:min-w-[8.75rem]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-3 break-all font-mono text-base text-foreground">{value}</p>
-      <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+      <p className="mt-1 break-all font-mono text-[13px] text-foreground">{value}</p>
+      <p className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</p>
     </div>
+  );
+}
+
+function AsnConcentrationChart({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: AsnNodeCountItem[];
+}) {
+  const maxValue = Math.max(...rows.map((row) => row.verifiedNodes), 1);
+
+  return (
+    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">{title}</p>
+        <p className="font-mono text-[11px] text-muted-foreground">{rows.length} ASNs</p>
+      </div>
+      <div className="mt-5 space-y-3">
+        {rows.map((row) => (
+          <div key={`${title}-${row.asn ?? "none"}-${row.asnOrganization ?? "unknown"}`} className="space-y-2">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-xs text-foreground">{row.asn ?? "n/a"}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {row.asnOrganization ?? "Unknown ASN"}
+                </p>
+              </div>
+              <p className="shrink-0 font-mono text-xs text-foreground">
+                {row.verifiedNodes.toLocaleString()}
+              </p>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted/40">
+              <div
+                className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.92))]"
+                style={{ width: `${Math.max(8, (row.verifiedNodes / maxValue) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VerificationMixChart({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: CrawlRunDetail["networkOutcomes"];
+}) {
+  return (
+    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">{title}</p>
+        <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <LegendSwatch label="Verified" className="bg-primary" />
+          <LegendSwatch label="Failed" className="bg-amber-100/35" />
+        </div>
+      </div>
+      <div className="mt-5 space-y-4">
+        {rows.map((row) => {
+          const observed = Math.max(row.observations, 1);
+          const verifiedWidth = (row.verifiedNodes / observed) * 100;
+          const failedWidth = (row.failedNodes / observed) * 100;
+
+          return (
+            <div key={`${title}-${row.networkType}`} className="space-y-2">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs text-foreground">{row.networkType}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {row.observations.toLocaleString()} observed nodes
+                  </p>
+                </div>
+                <p className="shrink-0 font-mono text-xs text-foreground">
+                  {row.verifiedPct.toFixed(2)}%
+                </p>
+              </div>
+              <div className="flex h-3 overflow-hidden rounded-full bg-muted/35">
+                <div
+                  className="h-full bg-[linear-gradient(90deg,rgba(245,179,1,0.58),rgba(245,179,1,0.96))]"
+                  style={{ width: `${verifiedWidth}%` }}
+                />
+                <div
+                  className="h-full bg-[linear-gradient(90deg,rgba(245,239,226,0.14),rgba(245,239,226,0.34))]"
+                  style={{ width: `${failedWidth}%` }}
+                />
+              </div>
+              <div className="flex justify-between gap-3 text-[11px] text-muted-foreground">
+                <span>{row.verifiedNodes.toLocaleString()} verified</span>
+                <span>{row.failedNodes.toLocaleString()} failed</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LegendSwatch({ label, className }: { label: string; className: string }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className={`h-2.5 w-2.5 rounded-full ${className}`} />
+      <span>{label}</span>
+    </span>
   );
 }
 

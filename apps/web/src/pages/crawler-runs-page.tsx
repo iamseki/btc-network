@@ -4,16 +4,13 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  CrawlerLiveSignal,
+  useCrawlerSignalPlayback,
+} from "@/components/crawler-live-signal";
 import { DataList } from "@/components/ui/data-list";
 import { SectionHeading } from "@/components/ui/section-heading";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { BtcAppClient } from "@/lib/api/client";
 import type { CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
 import { isDemoModeEnabled } from "@/lib/runtime-config";
@@ -24,6 +21,8 @@ type CrawlerRunsPageProps = {
   client: BtcAppClient;
   activePanel?: CrawlerRunsPanel;
   onPanelChange?: (panel: CrawlerRunsPanel) => void;
+  autoExpandSignal?: boolean;
+  onAutoExpandSignalApplied?: () => void;
   showPanelNav?: boolean;
 };
 
@@ -31,6 +30,8 @@ export function CrawlerRunsPage({
   client,
   activePanel: controlledActivePanel,
   onPanelChange,
+  autoExpandSignal = false,
+  onAutoExpandSignalApplied,
   showPanelNav = true,
 }: CrawlerRunsPageProps) {
   const demoMode = isDemoModeEnabled();
@@ -40,14 +41,25 @@ export function CrawlerRunsPage({
   const [internalActivePanel, setInternalActivePanel] = useState<CrawlerRunsPanel>("overview");
   const [isLoadingRuns, setIsLoadingRuns] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isSignalExpanded, setIsSignalExpanded] = useState(false);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const activePanel = controlledActivePanel ?? internalActivePanel;
+  const signalPlayback = useCrawlerSignalPlayback(selectedDetail);
 
   useEffect(() => {
     void refreshRuns();
   }, []);
+
+  useEffect(() => {
+    if (!autoExpandSignal || !selectedDetail) {
+      return;
+    }
+
+    setIsSignalExpanded(true);
+    onAutoExpandSignalApplied?.();
+  }, [autoExpandSignal, onAutoExpandSignalApplied, selectedDetail]);
 
   function selectPanel(panel: CrawlerRunsPanel) {
     onPanelChange?.(panel);
@@ -72,6 +84,7 @@ export function CrawlerRunsPage({
       setSelectedRunId(nextSelectedRunId);
       setSelectedDetail(null);
       setDetailError(null);
+      setIsSignalExpanded(false);
       selectPanel("overview");
 
       if (nextSelectedRunId) {
@@ -91,6 +104,7 @@ export function CrawlerRunsPage({
     setIsLoadingDetail(true);
     setDetailError(null);
     setSelectedRunId(runId);
+    setIsSignalExpanded(false);
     selectPanel("overview");
 
     try {
@@ -106,172 +120,136 @@ export function CrawlerRunsPage({
 
   const selectedRunSummary =
     selectedDetail?.run ?? runs.find((run) => run.runId === selectedRunId) ?? runs[0] ?? null;
-  const latestCheckpoint = selectedDetail?.checkpoints[0] ?? null;
-  const dominantFailure =
-    [...(selectedDetail?.failureCounts ?? [])].sort((left, right) => right.observations - left.observations)[0] ??
-    null;
-  const strongestNetwork =
-    [...(selectedDetail?.networkOutcomes ?? [])].sort((left, right) => right.verifiedPct - left.verifiedPct)[0] ??
-    null;
   const panelDescription =
     activePanel === "overview"
       ? demoMode
-        ? "Inspect the deterministic demo run set used in the hosted browser build."
-        : "Inspect recent runs without opening every breakdown at once. Pick one run, then choose the exact slice you want to see."
+        ? "Inspect the deterministic public snapshot set used in the hosted browser build."
+        : "Inspect the latest public snapshot, then open the exact slice you want to review."
       : activePanel === "checkpoints"
         ? "Review recent checkpoint progression for the selected run."
         : activePanel === "failures"
           ? "Inspect the dominant failure mix for the selected run."
           : "Compare network-specific outcomes for the selected run.";
-  const summaryCards =
-    activePanel === "overview"
-      ? [
-          {
-            label: "Selected Run",
-            value: selectedRunSummary?.phase ?? "No run selected",
-            detail: selectedRunSummary?.runId ?? "No run loaded",
-          },
-          {
-            label: "Visit Success",
-            value: selectedRunSummary ? `${selectedRunSummary.successPct.toFixed(2)}%` : "n/a",
-            detail: selectedRunSummary
-              ? `${selectedRunSummary.successfulHandshakes}/${selectedRunSummary.scheduledTasks} attempted`
-              : "No run loaded",
-          },
-          {
-            label: "Tracked",
-            value: selectedRunSummary?.uniqueNodes ?? "n/a",
-            detail: selectedRunSummary
-              ? `${selectedRunSummary.scheduledPct.toFixed(2)}% scheduled`
-              : "No run loaded",
-          },
-          {
-            label: "Backlog",
-            value: selectedRunSummary?.unscheduledGap ?? "n/a",
-            detail: selectedRunSummary
-              ? `${selectedRunSummary.persistedObservationRows} persisted rows`
-              : "No run loaded",
-          },
-        ]
-      : activePanel === "checkpoints"
-        ? [
-            {
-              label: "Checkpoint Rows",
-              value: selectedDetail?.checkpoints.length ?? 0,
-              detail: "Recent checkpoints returned for this run",
-            },
-            {
-              label: "Latest Phase",
-              value: latestCheckpoint?.phase ?? "n/a",
-              detail: latestCheckpoint
-                ? formatTimestamp(latestCheckpoint.checkpointedAt)
-                : "No checkpoint rows returned",
-            },
-            {
-              label: "Scheduled",
-              value: latestCheckpoint?.scheduledTasks ?? "n/a",
-              detail: latestCheckpoint ? "Tasks attempted by the latest checkpoint" : "No checkpoint rows returned",
-            },
-            {
-              label: "Failed",
-              value: latestCheckpoint?.failedTasks ?? "n/a",
-              detail: latestCheckpoint ? "Failed tasks at the latest checkpoint" : "No checkpoint rows returned",
-            },
-          ]
-        : activePanel === "failures"
-          ? [
-              {
-                label: "Failure Classes",
-                value: selectedDetail?.failureCounts.length ?? 0,
-                detail: "Distinct classified failure buckets",
-              },
-              {
-                label: "Dominant Failure",
-                value: dominantFailure?.classification ?? "n/a",
-                detail: dominantFailure
-                  ? `${dominantFailure.observations} observations`
-                  : "No classified failures recorded",
-              },
-              {
-                label: "Failed Visits",
-                value: selectedRunSummary?.failedTasks ?? "n/a",
-                detail: "Total failed visits for the selected run",
-              },
-              {
-                label: "Failure Reason",
-                value: selectedRunSummary?.failureReason ?? "No terminal failure",
-                detail: "Terminal failure reason from the selected run",
-              },
-            ]
-          : [
-              {
-                label: "Network Rows",
-                value: selectedDetail?.networkOutcomes.length ?? 0,
-                detail: "Network breakdown rows returned for this run",
-              },
-              {
-                label: "Best Network",
-                value: strongestNetwork?.networkType ?? "n/a",
-                detail: strongestNetwork
-                  ? `${strongestNetwork.verifiedPct.toFixed(2)}% verified`
-                  : "No network rows recorded",
-              },
-              {
-                label: "Observed",
-                value: (selectedDetail?.networkOutcomes ?? []).reduce(
-                  (sum, row) => sum + row.observations,
-                  0,
-                ),
-                detail: "Observed nodes across the selected network breakdown",
-              },
-              {
-                label: "Verified",
-                value: (selectedDetail?.networkOutcomes ?? []).reduce(
-                  (sum, row) => sum + row.verifiedNodes,
-                  0,
-                ),
-                detail: "Verified nodes across the selected network breakdown",
-              },
-            ];
+  const headerStats = [
+    {
+      label: "Selected Run",
+      value: selectedRunSummary?.phase ?? "No run selected",
+      detail: selectedRunSummary?.runId ?? "No run loaded",
+    },
+    {
+      label: "Visit Success",
+      value: selectedRunSummary ? `${selectedRunSummary.successPct.toFixed(2)}%` : "n/a",
+      detail: selectedRunSummary
+        ? `${selectedRunSummary.successfulHandshakes.toLocaleString()}/${selectedRunSummary.scheduledTasks.toLocaleString()} attempted`
+        : "No run loaded",
+    },
+    {
+      label: "Tracked",
+      value: selectedRunSummary ? selectedRunSummary.uniqueNodes.toLocaleString() : "n/a",
+      detail: selectedRunSummary
+        ? `${selectedRunSummary.scheduledPct.toFixed(2)}% scheduled`
+        : "No run loaded",
+    },
+    {
+      label: "Backlog",
+      value: selectedRunSummary ? selectedRunSummary.unscheduledGap.toLocaleString() : "n/a",
+      detail: selectedRunSummary
+        ? `${selectedRunSummary.persistedObservationRows.toLocaleString()} persisted rows`
+        : "No run loaded",
+    },
+  ];
 
   return (
     <Card>
-      <CardContent className="space-y-8 p-6">
+      <CardContent className="space-y-8 p-4 sm:p-6">
         <SectionHeading
           eyebrow="Network Analytics"
           title="Crawler Runs"
           description={panelDescription}
           actions={
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void refreshRuns(selectedRunId ?? undefined)}
-              disabled={isLoadingRuns || isLoadingDetail}
-            >
-              {isLoadingRuns || isLoadingDetail ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <RotateCw className="h-4 w-4" />
-              )}
-              Refresh
-            </Button>
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+              {headerStats.map((stat) => (
+                <HeaderStat
+                  key={stat.label}
+                  label={stat.label}
+                  value={stat.value}
+                  detail={stat.detail}
+                />
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 self-start rounded-md px-0 sm:self-auto"
+                aria-label="Refresh crawler runs"
+                title="Refresh crawler runs"
+                onClick={() => void refreshRuns(selectedRunId ?? undefined)}
+                disabled={isLoadingRuns || isLoadingDetail}
+              >
+                {isLoadingRuns || isLoadingDetail ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCw className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           }
         />
 
-        {selectedRunSummary ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {summaryCards.map((card) => (
+        {selectedDetail ? (
+          <div className="rounded-[10px] border border-border/80 bg-[linear-gradient(180deg,rgba(245,179,1,0.08),rgba(255,255,255,0.02))] p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+                  Latest Snapshot
+                </p>
+                <p className="max-w-2xl text-sm text-muted-foreground">
+                  Replay the latest crawler snapshot here, then drop straight into checkpoints,
+                  failures, and network outcome tables below.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={isSignalExpanded ? "default" : "secondary"}
+                  onClick={() => setIsSignalExpanded((current) => !current)}
+                >
+                  {isSignalExpanded ? "Hide Latest Snapshot" : "Open Latest Snapshot"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <MetricCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                detail={card.detail}
+                label="Snapshot Status"
+                value={signalPlayback?.isLive ? "Live" : "Archived"}
+                detail={
+                  signalPlayback?.isLive
+                    ? "The browser is replaying the current public snapshot cycle."
+                    : "The last public snapshot is ready to inspect."
+                }
               />
-            ))}
+              <MetricCard
+                label="Duration"
+                value={formatRunDuration(selectedDetail.run.startedAt, selectedDetail.run.lastCheckpointedAt)}
+                detail={`Started ${formatTimestamp(selectedDetail.run.startedAt)}`}
+              />
+              <MetricCard
+                label="Tracked Nodes"
+                value={selectedDetail.run.uniqueNodes.toLocaleString()}
+                detail={`${selectedDetail.run.successfulHandshakes.toLocaleString()} verified observations in the last run`}
+              />
+            </div>
+
+            {isSignalExpanded ? (
+              <div className="mt-5">
+                <CrawlerLiveSignal detail={selectedDetail} playback={signalPlayback} />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           <section className="space-y-4">
             <div className="flex items-center gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
@@ -297,57 +275,39 @@ export function CrawlerRunsPage({
                 }
               />
             ) : (
-              <div className="overflow-hidden rounded-[8px] border border-border/80 bg-background/70">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Run</TableHead>
-                      <TableHead>Phase</TableHead>
-                      <TableHead className="text-right">Attempted</TableHead>
-                      <TableHead className="text-right">Success</TableHead>
-                      <TableHead className="text-right">Tracked</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {runs.map((run) => {
-                      const isSelected = run.runId === selectedRunId;
+              <div className="space-y-2">
+                {runs.map((run) => {
+                  const isSelected = run.runId === selectedRunId;
 
-                      return (
-                        <TableRow
-                          key={run.runId}
-                          className={
-                            isSelected
-                              ? "bg-primary/8"
-                              : "transition-colors hover:bg-muted/35"
-                          }
-                        >
-                          <TableCell className="align-top">
-                            <button
-                              type="button"
-                              className="grid w-full cursor-pointer gap-1 rounded-[6px] px-2 py-1 -mx-2 -my-1 text-left transition-colors outline-none hover:bg-primary/8 focus-visible:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring"
-                              onClick={() => void loadRunDetail(run.runId)}
-                            >
-                              <span className="font-mono text-xs text-foreground">{run.runId}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatTimestamp(run.lastCheckpointedAt)}
-                              </span>
-                            </button>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <Badge variant={phaseBadgeVariant(run.phase)}>{run.phase}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {run.scheduledTasks}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {run.successPct.toFixed(2)}%
-                          </TableCell>
-                          <TableCell className="text-right font-mono">{run.uniqueNodes}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                  return (
+                    <button
+                      key={run.runId}
+                      type="button"
+                      aria-label={`Select run ${run.runId}`}
+                      className={
+                        isSelected
+                          ? "block w-full rounded-[8px] border border-primary/30 bg-primary/10 p-3 text-left shadow-[0_0_0_1px_rgba(245,179,1,0.08)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          : "block w-full rounded-[8px] border border-border/80 bg-background/70 p-3 text-left transition-colors outline-none hover:border-primary/20 hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring"
+                      }
+                      onClick={() => void loadRunDetail(run.runId)}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-xs text-foreground">{run.runId}</p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {formatTimestamp(run.lastCheckpointedAt)}
+                          </p>
+                        </div>
+                        <Badge variant={phaseBadgeVariant(run.phase)}>{run.phase}</Badge>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <RunMetric label="Tracked" value={run.uniqueNodes.toLocaleString()} />
+                        <RunMetric label="Attempted" value={run.scheduledTasks.toLocaleString()} />
+                        <RunMetric label="Success" value={`${run.successPct.toFixed(2)}%`} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -378,7 +338,7 @@ export function CrawlerRunsPage({
                     </Badge>
                   </div>
                   <p className="mt-3 text-sm text-muted-foreground">
-                    Choose one detail slice instead of rendering every table at once.
+                    Review the latest public result and open only the slices you need.
                   </p>
                 </div>
 
@@ -425,16 +385,19 @@ export function CrawlerRunsPage({
                       },
                       {
                         label: "Attempted nodes",
-                        value: selectedDetail.run.scheduledTasks.toString(),
+                        value: selectedDetail.run.scheduledTasks.toLocaleString(),
                       },
                       {
                         label: "Successful visits",
-                        value: selectedDetail.run.successfulHandshakes.toString(),
+                        value: selectedDetail.run.successfulHandshakes.toLocaleString(),
                       },
-                      { label: "Failed visits", value: selectedDetail.run.failedTasks.toString() },
+                      {
+                        label: "Failed visits",
+                        value: selectedDetail.run.failedTasks.toLocaleString(),
+                      },
                       {
                         label: "Unscheduled gap",
-                        value: selectedDetail.run.unscheduledGap.toString(),
+                        value: selectedDetail.run.unscheduledGap.toLocaleString(),
                       },
                     ]}
                   />
@@ -447,8 +410,8 @@ export function CrawlerRunsPage({
                     rows={selectedDetail.checkpoints.map((checkpoint) => [
                       checkpoint.phase,
                       formatTimestamp(checkpoint.checkpointedAt),
-                      checkpoint.scheduledTasks.toString(),
-                      checkpoint.failedTasks.toString(),
+                      checkpoint.scheduledTasks.toLocaleString(),
+                      checkpoint.failedTasks.toLocaleString(),
                     ])}
                     emptyMessage="No checkpoints were returned for this run."
                   />
@@ -460,7 +423,7 @@ export function CrawlerRunsPage({
                     columns={["Classification", "Observations"]}
                     rows={selectedDetail.failureCounts.map((entry) => [
                       entry.classification,
-                      entry.observations.toString(),
+                      entry.observations.toLocaleString(),
                     ])}
                     emptyMessage="No classified failures were recorded."
                   />
@@ -472,8 +435,8 @@ export function CrawlerRunsPage({
                     columns={["Network", "Observed", "Verified", "Verified %"]}
                     rows={selectedDetail.networkOutcomes.map((entry) => [
                       entry.networkType,
-                      entry.observations.toString(),
-                      entry.verifiedNodes.toString(),
+                      entry.observations.toLocaleString(),
+                      entry.verifiedNodes.toLocaleString(),
                       `${entry.verifiedPct.toFixed(2)}%`,
                     ])}
                     emptyMessage="No network outcome rows were recorded."
@@ -503,6 +466,37 @@ function PanelButton({
     <Button type="button" variant={selected ? "default" : "secondary"} size="sm" onClick={onClick}>
       {label}
     </Button>
+  );
+}
+
+function RunMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[6px] border border-border/70 bg-background/65 px-2.5 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-xs text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function HeaderStat({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div className="min-w-[8rem] rounded-[8px] border border-border/70 bg-background/75 px-2.5 py-2 text-left sm:min-w-[8.75rem]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-[13px] text-foreground">{value}</p>
+      <p className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</p>
+    </div>
   );
 }
 
@@ -598,6 +592,21 @@ function formatTimestamp(value: string): string {
   }
 
   return parsed.toLocaleString();
+}
+
+function formatRunDuration(startedAt: string, completedAt: string): string {
+  const start = new Date(startedAt).getTime();
+  const end = new Date(completedAt).getTime();
+
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
+    return "n/a";
+  }
+
+  const totalSeconds = Math.round((end - start) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function phaseBadgeVariant(phase: string): "default" | "muted" {

@@ -121,8 +121,10 @@ describe("NetworkAnalyticsPage", () => {
 
     expect(await screen.findByText("Latest Run Focus")).toBeTruthy();
     expect(screen.getByText("What This View Shows")).toBeTruthy();
-    expect(screen.queryByText("Example ASN")).toBeNull();
-    expect(screen.queryByText("ipv4")).toBeNull();
+    expect(screen.getByText("ASN Concentration")).toBeTruthy();
+    expect(screen.getByText("Verification Distribution")).toBeTruthy();
+    expect(screen.getByText("Example ASN")).toBeTruthy();
+    expect(screen.getByText("ipv4")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
     expect(await screen.findByText("Lead ASN")).toBeTruthy();

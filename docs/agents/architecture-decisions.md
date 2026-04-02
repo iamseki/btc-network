@@ -40,6 +40,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Crawler analytics reads now go through the browser-safe HTTP app in `apps/api`
 - Both web and desktop analytics reads use the same HTTP helper and `VITE_API_BASE_URL`
 - Hosted browser builds may opt into `VITE_DEMO_MODE` to serve deterministic mock analytics data instead of calling the HTTP API
+- Hosted demo mode may replay a client-only latest-snapshot cycle from the most recent run and persist that cycle anchor in local storage
 - Do not add crawler analytics Tauri commands in the current slice
 - The plain web runtime remains placeholder-backed only for the single-peer flows that still lack a browser-safe backend
 
@@ -48,6 +49,9 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Use shadcn blocks first for page shells, sidebars, headers, settings/profile chrome, and similar product structure
 - Adapt blocks down to the repository style rather than rebuilding the same pattern from scratch
 - Use lower-level shadcn primitives only when no suitable block exists or the block is materially heavier than needed
+- Keep analytics summaries compact and aligned with page actions when the main section already shows the important state
+- Avoid duplicating the same run context in both a summary box and a primary section on the same screen
+- Prefer lightweight custom charts before adding chart or map dependencies; add heavier tooling only when the product or API shape requires it
 
 ## Frontend Visual Direction
 
@@ -55,6 +59,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Use a black / carbon base with restrained Bitcoin-gold accents
 - Favor a retro instrument-panel / terminal-console feel over generic SaaS styling
 - Avoid decorative chrome that does not help protocol exploration
+- Prefer `snapshot` as the user-facing term for public crawler replay state
 
 ## Maintenance Bias
 

@@ -1,0 +1,817 @@
+import { Activity } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+
+const PLAYBACK_IDLE_MS = 30 * 60 * 1000;
+const PLAYBACK_TICK_MS = 1000;
+const CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX = "btc-network:crawler-signal-cycle:v1:";
+
+const GLOBE_NODE_SEEDS = [
+  { lat: 56, lon: -122 },
+  { lat: 48, lon: -78 },
+  { lat: 42, lon: -12 },
+  { lat: 34, lon: 18 },
+  { lat: 28, lon: 77 },
+  { lat: 21, lon: 114 },
+  { lat: 12, lon: 103 },
+  { lat: 5, lon: -74 },
+  { lat: -7, lon: -53 },
+  { lat: -16, lon: 28 },
+  { lat: -22, lon: 133 },
+  { lat: -33, lon: 18 },
+  { lat: -35, lon: -58 },
+  { lat: 61, lon: 37 },
+  { lat: 52, lon: 14 },
+  { lat: 40, lon: 139 },
+  { lat: 31, lon: -97 },
+  { lat: 19, lon: -99 },
+  { lat: 14, lon: 121 },
+  { lat: 2, lon: 32 },
+  { lat: -1, lon: 36 },
+  { lat: -12, lon: -77 },
+  { lat: -23, lon: -46 },
+  { lat: 64, lon: -19 },
+  { lat: 59, lon: 18 },
+  { lat: 50, lon: -1 },
+  { lat: 37, lon: -122 },
+  { lat: 35, lon: 51 },
+  { lat: 25, lon: 55 },
+  { lat: -34, lon: 151 },
+  { lat: -26, lon: 28 },
+  { lat: 1, lon: 104 },
+] as const;
+
+type PlaybackSnapshot = {
+  phase: string;
+  checkpointSequence: number;
+  checkpointedAt: string;
+  frontierSize: number;
+  inFlightWork: number;
+  scheduledTasks: number;
+  successfulHandshakes: number;
+  failedTasks: number;
+  uniqueNodes: number;
+  persistedObservationRows: number;
+  writerBacklog: number;
+};
+
+type PlaybackMarker = {
+  phase: string;
+  sequence: number;
+  progressRatio: number;
+};
+
+export type CrawlerSignalPlayback = {
+  currentSummary: CrawlPulseSummary;
+  finalSummary: CrawlPulseSummary;
+  playbackSnapshot: PlaybackSnapshot;
+  finalSnapshot: PlaybackSnapshot;
+  markers: PlaybackMarker[];
+  elapsedMs: number;
+  loopDurationMs: number;
+  loopRatio: number;
+  isLive: boolean;
+  startedAt: string;
+  completedAt: string;
+};
+
+export type CrawlPulseSummary = Pick<
+  CrawlRunListItem,
+  "successfulHandshakes" | "scheduledTasks"
+>;
+
+export function CrawlerPulseButton({
+  summary,
+  live = false,
+  expanded = false,
+  disabled = false,
+  ariaLabel,
+  onClick,
+}: {
+  summary: CrawlPulseSummary | null;
+  live?: boolean;
+  expanded?: boolean;
+  disabled?: boolean;
+  ariaLabel: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={
+        disabled
+          ? "inline-flex min-w-[12rem] items-center gap-3 rounded-[8px] border border-border/70 bg-background/45 px-3 py-2 text-left text-muted-foreground"
+          : "inline-flex min-w-[12rem] cursor-pointer items-center gap-3 rounded-[8px] border border-border/80 bg-background/70 px-3 py-2 text-left transition-colors outline-none hover:border-primary/35 hover:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring"
+      }
+      aria-expanded={disabled ? false : expanded}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span
+        className={
+          live
+            ? "relative flex h-9 w-9 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary"
+            : "relative flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-muted/55 text-primary"
+        }
+      >
+        {live ? (
+          <span className="absolute inline-flex h-full w-full rounded-full bg-primary/18 animate-ping" />
+        ) : null}
+        <Activity className="relative h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <span>Latest Snapshot</span>
+          <span className={live ? "text-primary" : "text-muted-foreground/80"}>
+            {live ? "Live" : "Resting"}
+          </span>
+        </span>
+        <span className="mt-1 block font-mono text-sm text-foreground">
+          {summary
+            ? live
+              ? "Background snapshot updating"
+              : "Last snapshot ready"
+            : "Waiting for latest snapshot"}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+export function useCrawlerSignalPlayback(detail: CrawlRunDetail | null): CrawlerSignalPlayback | null {
+  const [now, setNow] = useState(() => Date.now());
+  const [cycleAnchorMs, setCycleAnchorMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!detail) {
+      setCycleAnchorMs(null);
+      return;
+    }
+
+    const nextNow = Date.now();
+    const nextAnchorMs = getOrCreateCycleAnchorMs(detail.run.runId, nextNow);
+
+    setNow(nextNow);
+    setCycleAnchorMs(nextAnchorMs);
+  }, [detail?.run.runId]);
+
+  useEffect(() => {
+    if (!detail) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, PLAYBACK_TICK_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [detail?.run.runId]);
+
+  if (!detail || cycleAnchorMs === null) {
+    return null;
+  }
+
+  const anchors = buildPlaybackAnchors(detail);
+  const finalSnapshot = anchors[anchors.length - 1]!;
+  const markers = normalizeCheckpoints(detail).map((checkpoint, index, checkpoints) => ({
+    phase: checkpoint.phase,
+    sequence: checkpoint.checkpointSequence,
+    progressRatio:
+      checkpoints.length === 1 ? 1 : index / Math.max(1, checkpoints.length - 1),
+  })) satisfies PlaybackMarker[];
+  const loopDurationMs = simulatedRunDurationMs(detail.run.runId);
+  const cycleDurationMs = loopDurationMs + PLAYBACK_IDLE_MS;
+  const cycleElapsedMs = Math.max(0, now - cycleAnchorMs) % cycleDurationMs;
+  const isLive = cycleElapsedMs < loopDurationMs;
+  const elapsedMs = isLive ? cycleElapsedMs : loopDurationMs;
+  const loopRatio = loopDurationMs <= 0 ? 1 : elapsedMs / loopDurationMs;
+  const startedAtMs = now - cycleElapsedMs;
+  const completedAtMs = startedAtMs + loopDurationMs;
+  const playbackSnapshot = derivePlaybackSnapshot(anchors, elapsedMs, loopDurationMs);
+
+  return {
+    currentSummary: {
+      successfulHandshakes: playbackSnapshot.successfulHandshakes,
+      scheduledTasks: playbackSnapshot.scheduledTasks,
+    },
+    finalSummary: {
+      successfulHandshakes: finalSnapshot.successfulHandshakes,
+      scheduledTasks: finalSnapshot.scheduledTasks,
+    },
+    playbackSnapshot,
+    finalSnapshot,
+    markers,
+    elapsedMs,
+    loopDurationMs,
+    loopRatio,
+    isLive,
+    startedAt: new Date(startedAtMs).toISOString(),
+    completedAt: new Date(completedAtMs).toISOString(),
+  };
+}
+
+export function CrawlerLiveSignal({
+  detail,
+  playback,
+}: {
+  detail: CrawlRunDetail;
+  playback?: CrawlerSignalPlayback | null;
+}) {
+  const localPlayback = useCrawlerSignalPlayback(detail);
+  const signalPlayback = playback ?? localPlayback;
+
+  if (!signalPlayback) {
+    return null;
+  }
+
+  const playbackSnapshot = signalPlayback.playbackSnapshot;
+  const finalSnapshot = signalPlayback.finalSnapshot;
+  const loopRatio = signalPlayback.loopRatio;
+  const discoveredNodeCount = clampCount(
+    Math.round(
+      progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * GLOBE_NODE_SEEDS.length,
+    ),
+  );
+  const verifiedNodeCount = Math.min(
+    discoveredNodeCount,
+    clampCount(
+      Math.round(
+        progressRatio(playbackSnapshot.successfulHandshakes, finalSnapshot.successfulHandshakes) *
+          GLOBE_NODE_SEEDS.length,
+      ),
+    ),
+  );
+  const sweepRotation = -180 + loopRatio * 360;
+  const visibleNodes = GLOBE_NODE_SEEDS.map((seed, index) => {
+    if (index >= discoveredNodeCount) {
+      return null;
+    }
+
+    const projected = projectNode(seed.lat, seed.lon, sweepRotation);
+    if (!projected.visible) {
+      return null;
+    }
+
+    const isVerified = index < verifiedNodeCount;
+    const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
+
+    return {
+      ...projected,
+      key: `${seed.lat}-${seed.lon}`,
+      isVerified,
+      isRecent,
+    };
+  }).filter((node) => node !== null);
+  const markers = signalPlayback.markers;
+
+  return (
+    <section className="rounded-[8px] border border-border/80 bg-background/80 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+            Crawler Snapshot
+          </p>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            A lightweight snapshot replay of frontier growth, worker fan-out, and verified nodes
+            using the checkpoint shape the API already exposes.
+          </p>
+        </div>
+        <div className="rounded-[6px] border border-border/70 bg-muted/35 px-3 py-2 text-right">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Sweep Window
+          </p>
+          <p className="mt-1 font-mono text-sm text-foreground">
+            {formatTimestamp(signalPlayback.startedAt)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatDuration(signalPlayback.loopDurationMs)} active scan window
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {signalPlayback.isLive
+              ? "Live sweep is currently stepping through the frontier."
+              : `Last sweep closed at ${formatTime(signalPlayback.completedAt)}.`}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)]">
+        <div className="rounded-[8px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.13),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Read-Only Snapshot
+              </p>
+              <p className="mt-1 font-mono text-lg text-foreground">
+                {formatPhase(playbackSnapshot.phase)}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
+              <SignalPill label="Tracked" value={playbackSnapshot.uniqueNodes} />
+              <SignalPill label="Attempted" value={playbackSnapshot.scheduledTasks} />
+              <SignalPill label="Verified" value={playbackSnapshot.successfulHandshakes} />
+              <SignalPill label="Frontier" value={playbackSnapshot.frontierSize} />
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[8px] border border-border/70 bg-background/55 p-3">
+            <svg
+              viewBox="0 0 420 260"
+              role="img"
+              aria-label="Crawler execution playback around a projected globe"
+              className="h-[240px] w-full"
+            >
+              <defs>
+                <radialGradient id="globe-core" cx="50%" cy="45%" r="60%">
+                  <stop offset="0%" stopColor="rgba(245,179,1,0.22)" />
+                  <stop offset="50%" stopColor="rgba(245,179,1,0.10)" />
+                  <stop offset="100%" stopColor="rgba(15,23,42,0.06)" />
+                </radialGradient>
+                <linearGradient id="globe-sweep" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="rgba(245,179,1,0)" />
+                  <stop offset="45%" stopColor="rgba(245,179,1,0.04)" />
+                  <stop offset="55%" stopColor="rgba(245,179,1,0.18)" />
+                  <stop offset="100%" stopColor="rgba(245,179,1,0)" />
+                </linearGradient>
+              </defs>
+
+              <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
+
+              <g transform="translate(16 8)">
+                <ellipse cx="170" cy="122" rx="120" ry="96" fill="url(#globe-core)" />
+                <ellipse
+                  cx="170"
+                  cy="122"
+                  rx="120"
+                  ry="96"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.18)"
+                  strokeWidth="1.2"
+                />
+                <ellipse
+                  cx="170"
+                  cy="122"
+                  rx="92"
+                  ry="96"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.08)"
+                  strokeWidth="1"
+                />
+                <ellipse
+                  cx="170"
+                  cy="122"
+                  rx="52"
+                  ry="96"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.07)"
+                  strokeWidth="1"
+                />
+                <ellipse
+                  cx="170"
+                  cy="122"
+                  rx="24"
+                  ry="96"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.06)"
+                  strokeWidth="1"
+                />
+                <ellipse
+                  cx="170"
+                  cy="122"
+                  rx="103"
+                  ry="20"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.08)"
+                  strokeWidth="1"
+                />
+                <ellipse
+                  cx="170"
+                  cy="92"
+                  rx="88"
+                  ry="16"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.07)"
+                  strokeWidth="1"
+                />
+                <ellipse
+                  cx="170"
+                  cy="152"
+                  rx="88"
+                  ry="16"
+                  fill="none"
+                  stroke="rgba(245,239,226,0.07)"
+                  strokeWidth="1"
+                />
+                <ellipse
+                  cx="170"
+                  cy="122"
+                  rx="136"
+                  ry="110"
+                  fill="none"
+                  stroke="rgba(245,179,1,0.16)"
+                  strokeDasharray="3 8"
+                  strokeWidth="1"
+                />
+
+                <g
+                  transform={`rotate(${sweepRotation} 170 122)`}
+                  style={{ transformOrigin: "170px 122px" }}
+                >
+                  <ellipse
+                    cx="170"
+                    cy="122"
+                    rx="120"
+                    ry="96"
+                    fill="url(#globe-sweep)"
+                    opacity="0.8"
+                  />
+                </g>
+
+                {visibleNodes.map((node) => (
+                  <g key={node.key}>
+                    {node.isRecent ? (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r="9"
+                        fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
+                      />
+                    ) : null}
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={node.isRecent ? 3.8 : 2.8}
+                      fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.74)"}
+                      stroke={node.isVerified ? "rgba(255,240,197,0.65)" : "rgba(245,239,226,0.26)"}
+                      strokeWidth="1"
+                    />
+                  </g>
+                ))}
+
+                {[0, 1, 2, 3, 4, 5].map((index) => {
+                  const orbitAngle = loopRatio * Math.PI * 2 + index * ((Math.PI * 2) / 6);
+                  const x = 170 + Math.cos(orbitAngle) * 146;
+                  const y = 122 + Math.sin(orbitAngle) * 116;
+
+                  return (
+                    <circle
+                      key={`orbit-${index}`}
+                      cx={x}
+                      cy={y}
+                      r={index % 2 === 0 ? 2.5 : 1.7}
+                      fill="rgba(245,179,1,0.72)"
+                      opacity={0.36 + index * 0.08}
+                    />
+                  );
+                })}
+              </g>
+            </svg>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <SignalMetric
+              label="Checkpoint Pulse"
+              value={`#${playbackSnapshot.checkpointSequence}`}
+              detail={formatTimestamp(playbackSnapshot.checkpointedAt)}
+            />
+            <SignalMetric
+              label="In Flight"
+              value={playbackSnapshot.inFlightWork}
+              detail={`${playbackSnapshot.frontierSize} endpoints still waiting in frontier`}
+            />
+            <SignalMetric
+              label="Writer Backlog"
+              value={playbackSnapshot.writerBacklog}
+              detail={`${playbackSnapshot.persistedObservationRows} rows persisted so far`}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-[8px] border border-border/70 bg-background/70 p-4">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Signal Focus
+            </p>
+            <p className="mt-3 font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
+              {playbackSnapshot.uniqueNodes}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              endpoints tracked while the sweep rotates through the current crawl window
+            </p>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/45">
+              <div
+                className="h-full rounded-full bg-primary transition-[width]"
+                style={{
+                  width: `${Math.max(6, progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <SignalMetric
+              label="Verification Pressure"
+              value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
+              detail={`${playbackSnapshot.successfulHandshakes} successful handshakes out of ${playbackSnapshot.scheduledTasks} attempts`}
+            />
+            <SignalMetric
+              label="Frontier Conversion"
+              value={`${formatPercent(progressRatio(playbackSnapshot.scheduledTasks, playbackSnapshot.uniqueNodes))}%`}
+              detail={`${Math.max(0, playbackSnapshot.uniqueNodes - playbackSnapshot.scheduledTasks)} tracked endpoints still unscheduled`}
+            />
+            <SignalMetric
+              label="Failure Weight"
+              value={playbackSnapshot.failedTasks}
+              detail="failed connect, handshake, timeout, or peer-discovery attempts"
+            />
+            <SignalMetric
+              label="Sweep Completion"
+              value={`${formatPercent(loopRatio)}%`}
+              detail={`${markers.length} checkpoint anchors across the current playback rail`}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-[8px] border border-border/70 bg-background/55 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Checkpoint Rail
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              The visual loops across the same checkpoint progression the current API already returns.
+            </p>
+          </div>
+          <p className="font-mono text-xs text-foreground">{detail.run.runId}</p>
+        </div>
+
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/40">
+          <div
+            className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.95))] transition-[width]"
+            style={{ width: `${Math.max(6, loopRatio * 100)}%` }}
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {markers.map((marker) => {
+            const isActive = loopRatio >= marker.progressRatio;
+
+            return (
+              <div
+                key={`${marker.sequence}-${marker.phase}`}
+                className={
+                  isActive
+                    ? "rounded-[6px] border border-primary/25 bg-primary/10 px-3 py-2"
+                    : "rounded-[6px] border border-border/70 bg-muted/25 px-3 py-2"
+                }
+              >
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Checkpoint {marker.sequence}
+                </p>
+                <p className="mt-1 font-mono text-sm text-foreground">{formatPhase(marker.phase)}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function simulatedRunDurationMs(runId: string): number {
+  return 295_000 + (hashSeed(runId) % 5_001);
+}
+
+function getOrCreateCycleAnchorMs(runId: string, now: number): number {
+  const storageKey = `${CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX}${runId}`;
+  const initialAnchorMs = now;
+
+  try {
+    const storedValue = window.localStorage.getItem(storageKey);
+    const parsedValue = storedValue ? Number.parseInt(storedValue, 10) : Number.NaN;
+
+    if (Number.isFinite(parsedValue) && parsedValue > 0) {
+      return parsedValue;
+    }
+
+    window.localStorage.setItem(storageKey, initialAnchorMs.toString());
+  } catch {
+    return initialAnchorMs;
+  }
+
+  return initialAnchorMs;
+}
+
+function hashSeed(value: string): number {
+  let hash = 0;
+
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+
+  return hash;
+}
+
+function SignalPill({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[6px] border border-border/70 bg-background/60 px-2.5 py-2">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-sm text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function SignalMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-[6px] border border-border/70 bg-muted/30 px-4 py-3">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-2 font-mono text-xl text-foreground">{value}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function normalizeCheckpoints(detail: CrawlRunDetail): CrawlRunCheckpointItem[] {
+  return [...detail.checkpoints].sort((left, right) => left.checkpointSequence - right.checkpointSequence);
+}
+
+function buildPlaybackAnchors(detail: CrawlRunDetail): PlaybackSnapshot[] {
+  const checkpoints = normalizeCheckpoints(detail);
+  const baseline: PlaybackSnapshot = {
+    phase: checkpoints[0]?.phase ?? "bootstrapping",
+    checkpointSequence: 0,
+    checkpointedAt: detail.run.startedAt,
+    frontierSize: 0,
+    inFlightWork: 0,
+    scheduledTasks: 0,
+    successfulHandshakes: 0,
+    failedTasks: 0,
+    uniqueNodes: 0,
+    persistedObservationRows: 0,
+    writerBacklog: 0,
+  };
+
+  if (checkpoints.length === 0) {
+    return [
+      baseline,
+      {
+        phase: detail.run.phase,
+        checkpointSequence: 1,
+        checkpointedAt: detail.run.lastCheckpointedAt,
+        frontierSize: detail.run.unscheduledGap,
+        inFlightWork: 0,
+        scheduledTasks: detail.run.scheduledTasks,
+        successfulHandshakes: detail.run.successfulHandshakes,
+        failedTasks: detail.run.failedTasks,
+        uniqueNodes: detail.run.uniqueNodes,
+        persistedObservationRows: detail.run.persistedObservationRows,
+        writerBacklog: 0,
+      },
+    ];
+  }
+
+  return [
+    baseline,
+    ...checkpoints.map((checkpoint) => ({
+      phase: checkpoint.phase,
+      checkpointSequence: checkpoint.checkpointSequence,
+      checkpointedAt: checkpoint.checkpointedAt,
+      frontierSize: checkpoint.frontierSize,
+      inFlightWork: checkpoint.inFlightWork,
+      scheduledTasks: checkpoint.scheduledTasks,
+      successfulHandshakes: checkpoint.successfulHandshakes,
+      failedTasks: checkpoint.failedTasks,
+      uniqueNodes: checkpoint.uniqueNodes,
+      persistedObservationRows: checkpoint.persistedObservationRows,
+      writerBacklog: checkpoint.writerBacklog,
+    })),
+  ];
+}
+
+function derivePlaybackSnapshot(
+  anchors: PlaybackSnapshot[],
+  elapsedMs: number,
+  loopDurationMs: number,
+): PlaybackSnapshot {
+  if (anchors.length === 1 || loopDurationMs <= 0) {
+    return anchors[anchors.length - 1]!;
+  }
+
+  const segmentCount = anchors.length - 1;
+  const scaledProgress = (elapsedMs / loopDurationMs) * segmentCount;
+  const index = Math.min(segmentCount - 1, Math.floor(scaledProgress));
+  const localProgress = scaledProgress - index;
+  const from = anchors[index]!;
+  const to = anchors[index + 1]!;
+
+  return {
+    phase: localProgress < 0.55 ? from.phase : to.phase,
+    checkpointSequence: localProgress < 0.55 ? from.checkpointSequence : to.checkpointSequence,
+    checkpointedAt: localProgress < 0.55 ? from.checkpointedAt : to.checkpointedAt,
+    frontierSize: Math.round(interpolateNumber(from.frontierSize, to.frontierSize, localProgress)),
+    inFlightWork: Math.round(interpolateNumber(from.inFlightWork, to.inFlightWork, localProgress)),
+    scheduledTasks: Math.round(interpolateNumber(from.scheduledTasks, to.scheduledTasks, localProgress)),
+    successfulHandshakes: Math.round(
+      interpolateNumber(from.successfulHandshakes, to.successfulHandshakes, localProgress),
+    ),
+    failedTasks: Math.round(interpolateNumber(from.failedTasks, to.failedTasks, localProgress)),
+    uniqueNodes: Math.round(interpolateNumber(from.uniqueNodes, to.uniqueNodes, localProgress)),
+    persistedObservationRows: Math.round(
+      interpolateNumber(from.persistedObservationRows, to.persistedObservationRows, localProgress),
+    ),
+    writerBacklog: Math.round(interpolateNumber(from.writerBacklog, to.writerBacklog, localProgress)),
+  };
+}
+
+function interpolateNumber(from: number, to: number, progress: number): number {
+  return from + (to - from) * progress;
+}
+
+function progressRatio(current: number, total: number): number {
+  if (total <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, current / total));
+}
+
+function clampCount(value: number): number {
+  return Math.max(1, Math.min(GLOBE_NODE_SEEDS.length, value));
+}
+
+function projectNode(lat: number, lon: number, rotationDeg: number) {
+  const latRad = (lat * Math.PI) / 180;
+  const lonRad = ((lon - rotationDeg) * Math.PI) / 180;
+  const horizon = Math.cos(latRad) * Math.cos(lonRad);
+
+  return {
+    x: 186 + Math.cos(latRad) * Math.sin(lonRad) * 120,
+    y: 130 - Math.sin(latRad) * 96,
+    visible: horizon >= -0.14,
+  };
+}
+
+function formatClock(valueMs: number): string {
+  const totalSeconds = Math.floor(valueMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function formatDuration(valueMs: number): string {
+  return formatClock(valueMs).replace(/^00:/, "");
+}
+
+function formatPercent(value: number): string {
+  return (Math.max(0, Math.min(1, value)) * 100).toFixed(1);
+}
+
+function formatPhase(value: string): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  return value
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((token) => token[0]!.toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+function formatTimestamp(value: string): string {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+}
+
+function formatTime(value: string): string {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleTimeString();
+}
