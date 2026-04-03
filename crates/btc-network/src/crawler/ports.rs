@@ -9,14 +9,17 @@ use super::domain::{
 };
 use super::{AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem};
 
+/// Boxed async result type used by crawler storage and analytics ports.
 pub type RepositoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// Adapter-level error returned by crawler storage and analytics ports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrawlerRepositoryError {
     message: String,
 }
 
 impl CrawlerRepositoryError {
+    /// Creates a repository error from a caller-provided message.
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -32,6 +35,10 @@ impl Display for CrawlerRepositoryError {
 
 impl Error for CrawlerRepositoryError {}
 
+/// Read-only IP enrichment contract for crawler endpoint metadata.
+///
+/// Implementations may return "not applicable" or "unavailable" results when
+/// the endpoint should not or cannot be enriched.
 pub trait IpEnrichmentProvider: Send + Sync {
     fn enrich(&self, endpoint: &CrawlEndpoint) -> IpEnrichment;
 }
@@ -70,6 +77,7 @@ pub trait CrawlerRepository: Send + Sync {
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>>;
 
+    /// Returns latest verified-node counts grouped by ASN across persisted data.
     fn count_nodes_by_asn<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>>;
@@ -77,17 +85,20 @@ pub trait CrawlerRepository: Send + Sync {
 
 /// Read-only analytics contract for browser-safe crawler UI surfaces.
 pub trait CrawlerAnalyticsReader: Send + Sync {
+    /// Returns the newest crawl runs, ordered from most recent to oldest.
     fn list_crawl_runs<'a>(
         &'a self,
         limit: usize,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlRunListItem>, CrawlerRepositoryError>>;
 
+    /// Returns one crawl run plus its recent checkpoints and derived analytics.
     fn get_crawl_run<'a>(
         &'a self,
         run_id: &'a CrawlRunId,
         checkpoint_limit: usize,
     ) -> RepositoryFuture<'a, Result<Option<CrawlRunDetail>, CrawlerRepositoryError>>;
 
+    /// Returns latest verified-node counts grouped by ASN for analytics views.
     fn count_nodes_by_asn<'a>(
         &'a self,
         limit: usize,

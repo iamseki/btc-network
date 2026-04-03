@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS ? (
 ORDER BY version
 ";
 
+/// Error returned while bootstrapping or applying ClickHouse schema migrations.
 #[derive(Debug)]
 pub enum ClickHouseMigrationError {
     Query {
@@ -67,12 +68,14 @@ impl Error for ClickHouseMigrationError {
     }
 }
 
+/// Applies the bundled schema migrations to a ClickHouse deployment.
 pub struct ClickHouseMigrationRunner {
     client: Client,
     database: String,
 }
 
 impl ClickHouseMigrationRunner {
+    /// Builds a migration runner from the shared ClickHouse connection config.
     pub fn new(config: &ClickHouseConnectionConfig) -> Self {
         Self {
             client: config.admin_client(),
@@ -80,6 +83,7 @@ impl ClickHouseMigrationRunner {
         }
     }
 
+    /// Builds a migration runner from an already configured ClickHouse client.
     pub fn with_client(client: Client, database: impl Into<String>) -> Self {
         Self {
             client,
@@ -87,6 +91,8 @@ impl ClickHouseMigrationRunner {
         }
     }
 
+    /// Ensures the database and migration table exist, validates previously
+    /// applied checksums, and applies any remaining bundled migrations.
     pub async fn apply_all(&self) -> Result<MigrationReport, ClickHouseMigrationError> {
         self.ensure_database().await?;
         self.ensure_schema_migrations_table().await?;
@@ -134,6 +140,7 @@ impl ClickHouseMigrationRunner {
         Ok(report)
     }
 
+    /// Returns the currently recorded applied migrations ordered by version.
     pub async fn applied_migrations(
         &self,
     ) -> Result<Vec<AppliedMigration>, ClickHouseMigrationError> {

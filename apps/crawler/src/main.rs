@@ -120,11 +120,23 @@ struct ClickHouseArgs {
     clickhouse_password: Option<String>,
 }
 
+/// Optional local MMDB inputs for crawler IP enrichment.
+///
+/// Provide both paths together to persist ASN/country data, or omit both to run
+/// without enrichment. This keeps ASN/country derivation in the enrichment
+/// adapter rather than in protocol or app code. See BNDD-0001 for the local
+/// MMDB dataset choice and BNDD-0005 for the enrichment-boundary decision.
 #[derive(Args, Debug, Clone)]
 struct MmdbArgs {
+    /// Path to the local ASN MMDB, such as `GeoLite2-ASN.mmdb`.
+    ///
+    /// Must be set together with `--mmdb-country-path`.
     #[arg(long, env = "BTC_NETWORK_MMDB_ASN_PATH")]
     mmdb_asn_path: Option<PathBuf>,
 
+    /// Path to the local country MMDB, such as `GeoLite2-Country.mmdb`.
+    ///
+    /// Must be set together with `--mmdb-asn-path`.
     #[arg(long, env = "BTC_NETWORK_MMDB_COUNTRY_PATH")]
     mmdb_country_path: Option<PathBuf>,
 }

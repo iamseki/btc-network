@@ -16,17 +16,20 @@ use crate::config::ClickHouseConnectionConfig;
 const NODE_OBSERVATIONS_TABLE: &str = "node_observations";
 const CRAWLER_RUN_CHECKPOINTS_TABLE: &str = "crawler_run_checkpoints";
 
+/// ClickHouse-backed implementation of the crawler write and analytics ports.
 pub struct ClickHouseCrawlerRepository {
     client: Client,
 }
 
 impl ClickHouseCrawlerRepository {
+    /// Builds a repository from the shared ClickHouse connection config.
     pub fn new(config: &ClickHouseConnectionConfig) -> Self {
         Self {
             client: config.client(),
         }
     }
 
+    /// Builds a repository from an already configured ClickHouse client.
     pub fn with_client(client: Client) -> Self {
         Self { client }
     }

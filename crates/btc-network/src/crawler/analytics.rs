@@ -3,6 +3,7 @@ use serde::Serialize;
 
 use super::domain::{CountNodesByAsnRow, CrawlPhase, CrawlRunCheckpoint};
 
+/// Summary row returned by crawl-run listing APIs.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRunListItem {
@@ -23,6 +24,7 @@ pub struct CrawlRunListItem {
 }
 
 impl CrawlRunListItem {
+    /// Derives a list item from the winning checkpoint row for a run.
     pub fn from_checkpoint(checkpoint: &CrawlRunCheckpoint) -> Self {
         let scheduled_tasks = checkpoint.metrics.scheduled_tasks;
         let successful_handshakes = checkpoint.metrics.successful_handshakes;
@@ -47,6 +49,7 @@ impl CrawlRunListItem {
     }
 }
 
+/// Serializable checkpoint summary exposed to analytics clients.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRunCheckpointItem {
@@ -66,6 +69,7 @@ pub struct CrawlRunCheckpointItem {
 }
 
 impl CrawlRunCheckpointItem {
+    /// Derives a checkpoint item from one durable checkpoint row.
     pub fn from_checkpoint(checkpoint: &CrawlRunCheckpoint) -> Self {
         Self {
             phase: crawl_phase_to_str(checkpoint.phase).to_string(),
@@ -85,6 +89,7 @@ impl CrawlRunCheckpointItem {
     }
 }
 
+/// Count of observations grouped by failure classification.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FailureClassificationCount {
@@ -92,6 +97,8 @@ pub struct FailureClassificationCount {
     pub observations: u64,
 }
 
+/// Count of observations grouped by network family with derived verification
+/// rate for UI consumers.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkOutcomeCount {
@@ -102,6 +109,7 @@ pub struct NetworkOutcomeCount {
     pub verified_pct: f64,
 }
 
+/// Verified-node count grouped by ASN for analytics views.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AsnNodeCountItem {
@@ -120,6 +128,7 @@ impl From<CountNodesByAsnRow> for AsnNodeCountItem {
     }
 }
 
+/// Full crawl-run payload returned by analytics detail APIs.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRunDetail {
@@ -129,10 +138,12 @@ pub struct CrawlRunDetail {
     pub network_outcomes: Vec<NetworkOutcomeCount>,
 }
 
+/// Formats a UTC timestamp for browser-safe analytics payloads.
 pub fn to_rfc3339(value: DateTime<Utc>) -> String {
     value.to_rfc3339()
 }
 
+/// Converts an internal crawl phase to the stable analytics string form.
 pub fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
     match value {
         CrawlPhase::Bootstrap => "bootstrap",
@@ -143,10 +154,13 @@ pub fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
     }
 }
 
+/// Returns a two-decimal percentage, using `0.0` when the denominator is zero.
 pub fn percentage(numerator: usize, denominator: usize) -> f64 {
     percentage_u64(numerator as u64, denominator as u64)
 }
 
+/// Returns a two-decimal percentage for `u64` inputs, using `0.0` when the
+/// denominator is zero.
 pub fn percentage_u64(numerator: u64, denominator: u64) -> f64 {
     if denominator == 0 {
         return 0.0;

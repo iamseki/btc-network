@@ -40,6 +40,12 @@ use types::{CrawlState, CrawlerStats};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};
 use worker::{run_worker, seed_initial_nodes};
 
+/// High-level crawler facade that wires runtime orchestration to storage and
+/// enrichment adapters.
+///
+/// The crawler owns concurrency, recovery, checkpointing, and stop-policy
+/// evaluation. Protocol parsing and peer-session behavior remain in the shared
+/// lower layers.
 pub struct Crawler {
     config: CrawlerConfig,
     repository: Arc<dyn CrawlerRepository>,
@@ -47,6 +53,10 @@ pub struct Crawler {
 }
 
 impl Crawler {
+    /// Builds a crawler with in-memory no-op adapters.
+    ///
+    /// Useful for tests or local experimentation where durable persistence and
+    /// IP enrichment are not required.
     pub fn new(config: CrawlerConfig) -> Self {
         Self::with_adapters(
             config,
@@ -55,6 +65,7 @@ impl Crawler {
         )
     }
 
+    /// Builds a crawler with explicit storage and enrichment adapters.
     pub fn with_adapters(
         config: CrawlerConfig,
         repository: Arc<dyn CrawlerRepository>,
@@ -67,6 +78,10 @@ impl Crawler {
         }
     }
 
+    /// Starts a crawl from the configured Bitcoin DNS seeds.
+    ///
+    /// If the repository exposes a durable active checkpoint, startup will try
+    /// to recover that run before beginning a fresh crawl.
     pub async fn run(&self) -> Result<CrawlSummary, Box<dyn Error>> {
         let seed_nodes = resolve_seed_nodes()
             .into_iter()

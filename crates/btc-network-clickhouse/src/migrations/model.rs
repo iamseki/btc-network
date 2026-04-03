@@ -3,6 +3,7 @@ use clickhouse::Row;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+/// One bundled ClickHouse migration file with a content checksum.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Migration {
     version: &'static str,
@@ -49,19 +50,23 @@ impl Migration {
         self.version
     }
 
+    /// Returns the migration slug without the timestamp prefix.
     pub fn name(&self) -> &str {
         self.name
     }
 
+    /// Returns the raw SQL body for this migration.
     pub fn sql(&self) -> &str {
         self.sql
     }
 
+    /// Returns the SHA-256 checksum of the raw SQL body.
     pub fn checksum(&self) -> &str {
         &self.checksum
     }
 }
 
+/// Row stored in `schema_migrations` after a migration is applied.
 #[derive(Debug, Clone, PartialEq, Eq, Row, Serialize, Deserialize)]
 pub struct AppliedMigration {
     pub version: String,
@@ -71,6 +76,7 @@ pub struct AppliedMigration {
     pub applied_at: DateTime<Utc>,
 }
 
+/// Summary of one migration run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MigrationReport {
     pub applied_versions: Vec<String>,

@@ -5,14 +5,17 @@ use std::time::Duration;
 
 use super::types::{CrawlerConfig, NodeState};
 
+/// Stable identifier for one crawler run.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CrawlRunId(String);
 
 impl CrawlRunId {
+    /// Creates a crawl run identifier from a caller-provided string.
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Returns the identifier as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -30,14 +33,17 @@ impl From<&str> for CrawlRunId {
     }
 }
 
+/// Stable identifier for one persisted node observation row.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObservationId(String);
 
 impl ObservationId {
+    /// Creates an observation identifier from a caller-provided string.
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Returns the identifier as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -55,14 +61,17 @@ impl From<&str> for ObservationId {
     }
 }
 
+/// Stable identifier for a batch of persisted observations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BatchId(String);
 
 impl BatchId {
+    /// Creates a batch identifier from a caller-provided string.
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 
+    /// Returns the identifier as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -80,6 +89,7 @@ impl From<&str> for BatchId {
     }
 }
 
+/// Lifecycle phase of a crawler run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CrawlPhase {
     Bootstrap,
@@ -89,6 +99,7 @@ pub enum CrawlPhase {
     Failed,
 }
 
+/// Network family inferred for a discovered endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CrawlNetwork {
     Ipv4,
@@ -102,11 +113,15 @@ pub enum CrawlNetwork {
 }
 
 impl CrawlNetwork {
+    /// Returns whether endpoints in this network family can use IP-based
+    /// enrichment such as ASN and country lookup.
     pub fn supports_ip_enrichment(self) -> bool {
         matches!(self, Self::Ipv4 | Self::Ipv6)
     }
 }
 
+/// Canonical crawler endpoint representation used across discovery, storage,
+/// and recovery flows.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CrawlEndpoint {
     pub canonical: String,
@@ -117,6 +132,7 @@ pub struct CrawlEndpoint {
 }
 
 impl CrawlEndpoint {
+    /// Builds an endpoint from normalized host, port, network, and optional IP.
     pub fn new(
         host: impl Into<String>,
         port: u16,
@@ -138,6 +154,8 @@ impl CrawlEndpoint {
         }
     }
 
+    /// Converts a socket address into a crawler endpoint with canonical
+    /// network-family metadata.
     pub fn from_socket_addr(addr: SocketAddr) -> Self {
         match addr {
             SocketAddr::V4(v4) => Self::new(
@@ -155,11 +173,15 @@ impl CrawlEndpoint {
         }
     }
 
+    /// Returns whether this endpoint should receive IP-based enrichment.
+    ///
+    /// Overlay networks and non-routable IP ranges bypass enrichment by design.
     pub fn supports_ip_enrichment(&self) -> bool {
         self.network.supports_ip_enrichment()
             && self.ip_addr.is_some_and(is_routable_for_enrichment)
     }
 
+    /// Returns a socket address when the endpoint includes a concrete IP.
     pub fn socket_addr(&self) -> Option<SocketAddr> {
         self.ip_addr
             .map(|ip_addr| SocketAddr::new(ip_addr, self.port))
@@ -210,6 +232,7 @@ pub enum HandshakeStatus {
     NotAttempted,
 }
 
+/// Confidence level assigned to an observation before persistence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObservationConfidence {
     Verified,
@@ -217,6 +240,7 @@ pub enum ObservationConfidence {
     Rumored,
 }
 
+/// Stage at which a node visit failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FailureClassification {
     Connect,
@@ -226,6 +250,7 @@ pub enum FailureClassification {
     Other(String),
 }
 
+/// Outcome of IP enrichment for one observation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpEnrichmentStatus {
     Matched,
@@ -234,6 +259,10 @@ pub enum IpEnrichmentStatus {
     LookupFailed,
 }
 
+/// IP-derived enrichment attached to a crawler observation.
+///
+/// BNDD-0005 keeps ASN, country, and prefix as enrichment-derived fields rather
+/// than protocol-derived fields, so they remain optional here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IpEnrichment {
     pub status: IpEnrichmentStatus,
@@ -244,6 +273,7 @@ pub struct IpEnrichment {
 }
 
 impl IpEnrichment {
+    /// Creates a successful enrichment payload.
     pub fn matched(
         asn: Option<u32>,
         asn_organization: Option<String>,
@@ -259,6 +289,7 @@ impl IpEnrichment {
         }
     }
 
+    /// Creates an enrichment payload for endpoints where lookup does not apply.
     pub fn not_applicable() -> Self {
         Self {
             status: IpEnrichmentStatus::NotApplicable,
@@ -269,6 +300,7 @@ impl IpEnrichment {
         }
     }
 
+    /// Creates an enrichment payload for runs where lookup support is disabled.
     pub fn unavailable() -> Self {
         Self {
             status: IpEnrichmentStatus::Unavailable,
