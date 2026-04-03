@@ -6,7 +6,7 @@ import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@
 
 const PLAYBACK_IDLE_MS = 15 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
-const CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX = "btc-network:crawler-signal-cycle:v1:";
+const CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX = "btc-network:crawler-signal-cycle:v2:";
 const VISUAL_SWEEP_LOOP_MS = 18_000;
 const REPLAY_RESUME_RESET_GAP_MS = PLAYBACK_IDLE_MS;
 const MAX_FUTURE_ANCHOR_DRIFT_MS = 60 * 1000;

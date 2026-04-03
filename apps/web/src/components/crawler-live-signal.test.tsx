@@ -7,7 +7,7 @@ import type { CrawlRunDetail } from "@/lib/api/types";
 
 import { useCrawlerSignalPlayback } from "./crawler-live-signal";
 
-const STORAGE_KEY = "btc-network:crawler-signal-cycle:v1:crawl-demo";
+const STORAGE_KEY = "btc-network:crawler-signal-cycle:v2:crawl-demo";
 const IDLE_WINDOW_MS = 15 * 60 * 1000;
 const SHORT_GAP_MS = 2 * 60 * 1000;
 

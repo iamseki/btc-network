@@ -291,7 +291,7 @@ describe("App sidebar shell", () => {
 
     await waitFor(() => {
       const storedValue = window.localStorage.getItem(
-        "btc-network:crawler-signal-cycle:v1:crawl-2",
+        "btc-network:crawler-signal-cycle:v2:crawl-2",
       );
       expect(storedValue).toBeTruthy();
       const parsed = JSON.parse(storedValue ?? "{}") as {
