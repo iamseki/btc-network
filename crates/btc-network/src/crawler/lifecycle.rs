@@ -407,6 +407,18 @@ mod tests {
             Box::pin(async { Ok(self.checkpoints.lock().expect("checkpoints lock").clone()) })
         }
 
+        fn get_latest_active_run_checkpoint<'a>(
+            &'a self,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(None) })
+        }
+
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> Pin<
@@ -508,6 +520,18 @@ mod tests {
             >,
         > {
             Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn get_latest_active_run_checkpoint<'a>(
+            &'a self,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(None) })
         }
 
         fn count_nodes_by_asn<'a>(

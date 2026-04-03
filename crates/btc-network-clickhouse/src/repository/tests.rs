@@ -115,6 +115,25 @@ async fn repository_fetches_latest_checkpoint_for_run() {
 }
 
 #[tokio::test]
+async fn repository_fetches_latest_active_run_checkpoint() {
+    let mock = test::Mock::new();
+    let client = Client::default().with_mock(&mock);
+    let repository = ClickHouseCrawlerRepository::with_client(client);
+    let checkpoint = from_checkpoint(sample_checkpoint());
+    mock.add(handlers::provide(vec![checkpoint.clone()]));
+
+    let result = repository
+        .get_latest_active_run_checkpoint()
+        .await
+        .expect("get latest active checkpoint")
+        .expect("checkpoint exists");
+
+    assert_eq!(result.run_id.as_str(), "run-1");
+    assert_eq!(result.phase, CrawlPhase::Crawling);
+    assert_eq!(result.checkpoint_sequence, checkpoint.checkpoint_sequence);
+}
+
+#[tokio::test]
 async fn repository_counts_latest_verified_nodes_by_asn() {
     let mock = test::Mock::new();
     let client = Client::default().with_mock(&mock);
@@ -167,6 +186,26 @@ async fn repository_list_runs_query_includes_argmax_latest_checkpoint_shape() {
     assert!(query.contains("latest_checkpoint_sequence AS checkpoint_sequence"));
     assert!(query.contains("GROUP BY run_id"));
     assert!(query.contains("crawler_run_checkpoints"));
+}
+
+#[tokio::test]
+async fn repository_latest_active_checkpoint_query_reads_latest_row_only() {
+    let mock = test::Mock::new();
+    let client = Client::default().with_mock(&mock);
+    let repository = ClickHouseCrawlerRepository::with_client(client.clone());
+    let recording = mock.add(handlers::record_ddl());
+
+    repository
+        .get_latest_active_run_checkpoint()
+        .await
+        .expect("get latest active checkpoint");
+
+    let query = recording.query().await;
+    assert!(!query.contains("GROUP BY run_id"));
+    assert!(query.contains("WHERE phase IN ('bootstrap', 'crawling', 'draining')"));
+    assert!(query.contains("ORDER BY checkpointed_at DESC, checkpoint_sequence DESC"));
+    assert!(query.contains("LIMIT 1"));
+    assert!(query.contains("FROM ("));
 }
 
 #[tokio::test]

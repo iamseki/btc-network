@@ -81,7 +81,9 @@ impl Crawler {
     /// Starts a crawl from the configured Bitcoin DNS seeds.
     ///
     /// If the repository exposes a durable active checkpoint, startup will try
-    /// to recover that run before beginning a fresh crawl.
+    /// to recover that run before beginning a fresh crawl. Recovery assumes one
+    /// crawler coordinator process writes to a given persistence database at a
+    /// time; overlapping crawler writers are treated as a deployment bug.
     pub async fn run(&self) -> Result<CrawlSummary, Box<dyn Error>> {
         let seed_nodes = resolve_seed_nodes()
             .into_iter()
@@ -145,7 +147,7 @@ impl Crawler {
         config: CrawlerConfig,
         processor: Arc<dyn NodeProcessor>,
     ) -> Result<Option<CrawlSummary>, Box<dyn Error>> {
-        let Some(checkpoint) = self.latest_active_checkpoint().await? else {
+        let Some(checkpoint) = self.repository.get_latest_active_run_checkpoint().await? else {
             return Ok(None);
         };
 
@@ -178,21 +180,6 @@ impl Crawler {
         )
         .await
         .map(Some)
-    }
-
-    async fn latest_active_checkpoint(
-        &self,
-    ) -> Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError> {
-        let mut runs = self.repository.list_runs().await?;
-        let Some(latest) = runs.drain(..).next() else {
-            return Ok(None);
-        };
-
-        if is_active_phase(latest.phase) {
-            Ok(Some(latest))
-        } else {
-            Ok(None)
-        }
     }
 
     async fn mark_recovery_failed(
@@ -555,13 +542,6 @@ fn writer_channel_capacity(config: CrawlerConfig) -> usize {
 
 fn writer_batch_size(config: CrawlerConfig) -> usize {
     effective_worker_count(config.max_concurrency).max(1)
-}
-
-fn is_active_phase(phase: CrawlPhase) -> bool {
-    matches!(
-        phase,
-        CrawlPhase::Bootstrap | CrawlPhase::Crawling | CrawlPhase::Draining
-    )
 }
 
 async fn pending_frontier(state: &Arc<Mutex<CrawlState>>) -> Vec<CrawlEndpoint> {
@@ -932,6 +912,12 @@ impl CrawlerRepository for NoopCrawlerRepository {
         Box::pin(async { Ok(Vec::new()) })
     }
 
+    fn get_latest_active_run_checkpoint<'a>(
+        &'a self,
+    ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
+        Box::pin(async { Ok(None) })
+    }
+
     fn count_nodes_by_asn<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
@@ -1112,6 +1098,27 @@ mod tests {
             Box::pin(async { Ok(self.checkpoints.lock().expect("checkpoints lock").clone()) })
         }
 
+        fn get_latest_active_run_checkpoint<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+        {
+            Box::pin(async {
+                Ok(self
+                    .checkpoints
+                    .lock()
+                    .expect("checkpoints lock")
+                    .iter()
+                    .rev()
+                    .find(|checkpoint| {
+                        matches!(
+                            checkpoint.phase,
+                            CrawlPhase::Bootstrap | CrawlPhase::Crawling | CrawlPhase::Draining
+                        )
+                    })
+                    .cloned())
+            })
+        }
+
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
@@ -1250,6 +1257,31 @@ mod tests {
             )
         }
 
+        fn get_latest_active_run_checkpoint<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                Ok(self
+                    .initial_runs
+                    .lock()
+                    .expect("initial runs lock")
+                    .iter()
+                    .filter(|checkpoint| {
+                        matches!(
+                            checkpoint.phase,
+                            CrawlPhase::Bootstrap | CrawlPhase::Crawling | CrawlPhase::Draining
+                        )
+                    })
+                    .max_by(|left, right| {
+                        left.checkpointed_at
+                            .cmp(&right.checkpointed_at)
+                            .then_with(|| left.checkpoint_sequence.cmp(&right.checkpoint_sequence))
+                    })
+                    .cloned())
+            })
+        }
+
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
@@ -1357,6 +1389,13 @@ mod tests {
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
             Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn get_latest_active_run_checkpoint<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
+        {
+            Box::pin(async { Ok(None) })
         }
 
         fn count_nodes_by_asn<'a>(

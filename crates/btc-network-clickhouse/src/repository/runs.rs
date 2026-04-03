@@ -9,16 +9,102 @@ pub(super) async fn get_run_checkpoint(
     client: &Client,
     run_id: &CrawlRunId,
 ) -> Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError> {
-    client
+    let row: Option<RunCheckpointRow> = client
         .query(
-            "SELECT ?fields FROM ? WHERE run_id = ? ORDER BY checkpointed_at DESC, checkpoint_sequence DESC LIMIT 1",
+            "
+SELECT
+    run_id,
+    phase,
+    checkpointed_at,
+    checkpoint_sequence,
+    started_at,
+    stop_reason,
+    failure_reason,
+    frontier_size,
+    in_flight_work,
+    scheduled_tasks,
+    successful_handshakes,
+    failed_tasks,
+    queued_nodes_total,
+    unique_nodes,
+    discovered_node_states,
+    persisted_observation_rows,
+    writer_backlog,
+    resume_state,
+    caller
+FROM crawler_run_checkpoints
+WHERE run_id = ?
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+LIMIT 1
+",
         )
-        .bind(Identifier(CRAWLER_RUN_CHECKPOINTS_TABLE))
         .bind(run_id.as_str())
-        .fetch_optional::<RunCheckpointRow>()
+        .fetch_optional()
         .await
-        .map(|row| row.map(to_checkpoint))
-        .map_err(map_clickhouse_err("fetch latest run checkpoint"))
+        .map_err(map_clickhouse_err("fetch latest run checkpoint"))?;
+
+    Ok(row.map(to_checkpoint))
+}
+
+pub(super) async fn get_latest_active_run_checkpoint(
+    client: &Client,
+) -> Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError> {
+    let row: Option<RunCheckpointRow> = client
+        .query(
+            "
+SELECT
+    run_id,
+    phase,
+    checkpointed_at,
+    checkpoint_sequence,
+    started_at,
+    stop_reason,
+    failure_reason,
+    frontier_size,
+    in_flight_work,
+    scheduled_tasks,
+    successful_handshakes,
+    failed_tasks,
+    queued_nodes_total,
+    unique_nodes,
+    discovered_node_states,
+    persisted_observation_rows,
+    writer_backlog,
+    resume_state,
+    caller
+FROM (
+    SELECT
+        run_id,
+        phase,
+        checkpointed_at,
+        checkpoint_sequence,
+        started_at,
+        stop_reason,
+        failure_reason,
+        frontier_size,
+        in_flight_work,
+        scheduled_tasks,
+        successful_handshakes,
+        failed_tasks,
+        queued_nodes_total,
+        unique_nodes,
+        discovered_node_states,
+        persisted_observation_rows,
+        writer_backlog,
+        resume_state,
+        caller
+    FROM crawler_run_checkpoints
+    ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+    LIMIT 1
+)
+WHERE phase IN ('bootstrap', 'crawling', 'draining')
+",
+        )
+        .fetch_optional()
+        .await
+        .map_err(map_clickhouse_err("fetch latest active run checkpoint"))?;
+
+    Ok(row.map(to_checkpoint))
 }
 
 pub(super) async fn list_runs(

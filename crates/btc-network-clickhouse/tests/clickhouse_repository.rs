@@ -370,6 +370,40 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
 }
 
 #[tokio::test]
+async fn repository_latest_active_checkpoint_ignores_terminal_latest_row() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = ClickHouseCrawlerRepository::new(&db.config);
+
+    let run_id = CrawlRunId::new("run-latest-terminal");
+    let base_time = Utc::now();
+
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Crawling,
+            base_time,
+            1,
+            None,
+        ))
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Failed,
+            base_time + Duration::seconds(1),
+            2,
+            Some("terminal".to_string()),
+        ))
+        .await?;
+
+    let latest_active = repository.get_latest_active_run_checkpoint().await?;
+    assert!(latest_active.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicable() -> TestResult {
     let db = TestDatabase::start().await?;
     db.apply_migrations().await?;
