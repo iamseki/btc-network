@@ -10,7 +10,7 @@ The preferred local development path for the crawler uses:
 
 1. Run `make crawler-mmdb-update`.
 2. Run `make crawler-dev-up`.
-3. Run `make crawler-migrate`.
+3. Run `make clickhouse-migrate`.
 4. Run `make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb --max-tracked-nodes 500000 --connect-max-attempts 10 --connect-retry-backoff-ms 250 --connect-timeout-secs 30 --io-timeout-secs 20"`.
 
 ## Local Paths
@@ -97,7 +97,7 @@ Migrations stay explicit. They are not tied to crawler startup.
 From the repository root:
 
 ```bash
-make crawler-migrate
+make clickhouse-migrate
 ```
 
 That uses the preferred local ClickHouse development settings automatically:
@@ -108,12 +108,12 @@ That uses the preferred local ClickHouse development settings automatically:
 - password: `btc_network_dev`
 
 These are local development defaults provided by the repository Make targets.
-The crawler binary itself still only defaults the URL and database; it does not hardcode a global username or password.
+The dedicated migration binary still only defaults the URL and database; it does not hardcode a global username or password.
 
 If you need different settings, pass them through `ARGS`:
 
 ```bash
-make crawler-migrate ARGS="--clickhouse-user another_user --clickhouse-password another_password"
+make clickhouse-migrate ARGS="--clickhouse-user another_user --clickhouse-password another_password"
 ```
 
 If you already initialized `.dev-data/clickhouse/` with older local settings and keep seeing authentication failures, reset the local dev data once and start again:
@@ -121,7 +121,7 @@ If you already initialized `.dev-data/clickhouse/` with older local settings and
 ```bash
 make crawler-dev-reset
 make crawler-dev-up
-make crawler-migrate
+make clickhouse-migrate
 ```
 
 ## Run The Crawler
@@ -132,7 +132,7 @@ With local MMDB files in place:
 make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"
 ```
 
-`make crawler` also injects the same local ClickHouse development defaults automatically, so it matches `make crawler-dev-up` and `make crawler-migrate` out of the box.
+`make crawler` also injects the same local ClickHouse development defaults automatically, so it matches `make crawler-dev-up` and `make clickhouse-migrate` out of the box.
 
 You can also provide the same paths through environment variables:
 
@@ -384,7 +384,7 @@ For this repository, I recommend:
 
 1. Run `make crawler-mmdb-update`.
 2. Run `make crawler-dev-up`.
-3. Run `make crawler-migrate`.
+3. Run `make clickhouse-migrate`.
 4. Run `make crawler` with MMDB paths.
 
 ## Verification

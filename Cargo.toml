@@ -2,6 +2,7 @@
 members = [
     "apps/api",
     "apps/cli",
+    "apps/clickhouse-migrate",
     "apps/crawler",
     "apps/listener",
     "apps/desktop/src-tauri",
@@ -13,6 +14,7 @@ members = [
 default-members = [
     "apps/api",
     "apps/cli",
+    "apps/clickhouse-migrate",
     "apps/crawler",
     "apps/listener",
     "apps/desktop/src-tauri",

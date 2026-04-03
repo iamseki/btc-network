@@ -484,6 +484,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "btc-network-clickhouse-migrate"
+version = "0.1.0"
+dependencies = [
+ "btc-network-clickhouse",
+ "btc-network-observability",
+ "clap",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "btc-network-crawler"
 version = "0.1.0"
 dependencies = [

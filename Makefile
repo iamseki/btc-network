@@ -19,13 +19,13 @@ crawler:
 	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
 	cargo run -p btc-network-crawler -- $(ARGS)
 
-## Apply ClickHouse migrations for the crawler persistence schema
-crawler-migrate:
+## Apply ClickHouse migrations for the shared persistence schema
+clickhouse-migrate:
 	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
 	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
 	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
 	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
-	cargo run -p btc-network-crawler -- migrate-clickhouse $(ARGS)
+	cargo run -p btc-network-clickhouse-migrate -- $(ARGS)
 
 ## Start local ClickHouse for crawler development
 crawler-dev-up:
@@ -176,7 +176,7 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  make crawler ARGS=\"--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb\""
-	@echo "  make crawler-migrate"
+	@echo "  make clickhouse-migrate"
 	@echo "    uses local dev ClickHouse defaults: url=$(CRAWLER_CLICKHOUSE_LOCAL_URL) db=$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE) user=$(CRAWLER_CLICKHOUSE_LOCAL_USER)"
 	@echo "  make crawler-dev-up"
 	@echo "  make crawler-mmdb-update"

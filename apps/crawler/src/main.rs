@@ -4,27 +4,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use btc_network::crawler::{Crawler, CrawlerConfig, IpEnrichmentProvider};
-use btc_network_clickhouse::{
-    ClickHouseConnectionConfig, ClickHouseCrawlerRepository, ClickHouseMigrationRunner,
-};
+use btc_network_clickhouse::{ClickHouseConnectionConfig, ClickHouseCrawlerRepository};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_observability::init_tracing;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser};
 use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
 #[command(name = "crawler")]
 struct Cli {
-    #[command(subcommand)]
-    command: Option<Command>,
-
     #[command(flatten)]
     crawl: CrawlArgs,
-}
-
-#[derive(Subcommand, Debug)]
-enum Command {
-    MigrateClickhouse(MigrateClickhouseArgs),
 }
 
 /// Runtime knobs for a crawler run.
@@ -89,12 +79,6 @@ struct CrawlArgs {
 
     #[command(flatten)]
     mmdb: MmdbArgs,
-}
-
-#[derive(Args, Debug, Clone)]
-struct MigrateClickhouseArgs {
-    #[command(flatten)]
-    clickhouse: ClickHouseArgs,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -169,11 +153,7 @@ fn parse_positive_u64(raw: &str) -> Result<u64, String> {
 async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing();
     let cli = Cli::parse();
-
-    match cli.command {
-        Some(Command::MigrateClickhouse(args)) => run_clickhouse_migrations(args).await,
-        None => run_crawler(cli.crawl).await,
-    }
+    run_crawler(cli.crawl).await
 }
 
 async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
@@ -192,19 +172,6 @@ async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
     info!("unique nodes discovered: {}", summary.unique_nodes);
     info!("node states captured: {}", summary.discovered_node_states);
     info!("elapsed: {:.2?}", summary.elapsed);
-
-    Ok(())
-}
-
-async fn run_clickhouse_migrations(args: MigrateClickhouseArgs) -> Result<(), Box<dyn Error>> {
-    let config = build_clickhouse_config(&args.clickhouse);
-    let report = ClickHouseMigrationRunner::new(&config).apply_all().await?;
-
-    info!(
-        "ClickHouse migrations finished: {} applied, {} skipped.",
-        report.applied_versions.len(),
-        report.skipped_versions.len()
-    );
 
     Ok(())
 }
@@ -349,33 +316,6 @@ mod tests {
             provider.enrich(&endpoint).status,
             btc_network::crawler::IpEnrichmentStatus::Unavailable
         );
-    }
-
-    #[test]
-    fn migrate_clickhouse_subcommand_parses() {
-        let cli = Cli::try_parse_from([
-            "crawler",
-            "migrate-clickhouse",
-            "--clickhouse-url",
-            "http://clickhouse.internal:8123",
-            "--clickhouse-password",
-            "secret",
-        ])
-        .expect("cli");
-
-        match cli.command {
-            Some(Command::MigrateClickhouse(args)) => {
-                assert_eq!(
-                    args.clickhouse.clickhouse_url,
-                    "http://clickhouse.internal:8123"
-                );
-                assert_eq!(
-                    args.clickhouse.clickhouse_password.as_deref(),
-                    Some("secret")
-                );
-            }
-            None => panic!("expected migrate-clickhouse command"),
-        }
     }
 
     #[test]
