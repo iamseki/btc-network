@@ -290,11 +290,16 @@ describe("App sidebar shell", () => {
     });
 
     await waitFor(() => {
-      const storedAnchor = window.localStorage.getItem(
-        "btc-network:crawler-signal-cycle:v1:crawl-2",
+      const storedValue = window.localStorage.getItem(
+        "btc-network:crawler-signal-cycle:v2:crawl-2",
       );
-      expect(storedAnchor).toBeTruthy();
-      expect(Number.parseInt(storedAnchor ?? "", 10)).toBeGreaterThan(0);
+      expect(storedValue).toBeTruthy();
+      const parsed = JSON.parse(storedValue ?? "{}") as {
+        cycleAnchorMs?: number;
+        lastSeenAtMs?: number;
+      };
+      expect(parsed.cycleAnchorMs ?? 0).toBeGreaterThan(0);
+      expect(parsed.lastSeenAtMs ?? 0).toBeGreaterThan(0);
     });
   });
 

@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
 
-const PLAYBACK_IDLE_MS = 30 * 60 * 1000;
+const PLAYBACK_IDLE_MS = 15 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
-const CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX = "btc-network:crawler-signal-cycle:v1:";
+const CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX = "btc-network:crawler-signal-cycle:v2:";
 const VISUAL_SWEEP_LOOP_MS = 18_000;
+const REPLAY_RESUME_RESET_GAP_MS = PLAYBACK_IDLE_MS;
 const MAX_FUTURE_ANCHOR_DRIFT_MS = 60 * 1000;
 const MAX_PAST_ANCHOR_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -64,6 +65,11 @@ type PlaybackMarker = {
   phase: string;
   sequence: number;
   progressRatio: number;
+};
+
+type StoredCycleState = {
+  cycleAnchorMs: number;
+  lastSeenAtMs: number;
 };
 
 export type CrawlerSignalPlayback = {
@@ -176,6 +182,39 @@ export function useCrawlerSignalPlayback(detail: CrawlRunDetail | null): Crawler
       window.clearInterval(timer);
     };
   }, [detail?.run.runId]);
+
+  useEffect(() => {
+    if (!detail || cycleAnchorMs === null) {
+      return;
+    }
+
+    persistCycleState(detail.run.runId, {
+      cycleAnchorMs,
+      lastSeenAtMs: Date.now(),
+    });
+
+    const persistCurrentTime = () => {
+      persistCycleState(detail.run.runId, {
+        cycleAnchorMs,
+        lastSeenAtMs: Date.now(),
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        persistCurrentTime();
+      }
+    };
+
+    window.addEventListener("pagehide", persistCurrentTime);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", persistCurrentTime);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      persistCurrentTime();
+    };
+  }, [detail?.run.runId, cycleAnchorMs]);
 
   if (!detail || cycleAnchorMs === null) {
     return null;
@@ -631,23 +670,32 @@ function simulatedRunDurationMs(runId: string): number {
 }
 
 function getOrCreateCycleAnchorMs(runId: string, now: number): number {
-  const storageKey = `${CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX}${runId}`;
-  const initialAnchorMs = now;
+  const initialState: StoredCycleState = {
+    cycleAnchorMs: now,
+    lastSeenAtMs: now,
+  };
 
   try {
-    const storedValue = window.localStorage.getItem(storageKey);
-    const parsedValue = storedValue ? Number.parseInt(storedValue, 10) : Number.NaN;
+    const storedState = readStoredCycleState(runId, now);
+    if (storedState) {
+      const wasAwayLongEnoughToRestart =
+        now - storedState.lastSeenAtMs >= REPLAY_RESUME_RESET_GAP_MS;
+      const nextState = wasAwayLongEnoughToRestart
+        ? initialState
+        : {
+            cycleAnchorMs: storedState.cycleAnchorMs,
+            lastSeenAtMs: now,
+          };
 
-    if (isValidCycleAnchorMs(parsedValue, now)) {
-      return parsedValue;
+      persistCycleState(runId, nextState);
+      return nextState.cycleAnchorMs;
     }
-
-    window.localStorage.setItem(storageKey, initialAnchorMs.toString());
   } catch {
-    return initialAnchorMs;
+    return initialState.cycleAnchorMs;
   }
 
-  return initialAnchorMs;
+  persistCycleState(runId, initialState);
+  return initialState.cycleAnchorMs;
 }
 
 function isValidCycleAnchorMs(value: number, now: number): boolean {
@@ -664,6 +712,64 @@ function isValidCycleAnchorMs(value: number, now: number): boolean {
   }
 
   return true;
+}
+
+function isValidLastSeenAtMs(value: number, now: number): boolean {
+  if (!Number.isFinite(value) || value <= 0) {
+    return false;
+  }
+
+  if (value > now + MAX_FUTURE_ANCHOR_DRIFT_MS) {
+    return false;
+  }
+
+  if (value < now - MAX_PAST_ANCHOR_AGE_MS) {
+    return false;
+  }
+
+  return true;
+}
+
+function readStoredCycleState(runId: string, now: number): StoredCycleState | null {
+  const storageKey = `${CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX}${runId}`;
+  const storedValue = window.localStorage.getItem(storageKey);
+
+  if (!storedValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(storedValue) as Partial<StoredCycleState>;
+    if (
+      isValidCycleAnchorMs(parsed.cycleAnchorMs ?? Number.NaN, now) &&
+      isValidLastSeenAtMs(parsed.lastSeenAtMs ?? Number.NaN, now)
+    ) {
+      return {
+        cycleAnchorMs: parsed.cycleAnchorMs!,
+        lastSeenAtMs: parsed.lastSeenAtMs!,
+      };
+    }
+  } catch {
+    const parsedValue = Number.parseInt(storedValue, 10);
+    if (isValidCycleAnchorMs(parsedValue, now)) {
+      return {
+        cycleAnchorMs: parsedValue,
+        lastSeenAtMs: parsedValue,
+      };
+    }
+  }
+
+  return null;
+}
+
+function persistCycleState(runId: string, state: StoredCycleState): void {
+  const storageKey = `${CRAWL_SIGNAL_CYCLE_STORAGE_KEY_PREFIX}${runId}`;
+
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(state));
+  } catch {
+    // Ignore storage write failures so the replay still works in-memory.
+  }
 }
 
 function hashSeed(value: string): number {

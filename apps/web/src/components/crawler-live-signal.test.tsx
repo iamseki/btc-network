@@ -7,8 +7,9 @@ import type { CrawlRunDetail } from "@/lib/api/types";
 
 import { useCrawlerSignalPlayback } from "./crawler-live-signal";
 
-const STORAGE_KEY = "btc-network:crawler-signal-cycle:v1:crawl-demo";
-const IDLE_WINDOW_MS = 30 * 60 * 1000;
+const STORAGE_KEY = "btc-network:crawler-signal-cycle:v2:crawl-demo";
+const IDLE_WINDOW_MS = 15 * 60 * 1000;
+const SHORT_GAP_MS = 2 * 60 * 1000;
 
 const DETAIL = {
   run: {
@@ -127,7 +128,10 @@ describe("useCrawlerSignalPlayback", () => {
     const { result } = renderHook(() => useCrawlerSignalPlayback(DETAIL));
 
     expect(result.current).not.toBeNull();
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(now.getTime().toString());
+    expect(readStoredState()).toEqual({
+      cycleAnchorMs: now.getTime(),
+      lastSeenAtMs: now.getTime(),
+    });
     expect(result.current?.isLive).toBe(true);
   });
 
@@ -140,7 +144,64 @@ describe("useCrawlerSignalPlayback", () => {
     const { result } = renderHook(() => useCrawlerSignalPlayback(DETAIL));
 
     expect(result.current).not.toBeNull();
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(now.getTime().toString());
+    expect(readStoredState()).toEqual({
+      cycleAnchorMs: now.getTime(),
+      lastSeenAtMs: now.getTime(),
+    });
+    expect(result.current?.isLive).toBe(true);
+  });
+
+  it("continues the stored cycle when the site was only closed briefly", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-04-01T12:00:00Z");
+    vi.setSystemTime(now);
+    const cycleAnchorMs = now.getTime() - DETAIL.run.scheduledTasks;
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        cycleAnchorMs,
+        lastSeenAtMs: now.getTime() - SHORT_GAP_MS,
+      }),
+    );
+
+    const { result } = renderHook(() => useCrawlerSignalPlayback(DETAIL));
+
+    expect(result.current).not.toBeNull();
+    expect(readStoredState()).toEqual({
+      cycleAnchorMs,
+      lastSeenAtMs: now.getTime(),
+    });
+  });
+
+  it("starts a fresh live cycle after a longer absence", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-04-02T12:00:00Z");
+    vi.setSystemTime(now);
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        cycleAnchorMs: now.getTime() - IDLE_WINDOW_MS - 5 * 60 * 1000,
+        lastSeenAtMs: now.getTime() - IDLE_WINDOW_MS - 1_000,
+      }),
+    );
+
+    const { result } = renderHook(() => useCrawlerSignalPlayback(DETAIL));
+
+    expect(result.current).not.toBeNull();
+    expect(readStoredState()).toEqual({
+      cycleAnchorMs: now.getTime(),
+      lastSeenAtMs: now.getTime(),
+    });
     expect(result.current?.isLive).toBe(true);
   });
 });
+
+function readStoredState(): { cycleAnchorMs: number; lastSeenAtMs: number } | null {
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  return JSON.parse(raw) as { cycleAnchorMs: number; lastSeenAtMs: number };
+}
