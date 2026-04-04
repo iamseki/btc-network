@@ -1,123 +1,172 @@
-# Default target
+# Repository workflow Makefile.
+#
+# Conventions:
+# - Run `make help` for the generated command list grouped by section.
+# - Put a target's one-line help text after `##` on the same line as the target.
+# - Start a help section with `##@ Section Name`.
+# - Keep recipes small and direct. Move multi-step or reusable shell logic into
+#   scripts/ instead of growing large inline recipes here.
+# - Prefer repo-specific workflows here. Do not add wrappers for generic tools
+#   unless they remove repeated project-specific setup.
+#
+# Examples:
+# - `make crawler ARGS="--mmdb-asn-path ... --mmdb-country-path ..."`
+# - `make clickhouse-migrate`
+# - `make test`
+# - `make setup-git-hooks`
+#
 .DEFAULT_GOAL := help
 MAKEFLAGS += --no-print-directory
 
+# These are convenience targets rather than real build artifacts.
+.PHONY: \
+	help \
+	crawler \
+	clickhouse-migrate \
+	infra-clickhouse-up \
+	crawler-mmdb-update \
+	infra-clickhouse-down \
+	infra-clickhouse-reset \
+	api \
+	listener \
+	crawler-debug \
+	cli \
+	build \
+	security-tools-install \
+	setup-git-hooks \
+	web-install \
+	desktop-install \
+	web-dev \
+	desktop-dev \
+	web-test \
+	web-build \
+	rust-test \
+	desktop-test \
+	api-test \
+	security-rust-audit \
+	security-rust-deny \
+	security-rust \
+	security-web-audit \
+	security-web-signatures \
+	security-web \
+	security \
+	test \
+	clean
+
+# Local caches and per-clone configuration stay inside the repository so setup
+# is reproducible and does not depend on the developer's global machine state.
 LOCAL_CARGO_HOME := $(CURDIR)/.cargo-home
 LOCAL_ADVISORY_DB := $(LOCAL_CARGO_HOME)/advisory-db
 LOCAL_DENY_ADVISORY_DB := $(firstword $(wildcard $(LOCAL_CARGO_HOME)/advisory-dbs/*))
 LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
+LOCAL_GIT_HOOKS_PATH := .githooks
+DOCKER_COMPOSE := docker compose -f docker-compose.yml
+
+# Shared local ClickHouse defaults used by the crawler, API, and migration
+# targets. Override per command via ARGS when a non-default local setup is
+# needed.
 CRAWLER_CLICKHOUSE_LOCAL_URL := http://localhost:8123
 CRAWLER_CLICKHOUSE_LOCAL_DATABASE := btc_network
 CRAWLER_CLICKHOUSE_LOCAL_USER := btc_network_dev
 CRAWLER_CLICKHOUSE_LOCAL_PASSWORD := btc_network_dev
 
-## Run the crawler binary
-crawler:
-	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
+# Reuse the same env block across local commands so the crawler-related targets
+# stay aligned on database, user, and password defaults.
+CLICKHOUSE_LOCAL_ENV = \
+	BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
 	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
 	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
-	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
-	cargo run -p btc-network-crawler -- $(ARGS)
+	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)"
 
-## Apply ClickHouse migrations for the shared persistence schema
-clickhouse-migrate:
-	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
-	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
-	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
-	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
-	cargo run -p btc-network-clickhouse-migrate -- $(ARGS)
+##@ Runtime
 
-## Start local ClickHouse for shared infrastructure development
-infra-clickhouse-up:
+crawler: ## Run the crawler binary with local ClickHouse defaults; pass crawler flags via ARGS="..."
+	@$(CLICKHOUSE_LOCAL_ENV) cargo run -p btc-network-crawler -- $(ARGS)
+
+clickhouse-migrate: ## Apply ClickHouse migrations with local development defaults; pass overrides via ARGS="..."
+	@$(CLICKHOUSE_LOCAL_ENV) cargo run -p btc-network-clickhouse-migrate -- $(ARGS)
+
+infra-clickhouse-up: ## Start the shared local ClickHouse service
 	@mkdir -p .dev-data/clickhouse
-	@docker compose -f docker-compose.yml up -d --wait
+	@$(DOCKER_COMPOSE) up -d --wait
 
-## Download or refresh local MMDB files for crawler development
-crawler-mmdb-update:
+crawler-mmdb-update: ## Download or refresh local MMDB files for crawler development
 	@bash scripts/update-crawler-mmdb.sh
 
-## Stop local ClickHouse for shared infrastructure development
-infra-clickhouse-down:
-	@docker compose -f docker-compose.yml down
+infra-clickhouse-down: ## Stop the shared local ClickHouse service
+	@$(DOCKER_COMPOSE) down
 
-## Reset local ClickHouse data for shared infrastructure development
-infra-clickhouse-reset:
-	@docker compose -f docker-compose.yml down
+infra-clickhouse-reset: ## Reset local ClickHouse data under .dev-data/clickhouse
+	@$(DOCKER_COMPOSE) down
 	@mkdir -p .dev-data/clickhouse
 	@docker run --rm -v "$(CURDIR)/.dev-data/clickhouse:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
 
-## Tail local ClickHouse logs for shared infrastructure development
-infra-clickhouse-logs:
-	@docker compose -f docker-compose.yml logs -f clickhouse
+api: ## Run the crawler analytics API with local ClickHouse defaults
+	@$(CLICKHOUSE_LOCAL_ENV) cargo run -p btc-network-api -- $(ARGS)
 
-## Run the listener binary
-listener:
-	@cargo run -p btc-network-listener
+listener: ## Run the listener binary; pass extra flags via ARGS="..."
+	@cargo run -p btc-network-listener -- $(ARGS)
 
-## Run the crawler analytics API with local ClickHouse defaults
-api:
-	@BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
-	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
-	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
-	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
-	cargo run -p btc-network-api
-
-## Run crawler timing debug workflow (captures raw logs + timing summary)
-crawler-debug:
+crawler-debug: ## Capture crawler timing artifacts; set OUT=... and optional TIMEOUT_MINUTES/MAX_CONCURRENCY/IDLE_TIMEOUT_MINUTES
 	@scripts/crawler_timing.sh $(OUT) --timeout-minutes $(TIMEOUT_MINUTES) -- --max-concurrency $(MAX_CONCURRENCY) --idle-timeout-minutes $(IDLE_TIMEOUT_MINUTES)
 
-## Run btc-cli (pass args via ARGS="")
-cli:
+cli: ## Run btc-network-cli; pass command flags via ARGS="..."
 	@cargo run -p btc-network-cli -- $(ARGS)
 
-## Build all binaries
-build:
-	@cargo build --workspace --bins
+##@ Setup
 
-## Install local Rust security tooling
-security-tools-install:
+security-tools-install: ## Install local Rust security tooling into .cargo-home
 	@mkdir -p "$(LOCAL_CARGO_HOME)"
 	@CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo install --locked cargo-audit cargo-deny
 
-## Install frontend dependencies
-web-install:
-	@npm install --prefix apps/web
+setup-git-hooks: ## Enable repo-local git hooks for this clone
+	@git config --local core.hooksPath "$(LOCAL_GIT_HOOKS_PATH)"
+	@echo "Configured core.hooksPath=$(LOCAL_GIT_HOOKS_PATH) for this clone"
 
-## Install desktop shell dependencies
-desktop-install:
-	@npm install --prefix apps/desktop
+web-install: ## Install web dependencies with npm ci
+	@npm ci --prefix apps/web
 
-## Run the web frontend in dev mode
-web-dev:
+desktop-install: ## Install desktop dependencies with npm ci
+	@npm ci --prefix apps/desktop
+
+##@ Development
+
+web-dev: ## Run the web frontend in dev mode
 	@npm run dev --prefix apps/web
 
-## Run the Tauri desktop app in dev mode
-desktop-dev:
+desktop-dev: ## Run the Tauri desktop app in dev mode
 	@test -x apps/desktop/node_modules/.bin/tauri || (echo "desktop dependencies are missing. Run: make desktop-install" && exit 1)
 	@npm run dev --prefix apps/desktop
 
-## Run frontend tests
-web-test:
+build: ## Build all workspace binaries
+	@cargo build --workspace --bins
+
+clean: ## Clean Rust build artifacts
+	@cargo clean
+
+##@ Verification
+
+web-test: ## Run frontend tests
 	@npm run test --prefix apps/web
 
-## Build the web frontend
-web-build:
+web-build: ## Build the web frontend
 	@npm run build --prefix apps/web
 
-## Run Rust workspace tests
-rust-test:
+rust-test: ## Run Rust workspace tests
 	@cargo test --workspace --locked
 
-## Run desktop Rust tests
-desktop-test:
+desktop-test: ## Run desktop Rust tests
 	@cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
-## Run API tests
-api-test:
+api-test: ## Run API tests
 	@cargo test -p btc-network-api --locked
 
-## Audit Rust dependencies against RustSec
-security-rust-audit:
+test: ## Run the repository test summary flow
+	@bash scripts/test_summary.sh
+
+##@ Security
+
+security-rust-audit: ## Audit Rust dependencies against RustSec
 	@mkdir -p "$(LOCAL_CARGO_HOME)"
 	@if test -d "$(LOCAL_ADVISORY_DB)/.git"; then \
 		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo audit --db "$(LOCAL_ADVISORY_DB)" --no-fetch --stale; \
@@ -125,8 +174,7 @@ security-rust-audit:
 		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo audit; \
 	fi
 
-## Enforce Rust dependency policy (advisories, bans, sources)
-security-rust-deny:
+security-rust-deny: ## Enforce Rust dependency policy for advisories, bans, and sources
 	@mkdir -p "$(LOCAL_CARGO_HOME)"
 	@if test -n "$(LOCAL_DENY_ADVISORY_DB)" && test -d "$(LOCAL_DENY_ADVISORY_DB)/.git"; then \
 		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources --disable-fetch; \
@@ -134,23 +182,19 @@ security-rust-deny:
 		CARGO_HOME="$(LOCAL_CARGO_HOME)" cargo deny check advisories bans sources; \
 	fi
 
-## Run Rust dependency security checks
-security-rust:
+security-rust: ## Run Rust dependency security checks
 	@$(MAKE) security-rust-audit
 	@$(MAKE) security-rust-deny
 
-## Run npm vulnerability audit
-security-web-audit:
+security-web-audit: ## Run npm vulnerability audit for the web app
 	@mkdir -p "$(LOCAL_NPM_CACHE)"
 	@npm_config_cache="$(LOCAL_NPM_CACHE)" npm audit --prefix apps/web --audit-level=high
 
-## Verify npm package signatures
-security-web-signatures:
+security-web-signatures: ## Verify npm package signatures for the web app
 	@mkdir -p "$(LOCAL_NPM_CACHE)"
 	@npm_config_cache="$(LOCAL_NPM_CACHE)" npm audit signatures --prefix apps/web
 
-## Run frontend dependency security checks
-security-web:
+security-web: ## Run frontend dependency security checks when the npm registry is reachable
 	@if getent ahosts registry.npmjs.org >/dev/null 2>&1; then \
 		$(MAKE) security-web-audit; \
 		$(MAKE) security-web-signatures; \
@@ -158,52 +202,24 @@ security-web:
 		echo "Skipping web security checks: npm registry is unreachable"; \
 	fi
 
-## Run all dependency security checks
-security:
+security: ## Run all dependency security checks
 	@$(MAKE) security-rust
 	@$(MAKE) security-web
 
-## Run tests
-test:
-	@bash scripts/test_summary.sh
+##@ Help
 
-## Clean build artifacts
-clean:
-	@cargo clean
-
-## Show available commands
-help:
-	@echo ""
-	@echo "Available targets:"
-	@echo "  make crawler ARGS=\"--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb\""
-	@echo "  make clickhouse-migrate"
-	@echo "    uses local dev ClickHouse defaults: url=$(CRAWLER_CLICKHOUSE_LOCAL_URL) db=$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE) user=$(CRAWLER_CLICKHOUSE_LOCAL_USER)"
-	@echo "  make infra-clickhouse-up"
-	@echo "  make crawler-mmdb-update"
-	@echo "  make infra-clickhouse-down"
-	@echo "  make infra-clickhouse-reset"
-	@echo "  make infra-clickhouse-logs"
-	@echo "  make crawler-debug"
-	@echo "    example: make crawler-debug TIMEOUT_MINUTES=5 MAX_CONCURRENCY=1000 IDLE_TIMEOUT_MINUTES=5 OUT=artifacts/crawler-timing-run-1"
-	@echo "  make listener"
-	@echo "  make api"
-	@echo "    uses local dev ClickHouse defaults: url=$(CRAWLER_CLICKHOUSE_LOCAL_URL) db=$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE) user=$(CRAWLER_CLICKHOUSE_LOCAL_USER)"
-	@echo "  make cli ARGS=\"--node host:port ping\""
-	@echo "  make build"
-	@echo "  make test"
-	@echo "    runs Rust workspace tests and web tests with an aggregate summary"
-	@echo "  make security-tools-install"
-	@echo "  make security-rust"
-	@echo "  make security-web"
-	@echo "  make security"
-	@echo "  make web-install"
-	@echo "  make web-dev"
-	@echo "  make web-test"
-	@echo "  make web-build"
-	@echo "  make rust-test"
-	@echo "  make api-test"
-	@echo "  make desktop-install"
-	@echo "  make desktop-dev"
-	@echo "  make desktop-test"
-	@echo "  make clean"
-	@echo ""
+help: ## Show available commands
+	@awk 'BEGIN { \
+		FS = ":.*## "; \
+		printf "\nUsage:\n  make <target>\n"; \
+		printf "\nNotes:\n"; \
+		printf "  ARGS=... passes extra CLI flags to wrapper targets such as crawler, cli, api, and clickhouse-migrate.\n"; \
+		printf "  Targets are grouped by section below.\n"; \
+	} \
+	/^##@/ { \
+		printf "\n%s\n", substr($$0, 5); \
+		next; \
+	} \
+	/^[a-zA-Z0-9_.-]+:.*## / { \
+		printf "  %-24s %s\n", $$1, $$2; \
+	}' $(MAKEFILE_LIST)

@@ -20,17 +20,13 @@ jobs:
     if: github.event_name == 'pull_request'
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validate pull request title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          pattern='^(feat|fix|docs|chore|refactor|test|ci|build)(\([A-Za-z0-9._/-]+\))?: .+'
-          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
-            echo "::error title=Invalid PR title::Pull request titles must match '<type>(<scope>): <summary>' or '<type>: <summary>'."
-            echo "Allowed types: feat, fix, docs, chore, refactor, test, ci, build."
-            echo "Example: docs(BNDD-0005): add implementation plan"
-            exit 1
-          fi
+        run: scripts/validate-semantic-subject.sh "pull request title" "$PR_TITLE"
 
   web-changes:
     runs-on: ubuntu-latest

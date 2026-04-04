@@ -19,6 +19,9 @@ Small repository helper scripts for local development and maintenance.
 - [`update-crawler-mmdb.sh`](./update-crawler-mmdb.sh)
   Downloads or refreshes the local crawler MMDB files under `.dev-data/mmdb/` from the documented upstream source.
 
+- [`validate-semantic-subject.sh`](./validate-semantic-subject.sh)
+  Validates semantic commit subjects and PR titles for repository workflow checks and the optional local git hook.
+
 ## Notes
 
 - These scripts are developer and operator helpers, not shared runtime logic.

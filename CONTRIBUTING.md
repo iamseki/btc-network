@@ -145,13 +145,18 @@ Branch names:
 
 Commit subjects:
 
-- use semantic subjects such as `feat: ...`, `fix: ...`, `docs: ...`, `chore: ...`, `refactor: ...`, `test: ...`, `ci: ...`, or `build: ...`
-- use a BNDD scope when helpful, for example `docs(BNDD-0005): add implementation plan`
+- must match `<type>(<scope>): <summary>` or `<type>: <summary>`
+- allowed types are `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, and `build`
+- prefer a scope naming the touched crate, app, doc area, or BNDD, for example `feat(crawler): simplify startup recovery` or `docs(BNDD-0005): add implementation plan`
+- CI does not block commit subjects today
+- if you want local enforcement without external tooling, run `make setup-git-hooks` once in this clone to enable the repo-local `commit-msg` hook
 
 Pull request titles:
 
 - must match `<type>(<scope>): <summary>` or `<type>: <summary>`
 - allowed types are `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, and `build`
+- scope is recommended for the same monorepo clarity as commit subjects
+- CI validates PR titles with the same pattern
 - example: `docs(BNDD-0005): add implementation plan`
 
 Pull request body:

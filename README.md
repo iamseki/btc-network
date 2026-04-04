@@ -46,6 +46,12 @@ Run the full test suite:
 make test
 ```
 
+List the repository helper commands:
+
+```bash
+make help
+```
+
 Useful focused commands:
 
 ```bash
@@ -54,6 +60,14 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 npm run test --prefix apps/web
 npm run build --prefix apps/web
 ```
+
+Optional local git hook setup:
+
+```bash
+make setup-git-hooks
+```
+
+This repository includes a repo-local `commit-msg` hook under `.githooks/` that validates semantic commit subjects such as `feat(crawler): ...` or `docs: ...`. The hook is opt-in per clone. `make setup-git-hooks` configures `core.hooksPath=.githooks` for the current clone. CI enforces pull request titles with the same semantic pattern, while commit-subject validation remains a local convention unless you enable the hook.
 
 ## Running
 

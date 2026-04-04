@@ -77,9 +77,12 @@ Run the smallest relevant scope while working. Run the broader gate before finis
 
 - For changes guided by a BNDD, prefer a branch name like `feat/BNDD-0005-short-slug`, `improve/BNDD-0005-short-slug`, or `docs/BNDD-0005-short-slug`
 - If the preferred BNDD branch name already exists, especially after an earlier merge, create a new suffixed branch such as `improve/BNDD-0005-agent-routing` instead of reusing the old name
-- Prefer semantic commit subjects such as `feat(BNDD-0005): ...`, `fix(BNDD-0005): ...`, `docs(BNDD-0005): ...`, or `chore(BNDD-0005): ...`
-- Prefer PR titles in the same style as semantic commit subjects: `<type>(<scope>): <summary>` or `<type>: <summary>`
+- Use semantic commit subjects in the form `<type>(<scope>): <summary>` or `<type>: <summary>`
+- In this monorepo, prefer adding a scope that names the touched crate, app, doc area, or BNDD, for example `feat(crawler): ...` or `docs(BNDD-0005): ...`
+- Use PR titles in the same semantic style as commit subjects
 - Allowed PR title types are `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, and `build`
+- CI validates PR titles against that semantic pattern; scope is recommended but optional
+- Developers may opt into the repo-local `commit-msg` hook with `make setup-git-hooks` to validate commit subjects locally
 - If an `implementation-plan.md` exists, keep its progress tracker aligned with the active branch or PR when the work spans multiple commits or PRs
 - When work is being done on a dedicated implementation branch, open the corresponding PR or update the existing PR before treating the task as complete unless the user explicitly says not to
 - When opening a PR, use a short body with `## Summary`, `## Changes`, and `## Why` only when the reason is not already obvious from the summary and changes

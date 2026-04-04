@@ -87,7 +87,7 @@ make infra-clickhouse-down
 To inspect logs:
 
 ```bash
-make infra-clickhouse-logs
+docker compose -f docker-compose.yml logs -f clickhouse
 ```
 
 ## Apply Migrations

@@ -1,3 +1,5 @@
+Title format: `type(scope): summary` or `type: summary`. Scope is recommended but optional.
+
 ## Summary
 
 Briefly describe the outcome of the PR.
