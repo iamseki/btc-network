@@ -27,6 +27,16 @@ pub(crate) struct WorkerContext {
     pub(crate) enrichment_provider: Arc<dyn IpEnrichmentProvider>,
 }
 
+/// Runs one crawler worker loop.
+///
+/// A worker owns the per-endpoint processing path:
+/// dequeue one pending endpoint, mark it in flight, run the node processor,
+/// enqueue the persisted observation for the writer task, merge discovered
+/// nodes back into shared state, and queue any newly discovered follow-up work.
+///
+/// Workers do not write directly to the repository and they do not decide when
+/// the crawl should stop overall. Those responsibilities stay with the writer
+/// and lifecycle/coordinator tasks.
 pub(crate) async fn run_worker(context: WorkerContext) {
     let WorkerContext {
         config,

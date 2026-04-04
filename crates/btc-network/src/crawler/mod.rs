@@ -346,6 +346,11 @@ impl Crawler {
         let (observation_tx, observation_rx) =
             mpsc::channel::<PersistedNodeObservation>(writer_channel_capacity(config));
 
+        // Split long-running crawler responsibilities into focused tasks:
+        // workers visit nodes and enqueue observations, the writer persists
+        // observation batches, the lifecycle task flips `stop` on policy
+        // conditions, the checkpoint emitter persists background progress, and
+        // the signal task translates process signals into graceful shutdown.
         let writer_handle = AbortOnDropHandle::new(tokio::spawn(run_observation_writer(
             Arc::clone(&self.repository),
             Arc::clone(&stats),
@@ -736,6 +741,13 @@ async fn write_checkpoint(
     Ok(())
 }
 
+/// Persists node observations produced by workers.
+///
+/// Workers never write directly to the repository. They send one
+/// `PersistedNodeObservation` at a time into the bounded channel, and this task
+/// owns the durable write boundary by draining that channel into small batches.
+/// If the repository write fails, it requests global shutdown through `stop`
+/// and returns the repository error to the coordinator.
 async fn run_observation_writer(
     repository: Arc<dyn CrawlerRepository>,
     stats: Arc<CrawlerStats>,
@@ -746,11 +758,15 @@ async fn run_observation_writer(
     let batch_size = batch_size.max(1);
 
     loop {
+        // Wait for the first item so an idle writer does not spin or emit empty
+        // writes.
         let Some(first) = observation_rx.recv().await else {
             return Ok(());
         };
 
         let mut batch = vec![first];
+        // After the first blocking receive, drain whatever is already queued so
+        // adapters can amortize persistence without adding extra delay.
         while batch.len() < batch_size {
             match observation_rx.try_recv() {
                 Ok(observation) => batch.push(observation),
@@ -770,6 +786,11 @@ async fn run_observation_writer(
     }
 }
 
+/// Translates process signals into the crawler's shared shutdown flag.
+///
+/// This keeps OS signal handling out of the lifecycle policy loop. Runtime
+/// limits, persistence failures, and operator interrupts all converge on the
+/// same `stop` flag so workers and background tasks follow one shutdown path.
 async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
     #[cfg(unix)]
     {
@@ -783,6 +804,9 @@ async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
             }
         };
 
+        // Treat Ctrl+C/SIGINT and SIGTERM the same way: request graceful
+        // shutdown and let the coordinator drain tasks and write terminal
+        // checkpoints.
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
                 info!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");

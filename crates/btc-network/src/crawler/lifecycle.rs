@@ -24,6 +24,13 @@ pub(crate) struct CheckpointEmitterContext {
     pub(crate) tick_every: Duration,
 }
 
+/// Periodically evaluates stop conditions that are independent of any single
+/// worker.
+///
+/// This task is the crawler's coordinator-side policy loop. It does not visit
+/// nodes or persist data. Instead it watches shared state and flips the shared
+/// `stop` flag when the crawl has exceeded its maximum runtime or has gone idle
+/// for too long without discovering a new node.
 pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
     stop: Arc<AtomicBool>,
@@ -60,6 +67,13 @@ pub(crate) async fn run_lifecycle(
     }
 }
 
+/// Periodically snapshots crawler progress and durable resume state.
+///
+/// This task is separate from the final phase-transition checkpoints written by
+/// the coordinator in `mod.rs`. Its job is to emit background progress
+/// checkpoints while the crawl is still active, using the current phase, stats,
+/// and resumable in-memory state. If checkpoint persistence fails, it requests
+/// global shutdown by setting `stop` and returns the repository error.
 pub(crate) async fn run_checkpoint_emitter(
     context: CheckpointEmitterContext,
 ) -> Result<(), CrawlerRepositoryError> {
