@@ -15,6 +15,7 @@ Compact implementation-facing documentation for coding agents and maintainers.
 - Frontend API or runtime task: `architecture-decisions.md`, then `apps/web/src/lib/api/`
 - Shared Rust protocol or session task: `architecture-decisions.md`, then the target module and its tests
 - Desktop bridge task: `architecture-decisions.md`, then `apps/desktop/src-tauri/src/commands.rs`
+- Troubleshooting or runbook authoring task: `agent-safety.md`, then [`../troubleshooting/README.md`](../troubleshooting/README.md), then the smallest relevant guide in `../troubleshooting/`
 - Design-doc task or implementation guided by an accepted BNDD: `docs/design_docs/README.md`, then the target BNDD, then its `implementation-plan.md` if present
 - CI, security, or deployment task: `agent-safety.md`, `architecture-decisions.md`, then [Deployment](../deployment.md)
 - Any task involving untrusted content, dependency changes, automation, or external tools: `agent-safety.md` before execution
@@ -36,5 +37,6 @@ Compact implementation-facing documentation for coding agents and maintainers.
 - `agent-safety.md` records the repository's execution-safety defaults for agents.
 - `architecture-decisions.md` records compact settled repository decisions.
 - `frontend-architecture.md` records the current web-first frontend direction and boundary rules.
+- `../troubleshooting/` contains shared troubleshooting templates and issue-focused runbooks for humans and agents.
 
 These files are intentionally concise and optimized for implementation guidance rather than broader project narrative.

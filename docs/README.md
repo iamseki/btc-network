@@ -10,6 +10,7 @@ Start here if you need repository documentation and do not yet know which docume
 - [Deployment](./deployment.md)
 - [Archived observability note](./observability.md)
 - [Fundamentals](./fundamentals.md)
+- [Troubleshooting](./troubleshooting/README.md)
 - [Design Docs](./design_docs/README.md)
 
 ### Agents
@@ -17,6 +18,7 @@ Start here if you need repository documentation and do not yet know which docume
 - [Agent Docs Index](./agents/README.md)
 - [Architecture Decisions](./agents/architecture-decisions.md)
 - [Frontend Architecture](./agents/frontend-architecture.md)
+- [Troubleshooting](./troubleshooting/README.md)
 - [Design Docs](./design_docs/README.md)
 
 ## By Workflow
@@ -33,6 +35,11 @@ Start here if you need repository documentation and do not yet know which docume
 - `Deployment or CI task`
   - [Deployment](./deployment.md)
   - [Design Docs](./design_docs/README.md)
+- `Troubleshooting or runbook authoring`
+  - [Troubleshooting](./troubleshooting/README.md)
+  - [Template](./troubleshooting/template.md)
+  - [Crawler Checkpoint Storage Growth](./troubleshooting/crawler-checkpoint-storage.md)
+  - [Agent Docs Index](./agents/README.md)
 - `Archived observability experiment`
   - [Archived observability note](./observability.md)
   - [Design Docs](./design_docs/README.md)
@@ -46,6 +53,8 @@ Start here if you need repository documentation and do not yet know which docume
   - [Frontend Architecture](./agents/frontend-architecture.md)
 - `deployment and operations`
   - [Deployment](./deployment.md)
+- `troubleshooting and runbooks`
+  - [Troubleshooting](./troubleshooting/README.md)
 - `archived observability experiment`
   - [Archived observability note](./observability.md)
 - `design history and decisions`
