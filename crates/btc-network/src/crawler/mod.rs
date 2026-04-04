@@ -9,7 +9,6 @@ mod worker;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex as StdMutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
@@ -83,7 +82,8 @@ impl Crawler {
     /// If the repository exposes a durable active checkpoint, startup will try
     /// to recover that run before beginning a fresh crawl. Recovery assumes one
     /// crawler coordinator process writes to a given persistence database at a
-    /// time; overlapping crawler writers are treated as a deployment bug.
+    /// time. That single-active-run constraint is enforced outside this crawler
+    /// implementation.
     pub async fn run(&self) -> Result<CrawlSummary, Box<dyn Error>> {
         let seed_nodes = resolve_seed_nodes()
             .into_iter()
@@ -130,16 +130,8 @@ impl Crawler {
             rand::random::<u64>()
         ));
 
-        let active_run_guard = claim_active_run(active_run_slot(), run_id.clone())?;
-        self.run_active_request(
-            run_id,
-            request,
-            processor,
-            started_at,
-            started_at_utc,
-            active_run_guard,
-        )
-        .await
+        self.run_active_request(run_id, request, processor, started_at, started_at_utc)
+            .await
     }
 
     async fn try_recover_latest_run(
@@ -160,7 +152,6 @@ impl Crawler {
         };
 
         let run_id = checkpoint.run_id.clone();
-        let active_run_guard = claim_active_run(active_run_slot(), run_id.clone())?;
         let started_at = recovered_started_at(checkpoint.started_at);
 
         info!(
@@ -170,14 +161,7 @@ impl Crawler {
             "[crawler] recovering active run from durable checkpoint"
         );
 
-        self.run_recovered_request(
-            checkpoint,
-            state,
-            processor,
-            started_at,
-            active_run_guard,
-            config,
-        )
+        self.run_recovered_request(checkpoint, state, processor, started_at, config)
         .await
         .map(Some)
     }
@@ -215,7 +199,6 @@ impl Crawler {
         processor: Arc<dyn NodeProcessor>,
         started_at: Instant,
         started_at_utc: DateTime<Utc>,
-        _active_run_guard: ActiveRunGuard,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stats = Arc::new(CrawlerStats::default());
@@ -264,7 +247,6 @@ impl Crawler {
             processor,
             started_at,
             started_at_utc,
-            _active_run_guard,
             state,
             stats,
             checkpoint_sequence,
@@ -280,7 +262,6 @@ impl Crawler {
         restored_state: CrawlState,
         processor: Arc<dyn NodeProcessor>,
         started_at: Instant,
-        _active_run_guard: ActiveRunGuard,
         config: CrawlerConfig,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let run_id = checkpoint.run_id.clone();
@@ -323,7 +304,6 @@ impl Crawler {
             processor,
             started_at,
             started_at_utc,
-            _active_run_guard,
             state,
             stats,
             checkpoint_sequence,
@@ -341,7 +321,6 @@ impl Crawler {
         processor: Arc<dyn NodeProcessor>,
         started_at: Instant,
         started_at_utc: DateTime<Utc>,
-        _active_run_guard: ActiveRunGuard,
         state: Arc<Mutex<CrawlState>>,
         stats: Arc<CrawlerStats>,
         checkpoint_sequence: Arc<AtomicU64>,
@@ -599,49 +578,6 @@ fn recovered_started_at(started_at_utc: DateTime<Utc>) -> Instant {
         .to_std()
         .unwrap_or(Duration::ZERO);
     Instant::now() - elapsed
-}
-
-fn active_run_slot() -> &'static StdMutex<Option<CrawlRunId>> {
-    static ACTIVE_RUN: OnceLock<StdMutex<Option<CrawlRunId>>> = OnceLock::new();
-    ACTIVE_RUN.get_or_init(|| StdMutex::new(None))
-}
-
-#[derive(Debug)]
-struct ActiveRunGuard {
-    active_run: &'static StdMutex<Option<CrawlRunId>>,
-    run_id: CrawlRunId,
-}
-
-impl Drop for ActiveRunGuard {
-    fn drop(&mut self) {
-        release_active_run(self.active_run, &self.run_id);
-    }
-}
-
-fn claim_active_run(
-    active_run: &'static StdMutex<Option<CrawlRunId>>,
-    run_id: CrawlRunId,
-) -> Result<ActiveRunGuard, Box<dyn Error>> {
-    let mut guard = active_run.lock().map_err(|_| "active run slot poisoned")?;
-    if let Some(existing) = guard.as_ref() {
-        return Err(format!("crawl run {} is already active", existing.as_str()).into());
-    }
-
-    *guard = Some(run_id.clone());
-    Ok(ActiveRunGuard { active_run, run_id })
-}
-
-fn release_active_run(active_run: &'static StdMutex<Option<CrawlRunId>>, run_id: &CrawlRunId) {
-    let mut guard = active_run.lock().expect("active run slot lock");
-    if guard.as_ref() == Some(run_id) {
-        *guard = None;
-    }
-}
-
-#[cfg(test)]
-fn clear_active_run_slot(active_run: &'static StdMutex<Option<CrawlRunId>>) {
-    let mut guard = active_run.lock().expect("active run slot lock");
-    *guard = None;
 }
 
 fn record_failure(failure_reason: &mut Option<String>, reason: String) {
@@ -938,69 +874,11 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
 
-    fn active_run_test_lock() -> &'static Mutex<()> {
-        static ACTIVE_RUN_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        ACTIVE_RUN_TEST_LOCK.get_or_init(|| Mutex::new(()))
-    }
-
     #[test]
     fn worker_count_is_at_least_one() {
         assert_eq!(effective_worker_count(0), 1);
         assert_eq!(effective_worker_count(1), 1);
         assert_eq!(effective_worker_count(8), 8);
-    }
-
-    #[tokio::test]
-    async fn active_run_claim_rejects_second_run() {
-        let _test_guard = active_run_test_lock().lock().await;
-        static ACTIVE_RUN: StdMutex<Option<CrawlRunId>> = StdMutex::new(None);
-        clear_active_run_slot(&ACTIVE_RUN);
-
-        let first_guard =
-            claim_active_run(&ACTIVE_RUN, CrawlRunId::new("run-1")).expect("first claim");
-        let err = claim_active_run(&ACTIVE_RUN, CrawlRunId::new("run-2"))
-            .expect_err("second claim should fail");
-
-        assert!(err.to_string().contains("already active"));
-
-        drop(first_guard);
-        let third_guard =
-            claim_active_run(&ACTIVE_RUN, CrawlRunId::new("run-3")).expect("claim after release");
-        drop(third_guard);
-    }
-
-    #[tokio::test]
-    async fn active_run_slot_is_shared_process_wide() {
-        let _test_guard = active_run_test_lock().lock().await;
-        clear_active_run_slot(active_run_slot());
-        let first_guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-1"))
-            .expect("claim shared slot");
-
-        let err = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
-            .expect_err("second shared claim should fail");
-
-        assert!(err.to_string().contains("already active"));
-        drop(first_guard);
-    }
-
-    #[tokio::test]
-    async fn active_run_guard_releases_slot_when_future_is_cancelled() {
-        let _test_guard = active_run_test_lock().lock().await;
-        clear_active_run_slot(active_run_slot());
-
-        let handle = tokio::spawn(async {
-            let _guard =
-                claim_active_run(active_run_slot(), CrawlRunId::new("run-1")).expect("claim slot");
-            pending::<()>().await;
-        });
-
-        tokio::task::yield_now().await;
-        handle.abort();
-        let _ = handle.await;
-
-        let guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
-            .expect("cancellation should release slot");
-        drop(guard);
     }
 
     #[derive(Clone)]
@@ -1407,9 +1285,6 @@ mod tests {
 
     #[tokio::test]
     async fn run_with_request_returns_error_when_periodic_checkpointing_fails() {
-        let _test_guard = active_run_test_lock().lock().await;
-        clear_active_run_slot(active_run_slot());
-
         let repository = Arc::new(FlakyCheckpointRepository::new(vec![
             Ok(()),
             Ok(()),
@@ -1454,10 +1329,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancelling_run_aborts_periodic_checkpoint_task_before_slot_reopens() {
-        let _test_guard = active_run_test_lock().lock().await;
-        clear_active_run_slot(active_run_slot());
-
+    async fn cancelling_run_aborts_periodic_checkpoint_task() {
         let repository = Arc::new(BlockingPeriodicCheckpointRepository::new());
         let crawler = Arc::new(Crawler::with_adapters(
             CrawlerConfig {
@@ -1511,10 +1383,6 @@ mod tests {
         })
         .await
         .expect("periodic checkpoint task should be aborted on cancellation");
-
-        let guard = claim_active_run(active_run_slot(), CrawlRunId::new("run-2"))
-            .expect("slot should reopen only after cancellation cleanup");
-        drop(guard);
     }
 
     #[tokio::test]
@@ -1544,9 +1412,6 @@ mod tests {
 
     #[tokio::test]
     async fn startup_recovery_resumes_latest_active_run_from_checkpoint() {
-        let _test_guard = active_run_test_lock().lock().await;
-        clear_active_run_slot(active_run_slot());
-
         let resumed_node = public_endpoint(21);
         let mut restored_state = CrawlState::new();
         restored_state.seen_nodes.insert(resumed_node.clone());
@@ -1629,9 +1494,6 @@ mod tests {
 
     #[tokio::test]
     async fn startup_recovery_marks_invalid_checkpoint_failed_before_new_run() {
-        let _test_guard = active_run_test_lock().lock().await;
-        clear_active_run_slot(active_run_slot());
-
         let invalid_checkpoint = CrawlRunCheckpoint {
             run_id: CrawlRunId::new("run-recover-bad"),
             phase: CrawlPhase::Crawling,

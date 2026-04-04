@@ -29,7 +29,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `unique_nodes` counts tracked endpoints, not persisted observations; it can be much larger than completed node visits
 - `scheduled_tasks` is the count of attempted node visits dequeued by workers
 - `handshake_status` in persisted observations is a historical field name; failed rows can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
-- crawler startup recovery assumes one coordinator process writes to a given persistence database at a time; overlapping crawler writers are a deployment bug, not a supported mode
+- crawler startup recovery assumes one coordinator process writes to a given persistence database at a time; that single-active-run constraint is enforced outside the crawler implementation, and overlapping writers are a deployment bug
 - under that single-writer assumption, startup recovery may treat the newest checkpoint row overall as the only candidate active run
 
 ## Frontend Architecture

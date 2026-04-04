@@ -73,7 +73,8 @@ pub trait CrawlerRepository: Send + Sync {
     /// crawler run.
     ///
     /// This repository currently assumes one crawler coordinator process writes
-    /// to a given persistence database at a time. Under that invariant, the
+    /// to a given persistence database at a time, and that constraint is
+    /// enforced outside the crawler implementation. Under that invariant, the
     /// newest checkpoint row overall is also the only candidate for startup
     /// recovery.
     fn get_latest_active_run_checkpoint<'a>(
