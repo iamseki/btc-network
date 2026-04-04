@@ -1,8 +1,10 @@
 services:
   clickhouse:
-    image: clickhouse/clickhouse-server:25.3
-    container_name: btc-network-crawler-clickhouse
+    image: clickhouse/clickhouse-server:26.3
+    container_name: btc-network-clickhouse
     restart: unless-stopped
+    cpus: 2.0
+    mem_limit: 8g
     environment:
       CLICKHOUSE_DB: btc_network
       CLICKHOUSE_USER: btc_network_dev
@@ -17,4 +19,4 @@ services:
       retries: 12
       start_period: 10s
     volumes:
-      - ../../.dev-data/clickhouse:/var/lib/clickhouse
+      - ./.dev-data/clickhouse:/var/lib/clickhouse

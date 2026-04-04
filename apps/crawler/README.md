@@ -2,14 +2,14 @@
 
 The preferred local development path for the crawler uses:
 
-- Docker Compose for ClickHouse
+- Docker Compose for the shared local ClickHouse used by the crawler and API
 - host-managed MMDB files under `.dev-data/mmdb/`
 - explicit migrations before the crawler starts
 
 ## Typical Local Flow
 
 1. Run `make crawler-mmdb-update`.
-2. Run `make crawler-dev-up`.
+2. Run `make infra-clickhouse-up`.
 3. Run `make clickhouse-migrate`.
 4. Run `make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb --max-tracked-nodes 500000 --connect-max-attempts 10 --connect-retry-backoff-ms 250 --connect-timeout-secs 30 --io-timeout-secs 20"`.
 
@@ -66,10 +66,10 @@ The local development copies are disposable. The source of truth stays upstream,
 From the repository root:
 
 ```bash
-make crawler-dev-up
+make infra-clickhouse-up
 ```
 
-This starts the local ClickHouse service defined in [`docker-compose.yml`](./docker-compose.yml) and exposes it on `http://localhost:8123`.
+This starts the shared local ClickHouse service defined in [`docker-compose.yml`](../../docker-compose.yml) and exposes it on `http://localhost:8123`.
 The command waits for the container healthcheck before it returns.
 
 The local development container is configured with these credentials:
@@ -81,13 +81,13 @@ The local development container is configured with these credentials:
 To stop it:
 
 ```bash
-make crawler-dev-down
+make infra-clickhouse-down
 ```
 
 To inspect logs:
 
 ```bash
-make crawler-dev-logs
+make infra-clickhouse-logs
 ```
 
 ## Apply Migrations
@@ -119,8 +119,8 @@ make clickhouse-migrate ARGS="--clickhouse-user another_user --clickhouse-passwo
 If you already initialized `.dev-data/clickhouse/` with older local settings and keep seeing authentication failures, reset the local dev data once and start again:
 
 ```bash
-make crawler-dev-reset
-make crawler-dev-up
+make infra-clickhouse-reset
+make infra-clickhouse-up
 make clickhouse-migrate
 ```
 
@@ -132,7 +132,7 @@ With local MMDB files in place:
 make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"
 ```
 
-`make crawler` also injects the same local ClickHouse development defaults automatically, so it matches `make crawler-dev-up` and `make clickhouse-migrate` out of the box.
+`make crawler` also injects the same local ClickHouse development defaults automatically, so it matches `make infra-clickhouse-up` and `make clickhouse-migrate` out of the box.
 
 You can also provide the same paths through environment variables:
 
@@ -383,7 +383,7 @@ For this repository, I recommend:
 ## Typical Local Flow
 
 1. Run `make crawler-mmdb-update`.
-2. Run `make crawler-dev-up`.
+2. Run `make infra-clickhouse-up`.
 3. Run `make clickhouse-migrate`.
 4. Run `make crawler` with MMDB paths.
 

@@ -36,12 +36,14 @@ Non-responsibilities:
 
 - `make api`
 - `make api-test`
+- `make infra-clickhouse-up`
 - `cargo run -p btc-network-api`
 - `cargo test -p btc-network-api`
 
 ## Notes
 
 - this app is intentionally read-only in the current slice
+- local development uses the shared ClickHouse service defined in the repository root `docker-compose.yml`
 - API errors should stay generic on the wire and keep adapter-specific detail in logs only
 - the web and desktop analytics UI should use this app through `VITE_API_BASE_URL`, not through Tauri commands or direct ClickHouse access
 - CORS is now allowlist-based rather than wildcard-based; set `BTC_NETWORK_API_ALLOWED_ORIGINS` explicitly when deploying to a different frontend origin

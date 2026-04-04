@@ -27,28 +27,28 @@ clickhouse-migrate:
 	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)" \
 	cargo run -p btc-network-clickhouse-migrate -- $(ARGS)
 
-## Start local ClickHouse for crawler development
-crawler-dev-up:
+## Start local ClickHouse for shared infrastructure development
+infra-clickhouse-up:
 	@mkdir -p .dev-data/clickhouse
-	@docker compose -f apps/crawler/docker-compose.yml up -d --wait
+	@docker compose -f docker-compose.yml up -d --wait
 
 ## Download or refresh local MMDB files for crawler development
 crawler-mmdb-update:
 	@bash scripts/update-crawler-mmdb.sh
 
-## Stop local ClickHouse for crawler development
-crawler-dev-down:
-	@docker compose -f apps/crawler/docker-compose.yml down
+## Stop local ClickHouse for shared infrastructure development
+infra-clickhouse-down:
+	@docker compose -f docker-compose.yml down
 
-## Reset local ClickHouse data for crawler development
-crawler-dev-reset:
-	@docker compose -f apps/crawler/docker-compose.yml down
+## Reset local ClickHouse data for shared infrastructure development
+infra-clickhouse-reset:
+	@docker compose -f docker-compose.yml down
 	@mkdir -p .dev-data/clickhouse
 	@docker run --rm -v "$(CURDIR)/.dev-data/clickhouse:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
 
-## Tail local ClickHouse logs for crawler development
-crawler-dev-logs:
-	@docker compose -f apps/crawler/docker-compose.yml logs -f clickhouse
+## Tail local ClickHouse logs for shared infrastructure development
+infra-clickhouse-logs:
+	@docker compose -f docker-compose.yml logs -f clickhouse
 
 ## Run the listener binary
 listener:
@@ -178,11 +178,11 @@ help:
 	@echo "  make crawler ARGS=\"--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb\""
 	@echo "  make clickhouse-migrate"
 	@echo "    uses local dev ClickHouse defaults: url=$(CRAWLER_CLICKHOUSE_LOCAL_URL) db=$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE) user=$(CRAWLER_CLICKHOUSE_LOCAL_USER)"
-	@echo "  make crawler-dev-up"
+	@echo "  make infra-clickhouse-up"
 	@echo "  make crawler-mmdb-update"
-	@echo "  make crawler-dev-down"
-	@echo "  make crawler-dev-reset"
-	@echo "  make crawler-dev-logs"
+	@echo "  make infra-clickhouse-down"
+	@echo "  make infra-clickhouse-reset"
+	@echo "  make infra-clickhouse-logs"
 	@echo "  make crawler-debug"
 	@echo "    example: make crawler-debug TIMEOUT_MINUTES=5 MAX_CONCURRENCY=1000 IDLE_TIMEOUT_MINUTES=5 OUT=artifacts/crawler-timing-run-1"
 	@echo "  make listener"
