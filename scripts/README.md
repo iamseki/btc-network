@@ -11,7 +11,10 @@ Small repository helper scripts for local development and maintenance.
   Summarizes crawler timing artifacts produced by `crawler_timing.sh`.
 
 - [`new-clickhouse-migration.sh`](./new-clickhouse-migration.sh)
-  Creates a new timestamped ClickHouse migration file for `btc-network-clickhouse`.
+  Creates a new timestamped ClickHouse migration file for the preserved legacy `btc-network-clickhouse` adapter.
+
+- [`new-postgres-migration.sh`](./new-postgres-migration.sh)
+  Creates a new timestamped PostgreSQL migration file for `btc-network-postgres`.
 
 - [`test_summary.sh`](./test_summary.sh)
   Runs the repository test summary flow used by `make test`.

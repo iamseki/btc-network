@@ -1,8 +1,12 @@
 # btc-network-clickhouse
 
-ClickHouse storage adapter for BNDD-0005.
+Legacy ClickHouse storage adapter preserved after `BNDD-0007`.
 
-This crate owns:
+This crate is no longer the default crawler persistence path.
+
+Use it only when maintaining or evaluating the preserved ClickHouse implementation for future reuse.
+
+This crate still owns:
 
 - ClickHouse connection configuration
 - forward-only SQL migrations

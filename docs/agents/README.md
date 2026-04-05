@@ -11,7 +11,7 @@ Compact implementation-facing documentation for coding agents and maintainers.
 ## Task Routing
 
 - Frontend shell or page task: `frontend-architecture.md`, then the specific page or component
-- Analytics UI refinement: `frontend-architecture.md`; read [BNDD-0006](../design_docs/BNDD-0006/BNDD-0006.md) only when the product shape or deployment behavior changes
+- Analytics UI refinement: `frontend-architecture.md`; read [BNDD-0006](../design_docs/BNDD-0006/BNDD-0006.md) and [BNDD-0007](../design_docs/BNDD-0007/BNDD-0007.md) only when the product shape, deployment behavior, or default storage adapter changes
 - Frontend API or runtime task: `architecture-decisions.md`, then `apps/web/src/lib/api/`
 - Shared Rust protocol or session task: `architecture-decisions.md`, then the target module and its tests
 - Desktop bridge task: `architecture-decisions.md`, then `apps/desktop/src-tauri/src/commands.rs`

@@ -4,9 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use btc_network::crawler::{Crawler, CrawlerConfig, IpEnrichmentProvider};
-use btc_network_clickhouse::{ClickHouseConnectionConfig, ClickHouseCrawlerRepository};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_observability::init_tracing;
+use btc_network_postgres::{PostgresConnectionConfig, PostgresCrawlerRepository};
 use clap::{Args, Parser};
 use tracing::{info, warn};
 
@@ -20,7 +20,7 @@ struct Cli {
 /// Runtime knobs for a crawler run.
 ///
 /// These options control concurrency, in-memory frontier limits, stop conditions,
-/// and per-node network behavior. ClickHouse and MMDB settings are flattened in
+/// and per-node network behavior. PostgreSQL and MMDB settings are flattened in
 /// below so the runnable app stays a thin adapter over the shared crawler config.
 #[derive(Args, Debug)]
 struct CrawlArgs {
@@ -75,33 +75,28 @@ struct CrawlArgs {
     verbose: bool,
 
     #[command(flatten)]
-    clickhouse: ClickHouseArgs,
+    postgres: PostgresArgs,
 
     #[command(flatten)]
     mmdb: MmdbArgs,
 }
 
 #[derive(Args, Debug, Clone)]
-struct ClickHouseArgs {
+struct PostgresArgs {
     #[arg(
         long,
-        env = "BTC_NETWORK_CLICKHOUSE_URL",
-        default_value = "http://localhost:8123"
+        env = "BTC_NETWORK_POSTGRES_URL",
+        default_value = "postgresql://btc_network_dev:btc_network_dev@localhost:5432/btc_network"
     )]
-    clickhouse_url: String,
+    postgres_url: String,
 
     #[arg(
         long,
-        env = "BTC_NETWORK_CLICKHOUSE_DATABASE",
-        default_value = "btc_network"
+        env = "BTC_NETWORK_POSTGRES_MAX_CONNECTIONS",
+        default_value_t = 16,
+        value_parser = parse_positive_usize
     )]
-    clickhouse_database: String,
-
-    #[arg(long, env = "BTC_NETWORK_CLICKHOUSE_USER")]
-    clickhouse_user: Option<String>,
-
-    #[arg(long, env = "BTC_NETWORK_CLICKHOUSE_PASSWORD", hide_env_values = true)]
-    clickhouse_password: Option<String>,
+    postgres_max_connections: usize,
 }
 
 /// Optional local MMDB inputs for crawler IP enrichment.
@@ -158,8 +153,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
     let config = build_crawler_config(&args);
-    let clickhouse_config = build_clickhouse_config(&args.clickhouse);
-    let repository = Arc::new(ClickHouseCrawlerRepository::new(&clickhouse_config));
+    let postgres_config = build_postgres_config(&args.postgres);
+    let repository = Arc::new(PostgresCrawlerRepository::new(&postgres_config)?);
     let enrichment_provider = build_enrichment_provider(&args.mmdb)?;
     let crawler = Crawler::with_adapters(config, repository, enrichment_provider);
     let summary = crawler.run().await?;
@@ -192,21 +187,9 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
     }
 }
 
-fn build_clickhouse_config(args: &ClickHouseArgs) -> ClickHouseConnectionConfig {
-    let mut config = ClickHouseConnectionConfig::new(
-        args.clickhouse_url.clone(),
-        args.clickhouse_database.clone(),
-    );
-
-    if let Some(user) = &args.clickhouse_user {
-        config = config.with_user(user.clone());
-    }
-
-    if let Some(password) = &args.clickhouse_password {
-        config = config.with_password(password.clone());
-    }
-
-    config
+fn build_postgres_config(args: &PostgresArgs) -> PostgresConnectionConfig {
+    PostgresConnectionConfig::new(args.postgres_url.clone())
+        .with_max_connections(args.postgres_max_connections)
 }
 
 fn build_enrichment_provider(
@@ -244,11 +227,11 @@ mod tests {
             io_timeout_secs: 10,
             shutdown_grace_period_secs: 20,
             verbose: false,
-            clickhouse: ClickHouseArgs {
-                clickhouse_url: "http://localhost:8123".to_string(),
-                clickhouse_database: "btc_network".to_string(),
-                clickhouse_user: None,
-                clickhouse_password: None,
+            postgres: PostgresArgs {
+                postgres_url:
+                    "postgresql://btc_network_dev:btc_network_dev@localhost:5432/btc_network"
+                        .to_string(),
+                postgres_max_connections: 16,
             },
             mmdb: MmdbArgs {
                 mmdb_asn_path: None,
@@ -265,18 +248,20 @@ mod tests {
     }
 
     #[test]
-    fn clickhouse_config_applies_optional_auth() {
-        let args = ClickHouseArgs {
-            clickhouse_url: "http://clickhouse.internal:8123".to_string(),
-            clickhouse_database: "btc_network".to_string(),
-            clickhouse_user: Some("crawler_writer".to_string()),
-            clickhouse_password: Some("secret".to_string()),
+    fn postgres_config_applies_connection_pool_override() {
+        let args = PostgresArgs {
+            postgres_url: "postgresql://crawler_writer:secret@postgres.internal:5432/btc_network"
+                .to_string(),
+            postgres_max_connections: 32,
         };
 
-        let config = build_clickhouse_config(&args);
+        let config = build_postgres_config(&args);
 
-        assert_eq!(config.url(), "http://clickhouse.internal:8123");
-        assert_eq!(config.database(), "btc_network");
+        assert_eq!(
+            config.url(),
+            "postgresql://crawler_writer:secret@postgres.internal:5432/btc_network"
+        );
+        assert_eq!(config.max_connections(), 32);
     }
 
     #[test]

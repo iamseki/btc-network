@@ -1,5 +1,11 @@
 # Troubleshooting: `crawler_run_checkpoints` Storage Growth
 
+Legacy note:
+
+- this runbook is for the preserved ClickHouse adapter only
+- PostgreSQL is now the default backend
+- keep this guide for future reevaluation or legacy maintenance work
+
 Use this guide when `btc_network.crawler_run_checkpoints` looks too large for its row count.
 
 The main question is simple: is the space coming from table mechanics, or from one payload repeated many times? In the observed case, the answer is the repeated `resume_state` snapshot.

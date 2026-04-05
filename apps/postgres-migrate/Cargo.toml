@@ -1,12 +1,10 @@
 [package]
-name = "btc-network-crawler"
+name = "btc-network-postgres-migrate"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 
 [dependencies]
-btc-network = { path = "../../crates/btc-network" }
-btc-network-mmdb = { path = "../../crates/btc-network-mmdb" }
 btc-network-observability = { path = "../../crates/btc-network-observability" }
 btc-network-postgres = { path = "../../crates/btc-network-postgres" }
 clap = { version = "4", features = ["derive", "env"] }
