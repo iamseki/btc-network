@@ -3,7 +3,7 @@ use btc_network::crawler::{
     CrawlRunListItem, CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError,
     PersistedNodeObservation, RepositoryFuture,
 };
-use sqlx::PgPool;
+use sqlx_postgres::PgPool;
 
 use crate::config::{PostgresConfigError, PostgresConnectionConfig};
 
@@ -104,7 +104,7 @@ impl CrawlerAnalyticsReader for PostgresCrawlerRepository {
 
 pub(super) fn map_postgres_err(
     context: &'static str,
-    source: sqlx::Error,
+    source: sqlx_core::Error,
 ) -> CrawlerRepositoryError {
     CrawlerRepositoryError::new(format!("{context}: {source}"))
 }

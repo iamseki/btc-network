@@ -10,7 +10,8 @@ btc-network = { path = "../btc-network" }
 chrono = "0.4.44"
 hex = "0.4.3"
 sha2 = "0.10"
-sqlx = { version = "0.8.6", features = ["chrono", "postgres", "runtime-tokio-rustls"] }
+sqlx-core = { version = "0.8.6", features = ["chrono", "migrate", "_rt-tokio", "_tls-rustls-ring-webpki"] }
+sqlx-postgres = { version = "0.8.6", features = ["chrono", "migrate"] }
 tokio = { version = "1", features = ["rt", "sync"] }
 
 [dev-dependencies]

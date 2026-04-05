@@ -3,7 +3,8 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use chrono::Utc;
-use sqlx::{PgPool, Row};
+use sqlx_core::{query::query, raw_sql::raw_sql, row::Row};
+use sqlx_postgres::PgPool;
 
 use crate::config::{PostgresConfigError, PostgresConnectionConfig};
 
@@ -25,7 +26,7 @@ pub enum PostgresMigrationError {
     Config(PostgresConfigError),
     Query {
         context: String,
-        source: sqlx::Error,
+        source: sqlx_core::Error,
     },
     ChecksumMismatch {
         version: String,
@@ -35,7 +36,7 @@ pub enum PostgresMigrationError {
 }
 
 impl PostgresMigrationError {
-    fn query(context: impl Into<String>, source: sqlx::Error) -> Self {
+    fn query(context: impl Into<String>, source: sqlx_core::Error) -> Self {
         Self::Query {
             context: context.into(),
             source,
@@ -89,7 +90,7 @@ impl PostgresMigrationRunner {
     }
 
     pub async fn apply_all(&self) -> Result<MigrationReport, PostgresMigrationError> {
-        sqlx::raw_sql(CREATE_SCHEMA_MIGRATIONS_SQL)
+        raw_sql(CREATE_SCHEMA_MIGRATIONS_SQL)
             .execute(&self.pool)
             .await
             .map_err(|err| PostgresMigrationError::query("create schema_migrations table", err))?;
@@ -140,7 +141,7 @@ impl PostgresMigrationRunner {
     pub async fn applied_migrations(
         &self,
     ) -> Result<Vec<AppliedMigration>, PostgresMigrationError> {
-        let rows = sqlx::query(
+        let rows = query(
             "
 SELECT version, name, checksum, applied_at
 FROM schema_migrations
@@ -163,7 +164,7 @@ ORDER BY version ASC
     }
 
     async fn execute_migration(&self, migration: &Migration) -> Result<(), PostgresMigrationError> {
-        sqlx::raw_sql(migration.sql())
+        raw_sql(migration.sql())
             .execute(&self.pool)
             .await
             .map_err(|err| {
@@ -181,7 +182,7 @@ ORDER BY version ASC
     }
 
     async fn record_migration(&self, migration: &Migration) -> Result<(), PostgresMigrationError> {
-        sqlx::query(
+        query(
             "
 INSERT INTO schema_migrations (version, name, checksum, applied_at)
 VALUES ($1, $2, $3, $4)

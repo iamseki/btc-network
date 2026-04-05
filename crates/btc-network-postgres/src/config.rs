@@ -1,8 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use sqlx::PgPool;
-use sqlx::postgres::PgPoolOptions;
+use sqlx_postgres::{PgPool, PgPoolOptions};
 
 /// Connection settings for the PostgreSQL crawler storage adapter.
 #[derive(Clone, PartialEq, Eq)]
@@ -49,7 +48,7 @@ impl Default for PostgresConnectionConfig {
 /// Error returned while building a PostgreSQL adapter config or pool.
 #[derive(Debug)]
 pub enum PostgresConfigError {
-    PoolConnect(sqlx::Error),
+    PoolConnect(sqlx_core::Error),
 }
 
 impl Display for PostgresConfigError {

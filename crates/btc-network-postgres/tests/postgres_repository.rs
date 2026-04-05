@@ -19,7 +19,8 @@ use btc_network_postgres::{
 use chrono::{Duration, Utc};
 use maxminddb_writer::paths::IpAddrWithMask;
 use maxminddb_writer::{Database, metadata};
-use sqlx::{PgPool, Row};
+use sqlx_core::{query::query, row::Row};
+use sqlx_postgres::{PgPool, Postgres};
 use testcontainers_modules::{
     postgres,
     testcontainers::{ContainerAsync, ImageExt, runners::AsyncRunner},
@@ -171,7 +172,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
     );
 
     let client = db.connect().await?;
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT tablename
 FROM pg_tables
@@ -440,7 +441,7 @@ async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicabl
         .await?;
 
     let client = db.connect().await?;
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT endpoint, enrichment_status, asn, country, prefix
 FROM node_observations

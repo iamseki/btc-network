@@ -1,5 +1,6 @@
 use btc_network::crawler::{CrawlRunCheckpoint, CrawlerRepositoryError, PersistedNodeObservation};
-use sqlx::PgPool;
+use sqlx_core::query::query;
+use sqlx_postgres::{PgPool, Postgres};
 
 use crate::values::{
     confidence_to_str, crawl_network_to_str, crawl_phase_to_str, duration_to_millis,
@@ -28,7 +29,7 @@ pub(super) async fn insert_observations_stream(
         let services = observation.raw.services.map(|value| value.to_string());
         let asn = observation.enrichment.asn.map(|value| value as i32);
 
-        sqlx::query(
+        query::<Postgres>(
             "
 INSERT INTO node_observations (
     observed_at,
@@ -94,7 +95,7 @@ pub(super) async fn insert_run_checkpoint(
     pool: &PgPool,
     checkpoint: CrawlRunCheckpoint,
 ) -> Result<(), CrawlerRepositoryError> {
-    sqlx::query(
+    query::<Postgres>(
         "
 INSERT INTO crawler_run_checkpoints (
     run_id,

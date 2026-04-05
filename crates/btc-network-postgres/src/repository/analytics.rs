@@ -2,7 +2,8 @@ use btc_network::crawler::{
     AsnNodeCountItem, CountNodesByAsnRow, CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunId,
     CrawlRunListItem, CrawlerRepositoryError, FailureClassificationCount, NetworkOutcomeCount,
 };
-use sqlx::{PgPool, Row};
+use sqlx_core::{query::query, row::Row};
+use sqlx_postgres::{PgPool, Postgres};
 
 use super::map_postgres_err;
 
@@ -82,7 +83,7 @@ async fn query_count_nodes_by_asn(
     limit: Option<usize>,
 ) -> Result<Vec<CountNodesByAsnDbRow>, CrawlerRepositoryError> {
     let limit = limit.unwrap_or(i64::MAX as usize).min(i64::MAX as usize) as i64;
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT
     asn,
@@ -134,7 +135,7 @@ async fn list_run_checkpoints(
     checkpoint_limit: usize,
 ) -> Result<Vec<CrawlRunCheckpointItem>, CrawlerRepositoryError> {
     let limit = checkpoint_limit.min(i64::MAX as usize) as i64;
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT
     run_id,
@@ -178,7 +179,7 @@ async fn list_failure_classification_counts(
     pool: &PgPool,
     run_id: &CrawlRunId,
 ) -> Result<Vec<FailureClassificationCount>, CrawlerRepositoryError> {
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT failure_classification AS classification, COUNT(*) AS observations
 FROM node_observations
@@ -215,7 +216,7 @@ async fn list_network_outcomes(
     pool: &PgPool,
     run_id: &CrawlRunId,
 ) -> Result<Vec<NetworkOutcomeCount>, CrawlerRepositoryError> {
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT
     network_type,

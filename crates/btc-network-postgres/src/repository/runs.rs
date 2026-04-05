@@ -1,7 +1,8 @@
 use btc_network::crawler::{
     CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics, CrawlerRepositoryError,
 };
-use sqlx::{PgPool, Row};
+use sqlx_core::{query::query, row::Row};
+use sqlx_postgres::{PgPool, PgRow, Postgres};
 
 use crate::values::crawl_phase_from_str;
 
@@ -11,7 +12,7 @@ pub(super) async fn get_run_checkpoint(
     pool: &PgPool,
     run_id: &CrawlRunId,
 ) -> Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError> {
-    let row = sqlx::query(
+    let row = query::<Postgres>(
         "
 SELECT
     run_id,
@@ -50,7 +51,7 @@ LIMIT 1
 pub(super) async fn get_latest_active_run_checkpoint(
     pool: &PgPool,
 ) -> Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError> {
-    let row = sqlx::query(
+    let row = query::<Postgres>(
         "
 SELECT
     run_id,
@@ -100,7 +101,7 @@ LIMIT 1
 pub(super) async fn list_runs(
     pool: &PgPool,
 ) -> Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError> {
-    let rows = sqlx::query(
+    let rows = query::<Postgres>(
         "
 SELECT *
 FROM (
@@ -137,9 +138,7 @@ ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
     rows.into_iter().map(row_to_checkpoint).collect()
 }
 
-pub(super) fn row_to_checkpoint(
-    row: sqlx::postgres::PgRow,
-) -> Result<CrawlRunCheckpoint, CrawlerRepositoryError> {
+pub(super) fn row_to_checkpoint(row: PgRow) -> Result<CrawlRunCheckpoint, CrawlerRepositoryError> {
     let checkpoint_sequence: i64 = row
         .try_get("checkpoint_sequence")
         .map_err(|err| map_postgres_err("decode checkpoint_sequence", err))?;
