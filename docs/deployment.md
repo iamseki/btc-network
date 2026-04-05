@@ -106,6 +106,6 @@ The planned later path is:
 
 - keep the frontend on Cloudflare Pages
 - add a Rust API on self-managed infrastructure
-- keep ClickHouse self-managed and non-public by default
+- keep PostgreSQL self-managed and non-public by default
 
-See [BNDD-0003](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0003/BNDD-0003.md) for the deployment decision record.
+See [BNDD-0003](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0003/BNDD-0003.md) for the staged deployment decision and [BNDD-0007](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0007/BNDD-0007.md) for the current default storage backend.

@@ -36,8 +36,9 @@ Use only the canonical status values below.
 | Code | Title | Status | Entry |
 | --- | --- | --- | --- |
 | `BNDD-0001` | `btc-network` | `implemented` | [BNDD-0001/BNDD-0001.md](./BNDD-0001/BNDD-0001.md) |
-| `BNDD-0002` | `Benchmarking analytics storage for crawler observations` | `accepted` | [BNDD-0002/BNDD-0002.md](./BNDD-0002/BNDD-0002.md) |
+| `BNDD-0002` | `Benchmarking analytics storage for crawler observations` | `deprecated` | [BNDD-0002/BNDD-0002.md](./BNDD-0002/BNDD-0002.md) |
 | `BNDD-0003` | `Web and future API deployment strategy` | `implemented` | [BNDD-0003/BNDD-0003.md](./BNDD-0003/BNDD-0003.md) |
 | `BNDD-0004` | `Agent runtime observability via OpenTelemetry Collector and Langfuse` | `rejected` | [BNDD-0004/BNDD-0004.md](./BNDD-0004/BNDD-0004.md) |
-| `BNDD-0005` | `Durable crawler runtime and analytics persistence` | `accepted` | [BNDD-0005/BNDD-0005.md](./BNDD-0005/BNDD-0005.md) |
+| `BNDD-0005` | `Durable crawler runtime and analytics persistence` | `deprecated` | [BNDD-0005/BNDD-0005.md](./BNDD-0005/BNDD-0005.md) |
 | `BNDD-0006` | `Public crawler analytics UI and browser-safe API contract` | `implemented` | [BNDD-0006/BNDD-0006.md](./BNDD-0006/BNDD-0006.md) |
+| `BNDD-0007` | `PostgreSQL as the default crawler persistence backend` | `implemented` | [BNDD-0007/BNDD-0007.md](./BNDD-0007/BNDD-0007.md) |

@@ -31,6 +31,8 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `handshake_status` in persisted observations is a historical field name; failed rows can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
 - crawler startup recovery assumes one coordinator process writes to a given persistence database at a time; that single-active-run constraint is enforced outside the crawler implementation, and overlapping writers are a deployment bug
 - under that single-writer assumption, startup recovery may treat the newest checkpoint row overall as the only candidate active run
+- the default crawler persistence adapter is PostgreSQL in `crates/btc-network-postgres`
+- the ClickHouse adapter remains preserved for reference and future reuse, but it is legacy rather than the default implementation
 
 ## Frontend Architecture
 
@@ -40,6 +42,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Frontend code talks to an app-facing client boundary under `apps/web/src/lib/api/`
 - The current real desktop-backed flows are handshake, ping, peer address lookup, chain height, block summary, and block download
 - Crawler analytics reads now go through the browser-safe HTTP app in `apps/api`
+- The default analytics storage adapter behind `apps/api` is PostgreSQL
 - Both web and desktop analytics reads use the same HTTP helper and `VITE_API_BASE_URL`
 - Hosted browser builds may opt into `VITE_DEMO_MODE` to serve deterministic mock analytics data instead of calling the HTTP API
 - Hosted demo mode may replay a client-only latest-snapshot cycle from the most recent run, persist replay state in local storage, and restart a fresh live cycle when the user returns after a longer absence
@@ -78,6 +81,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `make test` is the project-level verification command
 - Frontend-only changes: `npm run test --prefix apps/web` and `npm run build --prefix apps/web`
 - Shared Rust changes: `cargo test -p btc-network`
+- PostgreSQL adapter changes: `cargo test -p btc-network-postgres`
 - Desktop Rust bridge changes: `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
 
 ## Security Tooling

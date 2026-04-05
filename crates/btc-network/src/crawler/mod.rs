@@ -162,8 +162,8 @@ impl Crawler {
         );
 
         self.run_recovered_request(checkpoint, state, processor, started_at, config)
-        .await
-        .map(Some)
+            .await
+            .map(Some)
     }
 
     async fn mark_recovery_failed(

@@ -12,7 +12,7 @@ use btc_network::crawler::{
     AsnNodeCountItem, CrawlRunDetail, CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader,
     CrawlerRepositoryError,
 };
-use btc_network_clickhouse::{ClickHouseConnectionConfig, ClickHouseCrawlerRepository};
+use btc_network_postgres::{PostgresConnectionConfig, PostgresCrawlerRepository};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tower::limit::ConcurrencyLimitLayer;
@@ -99,10 +99,10 @@ fn build_router_with_config(
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let bind_addr = parse_bind_addr()?;
-    let clickhouse_config = parse_clickhouse_config();
+    let postgres_config = parse_postgres_config()?;
     let runtime_config = parse_runtime_config()?;
     let analytics_reader: Arc<dyn CrawlerAnalyticsReader> =
-        Arc::new(ClickHouseCrawlerRepository::new(&clickhouse_config));
+        Arc::new(PostgresCrawlerRepository::new(&postgres_config)?);
     let app = build_router_with_config(analytics_reader, runtime_config);
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
 
@@ -178,26 +178,13 @@ fn parse_bind_addr() -> Result<SocketAddr, Box<dyn std::error::Error>> {
     Ok(value.parse()?)
 }
 
-fn parse_clickhouse_config() -> ClickHouseConnectionConfig {
-    let url = env::var("BTC_NETWORK_CLICKHOUSE_URL")
-        .unwrap_or_else(|_| "http://localhost:8123".to_string());
-    let database =
-        env::var("BTC_NETWORK_CLICKHOUSE_DATABASE").unwrap_or_else(|_| "btc_network".to_string());
-    let mut config = ClickHouseConnectionConfig::new(url, database);
+fn parse_postgres_config() -> Result<PostgresConnectionConfig, Box<dyn std::error::Error>> {
+    let url = env::var("BTC_NETWORK_POSTGRES_URL").unwrap_or_else(|_| {
+        "postgresql://btc_network_dev:btc_network_dev@localhost:5432/btc_network".to_string()
+    });
+    let max_connections = parse_positive_usize_env("BTC_NETWORK_POSTGRES_MAX_CONNECTIONS", 16)?;
 
-    if let Ok(user) = env::var("BTC_NETWORK_CLICKHOUSE_USER") {
-        if !user.trim().is_empty() {
-            config = config.with_user(user);
-        }
-    }
-
-    if let Ok(password) = env::var("BTC_NETWORK_CLICKHOUSE_PASSWORD") {
-        if !password.trim().is_empty() {
-            config = config.with_password(password);
-        }
-    }
-
-    config
+    Ok(PostgresConnectionConfig::new(url).with_max_connections(max_connections))
 }
 
 fn parse_runtime_config() -> Result<ApiRuntimeConfig, Box<dyn std::error::Error>> {
@@ -555,7 +542,7 @@ mod tests {
     #[tokio::test]
     async fn asn_counts_returns_internal_error_without_leaking_adapter_message() {
         let app = build_router(Arc::new(StubAnalyticsReader {
-            fail_with: Some(CrawlerRepositoryError::new("raw clickhouse detail")),
+            fail_with: Some(CrawlerRepositoryError::new("raw postgres detail")),
             ..StubAnalyticsReader::default()
         }));
 
@@ -580,9 +567,29 @@ mod tests {
         assert_eq!(json["error"]["message"], "crawler analytics backend failed");
         assert!(
             !body
-                .windows("raw clickhouse detail".len())
-                .any(|window| window == b"raw clickhouse detail")
+                .windows("raw postgres detail".len())
+                .any(|window| window == b"raw postgres detail")
         );
+    }
+
+    #[test]
+    fn parse_postgres_config_uses_defaults_and_max_connections_override() {
+        unsafe {
+            env::remove_var("BTC_NETWORK_POSTGRES_URL");
+            env::set_var("BTC_NETWORK_POSTGRES_MAX_CONNECTIONS", "24");
+        }
+
+        let config = parse_postgres_config().expect("postgres config");
+
+        assert_eq!(
+            config.url(),
+            "postgresql://btc_network_dev:btc_network_dev@localhost:5432/btc_network"
+        );
+        assert_eq!(config.max_connections(), 24);
+
+        unsafe {
+            env::remove_var("BTC_NETWORK_POSTGRES_MAX_CONNECTIONS");
+        }
     }
 
     #[tokio::test]
