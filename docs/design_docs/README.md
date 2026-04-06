@@ -42,3 +42,4 @@ Use only the canonical status values below.
 | `BNDD-0005` | `Durable crawler runtime and analytics persistence` | `deprecated` | [BNDD-0005/BNDD-0005.md](./BNDD-0005/BNDD-0005.md) |
 | `BNDD-0006` | `Public crawler analytics UI and browser-safe API contract` | `implemented` | [BNDD-0006/BNDD-0006.md](./BNDD-0006/BNDD-0006.md) |
 | `BNDD-0007` | `PostgreSQL as the default crawler persistence backend` | `implemented` | [BNDD-0007/BNDD-0007.md](./BNDD-0007/BNDD-0007.md) |
+| `BNDD-0008` | `Minimal durable crawler recovery state` | `accepted` | [BNDD-0008/BNDD-0008.md](./BNDD-0008/BNDD-0008.md) |

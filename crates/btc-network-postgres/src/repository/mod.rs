@@ -1,7 +1,7 @@
 use btc_network::crawler::{
-    AsnNodeCountItem, CountNodesByAsnRow, CrawlRunCheckpoint, CrawlRunDetail, CrawlRunId,
-    CrawlRunListItem, CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError,
-    PersistedNodeObservation, RepositoryFuture,
+    AsnNodeCountItem, CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunDetail,
+    CrawlRunId, CrawlRunListItem, CrawlRunRecoveryPoint, CrawlerAnalyticsReader, CrawlerRepository,
+    CrawlerRepositoryError, PersistedNodeObservation, RepositoryFuture,
 };
 use sqlx_postgres::PgPool;
 
@@ -50,6 +50,13 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         Box::pin(async move { writes::insert_run_checkpoint(&self.pool, checkpoint).await })
     }
 
+    fn insert_run_recovery_point<'a>(
+        &'a self,
+        recovery_point: CrawlRunRecoveryPoint,
+    ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+        Box::pin(async move { writes::insert_run_recovery_point(&self.pool, recovery_point).await })
+    }
+
     fn get_run_checkpoint<'a>(
         &'a self,
         run_id: &'a CrawlRunId,
@@ -63,6 +70,12 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         Box::pin(async move { runs::get_latest_active_run_checkpoint(&self.pool).await })
     }
 
+    fn get_latest_active_run_recovery_point<'a>(
+        &'a self,
+    ) -> RepositoryFuture<'a, Result<Option<CrawlRunRecoveryPoint>, CrawlerRepositoryError>> {
+        Box::pin(async move { runs::get_latest_active_run_recovery_point(&self.pool).await })
+    }
+
     fn list_runs<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
@@ -73,6 +86,13 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
         Box::pin(async move { analytics::count_nodes_by_asn(&self.pool).await })
+    }
+
+    fn list_observed_endpoints_for_run<'a>(
+        &'a self,
+        run_id: &'a CrawlRunId,
+    ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> {
+        Box::pin(async move { runs::list_observed_endpoints_for_run(&self.pool, run_id).await })
     }
 }
 

@@ -201,7 +201,6 @@ mod tests {
                 persisted_observation_rows: 80,
                 writer_backlog: 0,
             },
-            resume_state: None,
             caller: None,
         };
 

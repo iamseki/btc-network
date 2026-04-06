@@ -12,10 +12,6 @@ Default backend:
 
 - PostgreSQL via `btc-network-postgres`
 
-Legacy backend:
-
-- ClickHouse remains preserved in-repo, but it is not the default API path
-
 ## Endpoints
 
 - `GET /api/v1/crawler/runs?limit=<n>`

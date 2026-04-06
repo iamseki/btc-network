@@ -7,7 +7,6 @@ Start with the shared template when authoring a new guide, then add concrete iss
 ## Available Guides
 
 - [Template](./template.md)
-- [Crawler Checkpoint Storage Growth](./crawler-checkpoint-storage.md)
 
 ## Notes
 

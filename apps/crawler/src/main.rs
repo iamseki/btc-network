@@ -42,6 +42,10 @@ struct CrawlArgs {
     #[arg(long, default_value_t = 5, value_parser = parse_positive_u64)]
     idle_timeout_minutes: u64,
 
+    /// Seconds between periodic durable checkpoints and recovery points.
+    #[arg(long, default_value_t = 30, value_parser = parse_positive_u64)]
+    checkpoint_interval_secs: u64,
+
     /// Timeout for a single TCP connect attempt to a peer.
     #[arg(long, default_value_t = 30, value_parser = parse_positive_u64)]
     connect_timeout_secs: u64,
@@ -177,6 +181,7 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
         max_tracked_nodes: args.max_tracked_nodes,
         max_runtime: Duration::from_secs(args.max_runtime_minutes * 60),
         idle_timeout: Duration::from_secs(args.idle_timeout_minutes * 60),
+        checkpoint_interval: Duration::from_secs(args.checkpoint_interval_secs),
         connect_timeout: Duration::from_secs(args.connect_timeout_secs),
         connect_max_attempts: args.connect_max_attempts,
         connect_retry_backoff: Duration::from_millis(args.connect_retry_backoff_ms),
@@ -221,6 +226,7 @@ mod tests {
             max_tracked_nodes: 250_000,
             max_runtime_minutes: 60,
             idle_timeout_minutes: 5,
+            checkpoint_interval_secs: 30,
             connect_timeout_secs: 30,
             connect_max_attempts: 4,
             connect_retry_backoff_ms: 500,

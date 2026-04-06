@@ -4,8 +4,8 @@ use std::future::Future;
 use std::pin::Pin;
 
 use super::domain::{
-    CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunId, IpEnrichment,
-    PersistedNodeObservation,
+    CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunId, CrawlRunRecoveryPoint,
+    IpEnrichment, PersistedNodeObservation,
 };
 use super::{AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem};
 
@@ -60,6 +60,11 @@ pub trait CrawlerRepository: Send + Sync {
         checkpoint: CrawlRunCheckpoint,
     ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>>;
 
+    fn insert_run_recovery_point<'a>(
+        &'a self,
+        recovery_point: CrawlRunRecoveryPoint,
+    ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>>;
+
     /// Returns the latest durable checkpoint for a specific run.
     ///
     /// Implementations must use `checkpoint_sequence` as a deterministic tie-breaker
@@ -81,6 +86,10 @@ pub trait CrawlerRepository: Send + Sync {
         &'a self,
     ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>;
 
+    fn get_latest_active_run_recovery_point<'a>(
+        &'a self,
+    ) -> RepositoryFuture<'a, Result<Option<CrawlRunRecoveryPoint>, CrawlerRepositoryError>>;
+
     /// Returns one latest checkpoint summary per run.
     ///
     /// Implementations must aggregate fields from the same winning checkpoint row and
@@ -93,6 +102,11 @@ pub trait CrawlerRepository: Send + Sync {
     fn count_nodes_by_asn<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>>;
+
+    fn list_observed_endpoints_for_run<'a>(
+        &'a self,
+        run_id: &'a CrawlRunId,
+    ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>>;
 }
 
 /// Read-only analytics contract for browser-safe crawler UI surfaces.
@@ -122,9 +136,9 @@ mod tests {
     use super::*;
     use crate::crawler::{
         AsnNodeCountItem, BatchId, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem,
-        CrawlRunDetail, CrawlRunListItem, CrawlRunMetrics, FailureClassificationCount,
-        HandshakeStatus, NetworkOutcomeCount, ObservationConfidence, ObservationId,
-        RawNodeObservation,
+        CrawlRunDetail, CrawlRunListItem, CrawlRunMetrics, CrawlRunRecoveryPoint,
+        FailureClassificationCount, HandshakeStatus, NetworkOutcomeCount, ObservationConfidence,
+        ObservationId, RawNodeObservation, RecoveryPayloadEncoding,
     };
     use chrono::Utc;
     use std::net::{IpAddr, Ipv4Addr};
@@ -146,6 +160,7 @@ mod tests {
     struct InMemoryCrawlerRepository {
         observations: Mutex<Vec<PersistedNodeObservation>>,
         checkpoints: Mutex<Vec<CrawlRunCheckpoint>>,
+        recovery_points: Mutex<Vec<CrawlRunRecoveryPoint>>,
         counts: Mutex<Vec<CountNodesByAsnRow>>,
         crawl_runs: Mutex<Vec<CrawlRunListItem>>,
         crawl_run_detail: Mutex<Option<CrawlRunDetail>>,
@@ -187,6 +202,19 @@ mod tests {
                     .lock()
                     .expect("checkpoints lock")
                     .push(checkpoint);
+                Ok(())
+            })
+        }
+
+        fn insert_run_recovery_point<'a>(
+            &'a self,
+            recovery_point: CrawlRunRecoveryPoint,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async move {
+                self.recovery_points
+                    .lock()
+                    .expect("recovery points lock")
+                    .push(recovery_point);
                 Ok(())
             })
         }
@@ -243,10 +271,57 @@ mod tests {
             })
         }
 
+        fn get_latest_active_run_recovery_point<'a>(
+            &'a self,
+        ) -> RepositoryFuture<'a, Result<Option<CrawlRunRecoveryPoint>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                let recovery_point = self
+                    .recovery_points
+                    .lock()
+                    .expect("recovery points lock")
+                    .iter()
+                    .filter(|point| {
+                        matches!(
+                            point.phase,
+                            crate::crawler::CrawlPhase::Bootstrap
+                                | crate::crawler::CrawlPhase::Crawling
+                                | crate::crawler::CrawlPhase::Draining
+                        )
+                    })
+                    .max_by(|left, right| {
+                        left.checkpointed_at
+                            .cmp(&right.checkpointed_at)
+                            .then_with(|| left.checkpoint_sequence.cmp(&right.checkpoint_sequence))
+                    })
+                    .cloned();
+                Ok(recovery_point)
+            })
+        }
+
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
             Box::pin(async move { Ok(self.counts.lock().expect("counts lock").clone()) })
+        }
+
+        fn list_observed_endpoints_for_run<'a>(
+            &'a self,
+            run_id: &'a CrawlRunId,
+        ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> {
+            Box::pin(async move {
+                let mut endpoints = self
+                    .observations
+                    .lock()
+                    .expect("observations lock")
+                    .iter()
+                    .filter(|observation| observation.raw.crawl_run_id == *run_id)
+                    .map(|observation| observation.raw.endpoint.clone())
+                    .collect::<Vec<_>>();
+                endpoints.sort_by(|left, right| left.canonical.cmp(&right.canonical));
+                endpoints.dedup();
+                Ok(endpoints)
+            })
         }
     }
 
@@ -333,7 +408,23 @@ mod tests {
                 persisted_observation_rows: 2,
                 writer_backlog: 0,
             },
-            resume_state: None,
+            caller: Some("test".to_string()),
+        }
+    }
+
+    fn sample_recovery_point() -> CrawlRunRecoveryPoint {
+        CrawlRunRecoveryPoint {
+            run_id: CrawlRunId::new("run-1"),
+            phase: CrawlPhase::Crawling,
+            checkpointed_at: Utc::now(),
+            checkpoint_sequence: 1,
+            started_at: Utc::now(),
+            stop_reason: None,
+            failure_reason: None,
+            metrics: sample_checkpoint().metrics,
+            payload_encoding: RecoveryPayloadEncoding::ZstdJsonV1,
+            frontier_payload: Vec::new(),
+            frontier_size: 0,
             caller: Some("test".to_string()),
         }
     }
@@ -373,6 +464,10 @@ mod tests {
             .insert_run_checkpoint(checkpoint.clone())
             .await
             .expect("insert checkpoint");
+        repository
+            .insert_run_recovery_point(sample_recovery_point())
+            .await
+            .expect("insert recovery point");
 
         let saved_checkpoint = repository
             .get_run_checkpoint(&checkpoint.run_id)
@@ -384,11 +479,22 @@ mod tests {
             .await
             .expect("get latest active checkpoint")
             .expect("active checkpoint exists");
+        let latest_recovery = repository
+            .get_latest_active_run_recovery_point()
+            .await
+            .expect("get latest active recovery point")
+            .expect("active recovery point exists");
         let runs = repository.list_runs().await.expect("list runs");
+        let observed_endpoints = repository
+            .list_observed_endpoints_for_run(&checkpoint.run_id)
+            .await
+            .expect("list observed endpoints");
 
         assert_eq!(saved_checkpoint, checkpoint);
         assert_eq!(latest_active, checkpoint);
         assert_eq!(runs, vec![checkpoint]);
+        assert_eq!(latest_recovery.run_id.as_str(), "run-1");
+        assert_eq!(observed_endpoints, vec![persisted.raw.endpoint.clone()]);
 
         repository
             .insert_observations_stream(vec![persisted.clone()])

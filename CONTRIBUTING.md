@@ -125,15 +125,6 @@ When you add a PostgreSQL schema change:
 - document required backfills or manual coordination steps in the migration file when the change is not purely online-safe
 - update `crates/btc-network-postgres/src/migrations/bundled.rs` to include the new checked-in file in `bundled_migrations()`
 
-## Legacy ClickHouse Migrations
-
-The preserved ClickHouse adapter is legacy-only.
-
-When you touch it intentionally:
-
-- create a new file with `scripts/new-clickhouse-migration.sh <snake_case_slug>`
-- keep the legacy docs aligned with the scope of that change
-
 ## Before Opening a PR
 
 - Run the relevant targeted tests for the area you changed

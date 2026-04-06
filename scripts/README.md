@@ -10,9 +10,6 @@ Small repository helper scripts for local development and maintenance.
 - [`crawler_timing_summary.jq`](./crawler_timing_summary.jq)
   Summarizes crawler timing artifacts produced by `crawler_timing.sh`.
 
-- [`new-clickhouse-migration.sh`](./new-clickhouse-migration.sh)
-  Creates a new timestamped ClickHouse migration file for the preserved legacy `btc-network-clickhouse` adapter.
-
 - [`new-postgres-migration.sh`](./new-postgres-migration.sh)
   Creates a new timestamped PostgreSQL migration file for `btc-network-postgres`.
 

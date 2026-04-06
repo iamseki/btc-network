@@ -6,8 +6,6 @@ The preferred local crawler path now uses:
 - host-managed MMDB files under `.dev-data/mmdb/`
 - explicit migrations before the crawler starts
 
-The preserved ClickHouse path still exists for future reuse, but it is legacy-only.
-
 ## Typical Local Flow
 
 1. Run `make crawler-mmdb-update`.
@@ -91,6 +89,7 @@ Optional crawler tuning overrides:
 - `--max-tracked-nodes`
 - `--max-runtime-minutes`
 - `--idle-timeout-minutes`
+- `--checkpoint-interval-secs`
 - `--connect-timeout-secs`
 - `--connect-max-attempts`
 - `--connect-retry-backoff-ms`
@@ -126,6 +125,19 @@ LIMIT 10;
 
 ```sql
 SELECT
+    run_id,
+    phase,
+    checkpointed_at,
+    recovery_frontier_size,
+    octet_length(frontier_payload) AS compressed_payload_bytes,
+    payload_encoding
+FROM crawler_run_recovery_points
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+LIMIT 10;
+```
+
+```sql
+SELECT
     endpoint,
     network_type,
     handshake_status,
@@ -138,13 +150,4 @@ ORDER BY observed_at DESC, observation_id DESC
 LIMIT 20;
 ```
 
-## Legacy ClickHouse Path
-
-The preserved ClickHouse adapter and local service are still available when you intentionally need them:
-
-- `make infra-clickhouse-up`
-- `make clickhouse-migrate`
-- `make infra-clickhouse-down`
-- `make infra-clickhouse-reset`
-
-Use that path only for legacy maintenance or future reevaluation work. It is not the default crawler workflow anymore.
+`crawler_run_checkpoints` is progress history only. Crash-restart state lives in `crawler_run_recovery_points` as a compressed frontier payload.

@@ -6,9 +6,12 @@ use chrono::{DateTime, Utc};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
-use super::domain::{CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics};
+use super::domain::{
+    CrawlEndpoint, CrawlPhase, CrawlRunCheckpoint, CrawlRunId, CrawlRunMetrics,
+    CrawlRunRecoveryPoint, RecoveryPayloadEncoding,
+};
 use super::ports::{CrawlerRepository, CrawlerRepositoryError};
-use super::types::{CrawlResumeState, CrawlState, CrawlerStats};
+use super::types::{CrawlState, CrawlerStats};
 
 const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -21,7 +24,16 @@ pub(crate) struct CheckpointEmitterContext {
     pub(crate) checkpoint_sequence: Arc<AtomicU64>,
     pub(crate) stop: Arc<AtomicBool>,
     pub(crate) started_at: DateTime<Utc>,
-    pub(crate) tick_every: Duration,
+    pub(crate) checkpoint_interval: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SnapshotCapture {
+    pub(crate) checkpointed_at: DateTime<Utc>,
+    pub(crate) checkpoint_sequence: u64,
+    pub(crate) metrics: CrawlRunMetrics,
+    pub(crate) frontier_payload: Vec<u8>,
+    pub(crate) frontier_size: usize,
 }
 
 /// Periodically evaluates stop conditions that are independent of any single
@@ -67,13 +79,13 @@ pub(crate) async fn run_lifecycle(
     }
 }
 
-/// Periodically snapshots crawler progress and durable resume state.
+/// Periodically snapshots crawler progress and durable recovery state.
 ///
 /// This task is separate from the final phase-transition checkpoints written by
 /// the coordinator in `mod.rs`. Its job is to emit background progress
-/// checkpoints while the crawl is still active, using the current phase, stats,
-/// and resumable in-memory state. If checkpoint persistence fails, it requests
-/// global shutdown by setting `stop` and returns the repository error.
+/// checkpoints and recovery points while the crawl is still active. If either
+/// persistence path fails, it requests global shutdown by setting `stop` and
+/// returns the repository error.
 pub(crate) async fn run_checkpoint_emitter(
     context: CheckpointEmitterContext,
 ) -> Result<(), CrawlerRepositoryError> {
@@ -86,9 +98,9 @@ pub(crate) async fn run_checkpoint_emitter(
         checkpoint_sequence,
         stop,
         started_at,
-        tick_every,
+        checkpoint_interval,
     } = context;
-    let mut ticker = tokio::time::interval(tick_every);
+    let mut ticker = tokio::time::interval(checkpoint_interval);
     let mut last_progress_log_at = None;
 
     loop {
@@ -99,18 +111,18 @@ pub(crate) async fn run_checkpoint_emitter(
         }
 
         let phase = *phase.lock().await;
-        let checkpoint = snapshot_checkpoint(
-            run_id.clone(),
-            phase,
-            &state,
-            &stats,
-            &checkpoint_sequence,
-            started_at,
-        )
-        .await;
+        let capture = capture_snapshot(&state, &stats, &checkpoint_sequence).await?;
+        let checkpoint = checkpoint_from_capture(run_id.clone(), phase, started_at, &capture);
         if should_log_progress(last_progress_log_at, PROGRESS_LOG_INTERVAL) {
             log_progress_summary(&checkpoint);
             last_progress_log_at = Some(Instant::now());
+        }
+        let recovery_point =
+            recovery_point_from_capture(run_id.clone(), phase, started_at, &capture);
+        if let Err(err) = repository.insert_run_recovery_point(recovery_point).await {
+            warn!("[crawler] failed to write recovery point: {err}");
+            stop.store(true, Ordering::Relaxed);
+            return Err(err);
         }
         if let Err(err) = repository.insert_run_checkpoint(checkpoint).await {
             warn!("[crawler] failed to write checkpoint: {err}");
@@ -120,24 +132,17 @@ pub(crate) async fn run_checkpoint_emitter(
     }
 }
 
-pub(crate) async fn snapshot_checkpoint(
-    run_id: CrawlRunId,
-    phase: CrawlPhase,
+pub(crate) async fn capture_snapshot(
     state: &Arc<Mutex<CrawlState>>,
     stats: &Arc<CrawlerStats>,
     checkpoint_sequence: &Arc<AtomicU64>,
-    started_at: DateTime<Utc>,
-) -> CrawlRunCheckpoint {
+) -> Result<SnapshotCapture, CrawlerRepositoryError> {
     let guard = state.lock().await;
+    let frontier = guard.recovery_frontier();
 
-    CrawlRunCheckpoint {
-        run_id,
-        phase,
+    Ok(SnapshotCapture {
         checkpointed_at: Utc::now(),
         checkpoint_sequence: next_checkpoint_sequence(checkpoint_sequence),
-        started_at,
-        stop_reason: None,
-        failure_reason: None,
         metrics: CrawlRunMetrics {
             frontier_size: guard.pending_nodes.len(),
             in_flight_work: stats.in_flight.load(Ordering::Relaxed),
@@ -146,23 +151,78 @@ pub(crate) async fn snapshot_checkpoint(
             failed_tasks: stats.failed.load(Ordering::Relaxed),
             queued_nodes_total: stats.queued_total.load(Ordering::Relaxed),
             unique_nodes: guard.seen_nodes.len(),
-            discovered_node_states: guard.node_states.len(),
+            discovered_node_states: stats.discovered_node_states.load(Ordering::Relaxed),
             persisted_observation_rows: stats.persisted_rows.load(Ordering::Relaxed),
             writer_backlog: stats.writer_backlog.load(Ordering::Relaxed),
         },
-        resume_state: Some(serialize_resume_state(&guard)),
+        frontier_payload: serialize_recovery_frontier(&frontier)?,
+        frontier_size: frontier.len(),
+    })
+}
+
+pub(crate) fn checkpoint_from_capture(
+    run_id: CrawlRunId,
+    phase: CrawlPhase,
+    started_at: DateTime<Utc>,
+    capture: &SnapshotCapture,
+) -> CrawlRunCheckpoint {
+    CrawlRunCheckpoint {
+        run_id,
+        phase,
+        checkpointed_at: capture.checkpointed_at,
+        checkpoint_sequence: capture.checkpoint_sequence,
+        started_at,
+        stop_reason: None,
+        failure_reason: None,
+        metrics: capture.metrics.clone(),
         caller: None,
     }
 }
 
-pub(crate) fn serialize_resume_state(state: &CrawlState) -> String {
-    serde_json::to_string(&state.to_resume_state()).expect("crawler resume state should serialize")
+pub(crate) fn recovery_point_from_capture(
+    run_id: CrawlRunId,
+    phase: CrawlPhase,
+    started_at: DateTime<Utc>,
+    capture: &SnapshotCapture,
+) -> CrawlRunRecoveryPoint {
+    CrawlRunRecoveryPoint {
+        run_id,
+        phase,
+        checkpointed_at: capture.checkpointed_at,
+        checkpoint_sequence: capture.checkpoint_sequence,
+        started_at,
+        stop_reason: None,
+        failure_reason: None,
+        metrics: capture.metrics.clone(),
+        payload_encoding: RecoveryPayloadEncoding::ZstdJsonV1,
+        frontier_payload: capture.frontier_payload.clone(),
+        frontier_size: capture.frontier_size,
+        caller: None,
+    }
 }
 
-pub(crate) fn deserialize_resume_state(
-    resume_state: &str,
-) -> Result<CrawlResumeState, serde_json::Error> {
-    serde_json::from_str(resume_state)
+pub(crate) fn serialize_recovery_frontier(
+    frontier: &[CrawlEndpoint],
+) -> Result<Vec<u8>, CrawlerRepositoryError> {
+    let payload = serde_json::to_vec(frontier).map_err(|err| {
+        CrawlerRepositoryError::new(format!("serialize recovery frontier: {err}"))
+    })?;
+    zstd::stream::encode_all(payload.as_slice(), 0)
+        .map_err(|err| CrawlerRepositoryError::new(format!("compress recovery frontier: {err}")))
+}
+
+pub(crate) fn deserialize_recovery_frontier(
+    payload_encoding: RecoveryPayloadEncoding,
+    frontier_payload: &[u8],
+) -> Result<Vec<CrawlEndpoint>, String> {
+    match payload_encoding {
+        RecoveryPayloadEncoding::ZstdJsonV1 => {
+            let decoded = zstd::stream::decode_all(frontier_payload)
+                .map_err(|err| format!("decompress recovery frontier: {err}"))?;
+            serde_json::from_slice(&decoded)
+                .map_err(|err| format!("decode recovery frontier JSON: {err}"))
+        }
+    }
 }
 
 fn next_checkpoint_sequence(checkpoint_sequence: &AtomicU64) -> u64 {
@@ -304,34 +364,25 @@ mod tests {
         let stats = Arc::new(CrawlerStats::default());
         stats.queued_total.store(1, Ordering::Relaxed);
         stats.in_flight.store(2, Ordering::Relaxed);
+        stats.discovered_node_states.store(1, Ordering::Relaxed);
         stats.persisted_rows.store(3, Ordering::Relaxed);
         stats.writer_backlog.store(4, Ordering::Relaxed);
 
-        let checkpoint = snapshot_checkpoint(
-            CrawlRunId::new("run-1"),
-            CrawlPhase::Crawling,
-            &state,
-            &stats,
-            &Arc::new(AtomicU64::new(0)),
-            Utc::now(),
-        )
-        .await;
+        let capture = capture_snapshot(&state, &stats, &Arc::new(AtomicU64::new(0)))
+            .await
+            .expect("snapshot capture");
 
-        assert_eq!(checkpoint.metrics.frontier_size, 1);
-        assert_eq!(checkpoint.metrics.in_flight_work, 2);
-        assert_eq!(checkpoint.metrics.persisted_observation_rows, 3);
-        assert_eq!(checkpoint.metrics.writer_backlog, 4);
-        assert_eq!(checkpoint.checkpoint_sequence, 1);
-        let resume_state = deserialize_resume_state(
-            checkpoint
-                .resume_state
-                .as_deref()
-                .expect("resume state should be present"),
+        assert_eq!(capture.metrics.frontier_size, 1);
+        assert_eq!(capture.metrics.in_flight_work, 2);
+        assert_eq!(capture.metrics.persisted_observation_rows, 3);
+        assert_eq!(capture.metrics.writer_backlog, 4);
+        assert_eq!(capture.checkpoint_sequence, 1);
+        let frontier = deserialize_recovery_frontier(
+            RecoveryPayloadEncoding::ZstdJsonV1,
+            capture.frontier_payload.as_slice(),
         )
-        .expect("resume state should deserialize");
-        assert_eq!(resume_state.seen_nodes.len(), 1);
-        assert_eq!(resume_state.pending_nodes.len(), 1);
-        assert_eq!(resume_state.in_flight_nodes.len(), 0);
+        .expect("recovery frontier should deserialize");
+        assert_eq!(frontier.len(), 1);
     }
 
     #[tokio::test]
@@ -340,24 +391,12 @@ mod tests {
         let stats = Arc::new(CrawlerStats::default());
         let checkpoint_sequence = Arc::new(AtomicU64::new(0));
 
-        let first = snapshot_checkpoint(
-            CrawlRunId::new("run-1"),
-            CrawlPhase::Bootstrap,
-            &state,
-            &stats,
-            &checkpoint_sequence,
-            Utc::now(),
-        )
-        .await;
-        let second = snapshot_checkpoint(
-            CrawlRunId::new("run-1"),
-            CrawlPhase::Crawling,
-            &state,
-            &stats,
-            &checkpoint_sequence,
-            Utc::now(),
-        )
-        .await;
+        let first = capture_snapshot(&state, &stats, &checkpoint_sequence)
+            .await
+            .expect("first capture");
+        let second = capture_snapshot(&state, &stats, &checkpoint_sequence)
+            .await
+            .expect("second capture");
 
         assert_eq!(first.checkpoint_sequence, 1);
         assert_eq!(second.checkpoint_sequence, 2);
@@ -366,6 +405,7 @@ mod tests {
     #[derive(Default)]
     struct RecordingRepository {
         checkpoints: StdMutex<Vec<CrawlRunCheckpoint>>,
+        recovery_points: StdMutex<Vec<CrawlRunRecoveryPoint>>,
     }
 
     impl CrawlerRepository for RecordingRepository {
@@ -392,6 +432,19 @@ mod tests {
                     .lock()
                     .expect("checkpoints lock")
                     .push(checkpoint);
+                Ok(())
+            })
+        }
+
+        fn insert_run_recovery_point<'a>(
+            &'a self,
+            recovery_point: CrawlRunRecoveryPoint,
+        ) -> Pin<Box<dyn Future<Output = Result<(), CrawlerRepositoryError>> + Send + 'a>> {
+            Box::pin(async move {
+                self.recovery_points
+                    .lock()
+                    .expect("recovery points lock")
+                    .push(recovery_point);
                 Ok(())
             })
         }
@@ -433,6 +486,18 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
+        fn get_latest_active_run_recovery_point<'a>(
+            &'a self,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Option<CrawlRunRecoveryPoint>, CrawlerRepositoryError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(None) })
+        }
+
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> Pin<
@@ -444,6 +509,17 @@ mod tests {
                         >,
                     > + Send
                     + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn list_observed_endpoints_for_run<'a>(
+            &'a self,
+            _run_id: &'a CrawlRunId,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> + Send + 'a,
             >,
         > {
             Box::pin(async { Ok(Vec::new()) })
@@ -468,7 +544,7 @@ mod tests {
             checkpoint_sequence: Arc::new(AtomicU64::new(0)),
             stop: Arc::clone(&stop),
             started_at: Utc::now(),
-            tick_every: Duration::from_millis(5),
+            checkpoint_interval: Duration::from_millis(5),
         }));
 
         tokio::time::sleep(Duration::from_millis(15)).await;
@@ -483,6 +559,13 @@ mod tests {
         assert!(
             runs.iter()
                 .all(|checkpoint| checkpoint.phase == CrawlPhase::Crawling)
+        );
+        assert!(
+            !repository
+                .recovery_points
+                .lock()
+                .expect("recovery points lock")
+                .is_empty()
         );
     }
 
@@ -509,6 +592,13 @@ mod tests {
             _checkpoint: CrawlRunCheckpoint,
         ) -> Pin<Box<dyn Future<Output = Result<(), CrawlerRepositoryError>> + Send + 'a>> {
             Box::pin(async { Err(CrawlerRepositoryError::new("checkpoint write failed")) })
+        }
+
+        fn insert_run_recovery_point<'a>(
+            &'a self,
+            _recovery_point: CrawlRunRecoveryPoint,
+        ) -> Pin<Box<dyn Future<Output = Result<(), CrawlerRepositoryError>> + Send + 'a>> {
+            Box::pin(async { Ok(()) })
         }
 
         fn get_run_checkpoint<'a>(
@@ -548,6 +638,18 @@ mod tests {
             Box::pin(async { Ok(None) })
         }
 
+        fn get_latest_active_run_recovery_point<'a>(
+            &'a self,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Option<CrawlRunRecoveryPoint>, CrawlerRepositoryError>>
+                    + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(None) })
+        }
+
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> Pin<
@@ -559,6 +661,17 @@ mod tests {
                         >,
                     > + Send
                     + 'a,
+            >,
+        > {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn list_observed_endpoints_for_run<'a>(
+            &'a self,
+            _run_id: &'a CrawlRunId,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> + Send + 'a,
             >,
         > {
             Box::pin(async { Ok(Vec::new()) })
@@ -582,7 +695,7 @@ mod tests {
             checkpoint_sequence: Arc::new(AtomicU64::new(0)),
             stop: Arc::clone(&stop),
             started_at: Utc::now(),
-            tick_every: Duration::from_millis(5),
+            checkpoint_interval: Duration::from_millis(5),
         })
         .await
         .expect_err("checkpoint emitter should return repository errors");

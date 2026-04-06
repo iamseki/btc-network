@@ -26,11 +26,7 @@ MAKEFLAGS += --no-print-directory
 	infra-postgres-up \
 	infra-postgres-down \
 	infra-postgres-reset \
-	clickhouse-migrate \
-	infra-clickhouse-up \
 	crawler-mmdb-update \
-	infra-clickhouse-down \
-	infra-clickhouse-reset \
 	api \
 	listener \
 	crawler-debug \
@@ -76,19 +72,6 @@ POSTGRES_LOCAL_ENV = \
 	BTC_NETWORK_POSTGRES_URL="$(CRAWLER_POSTGRES_LOCAL_URL)" \
 	BTC_NETWORK_POSTGRES_MAX_CONNECTIONS="$(CRAWLER_POSTGRES_LOCAL_MAX_CONNECTIONS)"
 
-# Legacy ClickHouse defaults are still available for the preserved adapter
-# workflow, but they are no longer the default development path.
-CRAWLER_CLICKHOUSE_LOCAL_URL := http://localhost:8123
-CRAWLER_CLICKHOUSE_LOCAL_DATABASE := btc_network
-CRAWLER_CLICKHOUSE_LOCAL_USER := btc_network_dev
-CRAWLER_CLICKHOUSE_LOCAL_PASSWORD := btc_network_dev
-
-CLICKHOUSE_LOCAL_ENV = \
-	BTC_NETWORK_CLICKHOUSE_URL="$(CRAWLER_CLICKHOUSE_LOCAL_URL)" \
-	BTC_NETWORK_CLICKHOUSE_DATABASE="$(CRAWLER_CLICKHOUSE_LOCAL_DATABASE)" \
-	BTC_NETWORK_CLICKHOUSE_USER="$(CRAWLER_CLICKHOUSE_LOCAL_USER)" \
-	BTC_NETWORK_CLICKHOUSE_PASSWORD="$(CRAWLER_CLICKHOUSE_LOCAL_PASSWORD)"
-
 ##@ Runtime
 
 crawler: ## Run the crawler binary with local PostgreSQL defaults; pass crawler flags via ARGS="..."
@@ -109,23 +92,8 @@ infra-postgres-reset: ## Reset local PostgreSQL data under .dev-data/postgres
 	@mkdir -p .dev-data/postgres
 	@docker run --rm -v "$(CURDIR)/.dev-data/postgres:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
 
-clickhouse-migrate: ## Apply legacy ClickHouse migrations with local development defaults; pass overrides via ARGS="..."
-	@$(CLICKHOUSE_LOCAL_ENV) cargo run -p btc-network-clickhouse-migrate -- $(ARGS)
-
-infra-clickhouse-up: ## Start the preserved local ClickHouse legacy service
-	@mkdir -p .dev-data/clickhouse
-	@$(DOCKER_COMPOSE) up -d --wait clickhouse
-
 crawler-mmdb-update: ## Download or refresh local MMDB files for crawler development
 	@bash scripts/update-crawler-mmdb.sh
-
-infra-clickhouse-down: ## Stop the preserved local ClickHouse legacy service
-	@$(DOCKER_COMPOSE) stop clickhouse
-
-infra-clickhouse-reset: ## Reset local ClickHouse data under .dev-data/clickhouse
-	@$(DOCKER_COMPOSE) rm -fs clickhouse >/dev/null 2>&1 || true
-	@mkdir -p .dev-data/clickhouse
-	@docker run --rm -v "$(CURDIR)/.dev-data/clickhouse:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
 
 api: ## Run the crawler analytics API with local PostgreSQL defaults
 	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-api -- $(ARGS)
@@ -239,7 +207,7 @@ help: ## Show available commands
 		FS = ":.*## "; \
 		printf "\nUsage:\n  make <target>\n"; \
 		printf "\nNotes:\n"; \
-		printf "  ARGS=... passes extra CLI flags to wrapper targets such as crawler, cli, api, postgres-migrate, and clickhouse-migrate.\n"; \
+		printf "  ARGS=... passes extra CLI flags to wrapper targets such as crawler, cli, api, and postgres-migrate.\n"; \
 		printf "  Targets are grouped by section below.\n"; \
 	} \
 	/^##@/ { \

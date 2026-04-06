@@ -155,7 +155,6 @@ SELECT
     discovered_node_states,
     persisted_observation_rows,
     writer_backlog,
-    resume_state,
     caller
 FROM crawler_run_checkpoints
 WHERE run_id = $1

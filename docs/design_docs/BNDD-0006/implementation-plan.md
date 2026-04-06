@@ -4,7 +4,7 @@ Execution plan for [BNDD-0006](./BNDD-0006.md).
 
 ## Summary
 
-Implement public crawler analytics in a way that keeps the React shell thin, keeps desktop parity with web, and pushes storage-adapter query logic behind shared Rust traits and the HTTP API adapter. The current default adapter is PostgreSQL and the preserved ClickHouse path is legacy only.
+Implement public crawler analytics in a way that keeps the React shell thin, keeps desktop parity with web, and pushes storage-adapter query logic behind shared Rust traits and the HTTP API adapter. The current default adapter is PostgreSQL.
 
 ## Progress Tracker
 

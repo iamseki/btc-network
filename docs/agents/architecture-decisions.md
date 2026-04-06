@@ -32,7 +32,6 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - crawler startup recovery assumes one coordinator process writes to a given persistence database at a time; that single-active-run constraint is enforced outside the crawler implementation, and overlapping writers are a deployment bug
 - under that single-writer assumption, startup recovery may treat the newest checkpoint row overall as the only candidate active run
 - the default crawler persistence adapter is PostgreSQL in `crates/btc-network-postgres`
-- the ClickHouse adapter remains preserved for reference and future reuse, but it is legacy rather than the default implementation
 
 ## Frontend Architecture
 

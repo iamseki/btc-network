@@ -95,6 +95,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         match visit_result {
             Ok(visit) => {
                 stats.success.fetch_add(1, Ordering::Relaxed);
+                stats.discovered_node_states.fetch_add(1, Ordering::Relaxed);
 
                 let discovered_count = visit.discovered.len();
                 let raw = RawNodeObservation::from_success(
@@ -284,10 +285,16 @@ pub(crate) fn apply_visit_to_state(
     visit: NodeVisit,
     max_tracked_nodes: usize,
 ) -> Vec<CrawlEndpoint> {
-    state.node_states.insert(visit.node, visit.state);
+    let NodeVisit {
+        node,
+        state: _,
+        discovered,
+        latency: _,
+    } = visit;
+    state.seen_nodes.insert(node);
 
     let mut new_nodes = Vec::new();
-    for endpoint in visit.discovered {
+    for endpoint in discovered {
         if endpoint.socket_addr().is_none() {
             continue;
         }
@@ -393,6 +400,7 @@ mod tests {
             max_runtime: Duration::from_secs(1),
             idle_timeout: Duration::from_secs(1),
             lifecycle_tick: Duration::from_millis(5),
+            checkpoint_interval: Duration::from_millis(30),
             connect_timeout: Duration::from_millis(50),
             connect_max_attempts: 1,
             connect_retry_backoff: Duration::ZERO,
@@ -454,7 +462,7 @@ mod tests {
         let inserted = apply_visit_to_state(&mut state, visit, test_config().max_tracked_nodes);
 
         assert_eq!(inserted, vec![new_node.clone()]);
-        assert!(state.node_states.contains_key(&node));
+        assert!(state.seen_nodes.contains(&node));
         assert!(state.pending_nodes.contains(&new_node));
         assert!(state.last_new_node_at >= before);
     }
@@ -476,20 +484,10 @@ mod tests {
     }
 
     #[test]
-    fn apply_visit_overwrites_existing_node_state() {
+    fn apply_visit_keeps_processed_node_in_seen_set() {
         let node = test_endpoint(2);
         let mut state = CrawlState::new();
-        state.node_states.insert(
-            node.clone(),
-            crate::crawler::NodeState {
-                version: 1,
-                services: 0,
-                user_agent: "old".to_string(),
-                start_height: 1,
-                relay: Some(false),
-                timestamp: 1,
-            },
-        );
+        state.seen_nodes.insert(node.clone());
 
         apply_visit_to_state(
             &mut state,
@@ -497,9 +495,7 @@ mod tests {
             test_config().max_tracked_nodes,
         );
 
-        let saved = state.node_states.get(&node).expect("node state");
-        assert_eq!(saved.version, 70016);
-        assert_eq!(saved.user_agent, "/Satoshi:27.0.0/");
+        assert!(state.seen_nodes.contains(&node));
     }
 
     #[tokio::test]
@@ -587,6 +583,7 @@ mod tests {
         assert_eq!(stats.success.load(Ordering::Relaxed), 1);
         assert_eq!(stats.failed.load(Ordering::Relaxed), 0);
         assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.discovered_node_states.load(Ordering::Relaxed), 1);
         assert_eq!(out_rx.try_recv().ok(), Some(discovered.clone()));
         assert!(out_rx.try_recv().is_err());
         assert_eq!(persisted.raw.handshake_status, HandshakeStatus::Succeeded);
@@ -594,7 +591,7 @@ mod tests {
         assert_eq!(persisted.enrichment.asn, Some(64512));
 
         let guard = state.lock().await;
-        assert!(guard.node_states.contains_key(&node));
+        assert!(guard.seen_nodes.contains(&node));
         assert!(guard.pending_nodes.contains(&discovered));
         assert!(!guard.in_flight_nodes.contains(&node));
     }
@@ -685,7 +682,7 @@ mod tests {
         assert_eq!(guard.pending_nodes.len(), 2);
         assert!(guard.seen_nodes.contains(&a));
         assert!(guard.seen_nodes.contains(&b));
-        assert!(guard.node_states.is_empty());
+        assert!(guard.in_flight_nodes.is_empty());
     }
 
     #[test]

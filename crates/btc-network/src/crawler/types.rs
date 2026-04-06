@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
 
@@ -19,6 +19,8 @@ pub struct CrawlerConfig {
     pub idle_timeout: Duration,
     /// Lifecycle polling interval used to evaluate stop policies.
     pub lifecycle_tick: Duration,
+    /// Periodic durable checkpoint interval.
+    pub checkpoint_interval: Duration,
     /// TCP connect timeout used per node.
     pub connect_timeout: Duration,
     /// Maximum number of TCP connect attempts per node, including the first try.
@@ -41,6 +43,7 @@ impl Default for CrawlerConfig {
             max_runtime: Duration::from_secs(60 * 60),
             idle_timeout: Duration::from_secs(5 * 60),
             lifecycle_tick: Duration::from_secs(1),
+            checkpoint_interval: Duration::from_secs(30),
             connect_timeout: Duration::from_secs(30),
             connect_max_attempts: 3,
             connect_retry_backoff: Duration::from_millis(250),
@@ -86,6 +89,7 @@ pub(crate) struct CrawlerStats {
     pub(crate) failed: AtomicUsize,
     pub(crate) queued_total: AtomicUsize,
     pub(crate) in_flight: AtomicUsize,
+    pub(crate) discovered_node_states: AtomicUsize,
     pub(crate) persisted_rows: AtomicUsize,
     pub(crate) writer_backlog: AtomicUsize,
 }
@@ -95,7 +99,6 @@ pub(crate) struct CrawlState {
     pub(crate) seen_nodes: HashSet<CrawlEndpoint>,
     pub(crate) pending_nodes: HashSet<CrawlEndpoint>,
     pub(crate) in_flight_nodes: HashSet<CrawlEndpoint>,
-    pub(crate) node_states: HashMap<CrawlEndpoint, NodeState>,
     pub(crate) last_new_node_at: Instant,
 }
 
@@ -105,79 +108,40 @@ impl CrawlState {
             seen_nodes: HashSet::new(),
             pending_nodes: HashSet::new(),
             in_flight_nodes: HashSet::new(),
-            node_states: HashMap::new(),
             last_new_node_at: Instant::now(),
         }
     }
 
-    pub(crate) fn to_resume_state(&self) -> CrawlResumeState {
-        let mut seen_nodes = self.seen_nodes.iter().cloned().collect::<Vec<_>>();
-        seen_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
-
-        let mut pending_nodes = self.pending_nodes.iter().cloned().collect::<Vec<_>>();
-        pending_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
-
-        let mut in_flight_nodes = self.in_flight_nodes.iter().cloned().collect::<Vec<_>>();
-        in_flight_nodes.sort_by(|left, right| left.canonical.cmp(&right.canonical));
-
-        let mut node_states = self
-            .node_states
+    pub(crate) fn recovery_frontier(&self) -> Vec<CrawlEndpoint> {
+        let mut frontier = self
+            .pending_nodes
             .iter()
-            .map(|(endpoint, state)| ResumeNodeState {
-                endpoint: endpoint.clone(),
-                state: state.clone(),
-            })
+            .chain(self.in_flight_nodes.iter())
+            .cloned()
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect::<Vec<_>>();
-        node_states.sort_by(|left, right| left.endpoint.canonical.cmp(&right.endpoint.canonical));
-
-        CrawlResumeState {
-            seen_nodes,
-            pending_nodes,
-            in_flight_nodes,
-            node_states,
-        }
+        frontier.sort_by(|left, right| left.canonical.cmp(&right.canonical));
+        frontier
     }
 
-    pub(crate) fn from_resume_state(resume_state: CrawlResumeState) -> Self {
+    pub(crate) fn from_recovery_frontier(
+        frontier: Vec<CrawlEndpoint>,
+        observed_endpoints: Vec<CrawlEndpoint>,
+    ) -> Self {
         let mut state = Self::new();
 
-        for endpoint in resume_state.seen_nodes {
+        for endpoint in observed_endpoints {
             state.seen_nodes.insert(endpoint);
         }
 
-        for endpoint in resume_state.pending_nodes {
+        for endpoint in frontier {
             state.seen_nodes.insert(endpoint.clone());
             state.pending_nodes.insert(endpoint);
-        }
-
-        for endpoint in resume_state.in_flight_nodes {
-            state.seen_nodes.insert(endpoint.clone());
-            state.pending_nodes.insert(endpoint);
-        }
-
-        for node_state in resume_state.node_states {
-            state.seen_nodes.insert(node_state.endpoint.clone());
-            state
-                .node_states
-                .insert(node_state.endpoint, node_state.state);
         }
 
         state
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CrawlResumeState {
-    pub(crate) seen_nodes: Vec<CrawlEndpoint>,
-    pub(crate) pending_nodes: Vec<CrawlEndpoint>,
-    pub(crate) in_flight_nodes: Vec<CrawlEndpoint>,
-    pub(crate) node_states: Vec<ResumeNodeState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ResumeNodeState {
-    pub(crate) endpoint: CrawlEndpoint,
-    pub(crate) state: NodeState,
 }
 
 #[derive(Debug, Clone)]

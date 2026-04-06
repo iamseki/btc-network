@@ -118,6 +118,33 @@ impl CrawlNetwork {
     pub fn supports_ip_enrichment(self) -> bool {
         matches!(self, Self::Ipv4 | Self::Ipv6)
     }
+
+    pub fn as_storage_str(self) -> &'static str {
+        match self {
+            Self::Ipv4 => "ipv4",
+            Self::Ipv6 => "ipv6",
+            Self::TorV2 => "tor_v2",
+            Self::TorV3 => "tor_v3",
+            Self::I2p => "i2p",
+            Self::Cjdns => "cjdns",
+            Self::Yggdrasil => "yggdrasil",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn from_storage_str(value: &str) -> Option<Self> {
+        match value {
+            "ipv4" => Some(Self::Ipv4),
+            "ipv6" => Some(Self::Ipv6),
+            "tor_v2" => Some(Self::TorV2),
+            "tor_v3" => Some(Self::TorV3),
+            "i2p" => Some(Self::I2p),
+            "cjdns" => Some(Self::Cjdns),
+            "yggdrasil" => Some(Self::Yggdrasil),
+            "unknown" => Some(Self::Unknown),
+            _ => None,
+        }
+    }
 }
 
 /// Canonical crawler endpoint representation used across discovery, storage,
@@ -186,6 +213,47 @@ impl CrawlEndpoint {
         self.ip_addr
             .map(|ip_addr| SocketAddr::new(ip_addr, self.port))
     }
+
+    pub fn from_stored(
+        canonical: impl Into<String>,
+        network: CrawlNetwork,
+    ) -> Result<Self, String> {
+        let canonical = canonical.into();
+        let (host, port) = parse_stored_endpoint(&canonical)?;
+        let ip_addr = match network {
+            CrawlNetwork::Ipv4 => host.parse::<Ipv4Addr>().ok().map(IpAddr::V4),
+            CrawlNetwork::Ipv6 => host.parse::<Ipv6Addr>().ok().map(IpAddr::V6),
+            _ => None,
+        };
+
+        Ok(Self {
+            canonical,
+            host,
+            port,
+            network,
+            ip_addr,
+        })
+    }
+}
+
+fn parse_stored_endpoint(canonical: &str) -> Result<(String, u16), String> {
+    if let Some(rest) = canonical.strip_prefix('[') {
+        let Some((host, port)) = rest.rsplit_once("]:") else {
+            return Err(format!("invalid stored endpoint: {canonical}"));
+        };
+        let port = port
+            .parse::<u16>()
+            .map_err(|_| format!("invalid stored endpoint port: {canonical}"))?;
+        return Ok((host.to_string(), port));
+    }
+
+    let Some((host, port)) = canonical.rsplit_once(':') else {
+        return Err(format!("invalid stored endpoint: {canonical}"));
+    };
+    let port = port
+        .parse::<u16>()
+        .map_err(|_| format!("invalid stored endpoint port: {canonical}"))?;
+    Ok((host.to_string(), port))
 }
 
 impl From<SocketAddr> for CrawlEndpoint {
@@ -448,7 +516,42 @@ pub struct CrawlRunCheckpoint {
     pub stop_reason: Option<String>,
     pub failure_reason: Option<String>,
     pub metrics: CrawlRunMetrics,
-    pub resume_state: Option<String>,
+    pub caller: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecoveryPayloadEncoding {
+    ZstdJsonV1,
+}
+
+impl RecoveryPayloadEncoding {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ZstdJsonV1 => "zstd-json-v1",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "zstd-json-v1" => Some(Self::ZstdJsonV1),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrawlRunRecoveryPoint {
+    pub run_id: CrawlRunId,
+    pub phase: CrawlPhase,
+    pub checkpointed_at: DateTime<Utc>,
+    pub checkpoint_sequence: u64,
+    pub started_at: DateTime<Utc>,
+    pub stop_reason: Option<String>,
+    pub failure_reason: Option<String>,
+    pub metrics: CrawlRunMetrics,
+    pub payload_encoding: RecoveryPayloadEncoding,
+    pub frontier_payload: Vec<u8>,
+    pub frontier_size: usize,
     pub caller: Option<String>,
 }
 
