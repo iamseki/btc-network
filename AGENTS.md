@@ -17,9 +17,20 @@ This is not a wallet, miner, or full node clone.
 Prefer code that is easy to maintain.
 
 - Choose pragmatic changes over speculative architecture
+- Make important tradeoffs explicit when choosing a design, especially when simplicity, correctness, operability, and speed pull in different directions
 - Apply YAGNI: do not add abstractions, layers, or options before the project clearly needs them
 - Apply KISS: prefer straightforward control flow, explicit types, and small focused helpers over clever reuse
 - Add indirection only when it removes real duplication or protects an important boundary
+
+## Performance And Scale Rule
+
+When a decision has scalability, storage-growth, latency, concurrency, or throughput implications:
+
+- identify the dominant cost driver instead of hand-waving about performance
+- prefer measured evidence, existing benchmarks, targeted tests, or concrete workload reasoning over intuition alone
+- state the relevant tradeoff explicitly if a design favors maintainability or correctness over peak performance, or vice versa
+- avoid speculative optimization, but do not ignore obvious scale risks when the data shape or hot path makes them likely
+- if a change is motivated by performance or scale, leave behind enough verification or documentation that a future engineer can understand why
 
 ## Context Rule
 

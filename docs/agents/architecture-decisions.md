@@ -72,8 +72,17 @@ Compact decision index for agents. Read this before rediscovering settled struct
 ## Maintenance Bias
 
 - Prefer maintainable, pragmatic code over speculative architecture
+- Make major tradeoffs explicit when a design balances simplicity, correctness, operability, and speed
 - Apply YAGNI before adding new layers, options, or generalized helpers
 - Apply KISS with direct control flow and explicit types unless a real boundary needs more structure
+
+## Performance And Scale Bias
+
+- Treat performance and scalability as design concerns, not only as post-hoc tuning work
+- Identify the dominant cost driver before proposing an optimization or storage change
+- Prefer measured evidence, targeted tests, benchmarks, or concrete workload reasoning over instinct
+- Avoid speculative optimization, but call out obvious scale risks in hot paths, persistence shape, and high-cardinality data flows
+- When choosing the simpler design over the faster design, or the reverse, make the tradeoff explicit in code review notes, docs, or BNDD text as appropriate
 
 ## Verification Defaults
 
