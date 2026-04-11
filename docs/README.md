@@ -38,7 +38,8 @@ Start here if you need repository documentation and do not yet know which docume
 - `Troubleshooting or runbook authoring`
   - [Troubleshooting](./troubleshooting/README.md)
   - [Template](./troubleshooting/template.md)
-  - [Crawler Checkpoint Storage Growth](./troubleshooting/crawler-checkpoint-storage.md)
+  - [Crawler Checkpoint Storage Growth (ClickHouse legacy)](./troubleshooting/crawler-checkpoint-storage.md)
+  - [Crawler Checkpoint Storage Growth (PostgreSQL legacy)](./troubleshooting/crawler-checkpoint-storage-postgres.md)
   - [Agent Docs Index](./agents/README.md)
 - `Archived observability experiment`
   - [Archived observability note](./observability.md)
