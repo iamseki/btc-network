@@ -1,7 +1,6 @@
 use crate::wire::constants::PROTOCOL_VERSION;
 use crate::wire::message::InventoryType;
 use byteorder::{LittleEndian, WriteBytesExt};
-use rand::Rng;
 use std::io::{self};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -67,7 +66,7 @@ pub fn build_version_payload(protocol_version: i32, services: u64) -> io::Result
     // addr_from
     payload.extend([0u8; 26]);
 
-    let nonce: u64 = rand::thread_rng().r#gen();
+    let nonce = getrandom::u64().map_err(|err| io::Error::other(err.to_string()))?;
     payload.write_u64::<LittleEndian>(nonce)?;
 
     // user agent (empty string => CompactSize 0)

@@ -23,6 +23,11 @@ ignore = [
   "RUSTSEC-2025-0081",
   "RUSTSEC-2025-0098",
   "RUSTSEC-2025-0100",
+  # btc-network no longer uses rand directly for protocol nonces. The remaining
+  # affected rand versions are transitive through sqlx-postgres, Tauri build/runtime
+  # dependencies, and test-only containers; revisit when those upstream graphs move to
+  # patched rand releases.
+  "RUSTSEC-2026-0097",
 ]
 
 [output]
