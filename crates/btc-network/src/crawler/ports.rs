@@ -135,10 +135,10 @@ pub trait CrawlerAnalyticsReader: Send + Sync {
 mod tests {
     use super::*;
     use crate::crawler::{
-        AsnNodeCountItem, BatchId, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem,
-        CrawlRunDetail, CrawlRunListItem, CrawlRunMetrics, CrawlRunRecoveryPoint,
-        FailureClassificationCount, HandshakeStatus, NetworkOutcomeCount, ObservationConfidence,
-        ObservationId, RawNodeObservation, RecoveryPayloadEncoding,
+        AsnNodeCountItem, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem, CrawlRunDetail,
+        CrawlRunListItem, CrawlRunMetrics, CrawlRunRecoveryPoint, FailureClassificationCount,
+        HandshakeStatus, NetworkOutcomeCount, ObservationId, RawNodeObservation,
+        RecoveryPayloadEncoding,
     };
     use chrono::Utc;
     use std::net::{IpAddr, Ipv4Addr};
@@ -367,7 +367,7 @@ mod tests {
     fn sample_raw_observation() -> RawNodeObservation {
         RawNodeObservation {
             observed_at: Utc::now(),
-            crawl_run_id: CrawlRunId::new("run-1"),
+            crawl_run_id: CrawlRunId::from_u128(1),
             endpoint: CrawlEndpoint::new(
                 "1.1.1.7",
                 8333,
@@ -375,13 +375,12 @@ mod tests {
                 Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7))),
             ),
             handshake_status: HandshakeStatus::Succeeded,
-            confidence: ObservationConfidence::Verified,
             protocol_version: Some(70016),
             services: Some(1),
             user_agent: Some("/Satoshi:27.0.0/".to_string()),
             start_height: Some(900_000),
             relay: Some(true),
-            discovered_count: 3,
+            discovered_peer_addresses_count: 3,
             latency: Some(Duration::from_millis(125)),
             failure_classification: None,
         }
@@ -389,7 +388,7 @@ mod tests {
 
     fn sample_checkpoint() -> CrawlRunCheckpoint {
         CrawlRunCheckpoint {
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             phase: CrawlPhase::Crawling,
             checkpointed_at: Utc::now(),
             checkpoint_sequence: 1,
@@ -414,7 +413,7 @@ mod tests {
 
     fn sample_recovery_point() -> CrawlRunRecoveryPoint {
         CrawlRunRecoveryPoint {
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             phase: CrawlPhase::Crawling,
             checkpointed_at: Utc::now(),
             checkpoint_sequence: 1,
@@ -449,11 +448,8 @@ mod tests {
     #[tokio::test]
     async fn repository_trait_supports_test_double_for_observations_and_checkpoints() {
         let repository: &dyn CrawlerRepository = &InMemoryCrawlerRepository::default();
-        let persisted = sample_raw_observation().into_persisted(
-            ObservationId::new("observation-1"),
-            BatchId::new("batch-1"),
-            IpEnrichment::not_applicable(),
-        );
+        let persisted = sample_raw_observation()
+            .into_persisted(ObservationId::from_u128(1), IpEnrichment::not_applicable());
         let checkpoint = sample_checkpoint();
 
         repository
@@ -493,7 +489,7 @@ mod tests {
         assert_eq!(saved_checkpoint, checkpoint);
         assert_eq!(latest_active, checkpoint);
         assert_eq!(runs, vec![checkpoint]);
-        assert_eq!(latest_recovery.run_id.as_str(), "run-1");
+        assert_eq!(latest_recovery.run_id, CrawlRunId::from_u128(1));
         assert_eq!(observed_endpoints, vec![persisted.raw.endpoint.clone()]);
 
         repository
@@ -520,7 +516,7 @@ mod tests {
             writer_backlog: 0,
         };
         let run = CrawlRunListItem {
-            run_id: "run-1".to_string(),
+            run_id: CrawlRunId::from_u128(1).to_string(),
             phase: "completed".to_string(),
             started_at: "2026-03-30T11:00:00+00:00".to_string(),
             last_checkpointed_at: "2026-03-30T12:00:00+00:00".to_string(),
@@ -559,7 +555,7 @@ mod tests {
 
         let runs = reader.list_crawl_runs(10).await.expect("list runs");
         let fetched_detail = reader
-            .get_crawl_run(&CrawlRunId::new("run-1"), 10)
+            .get_crawl_run(&CrawlRunId::from_u128(1), 10)
             .await
             .expect("get run")
             .expect("run detail");

@@ -6,9 +6,7 @@ use chrono::Utc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::{info, warn};
 
-use super::domain::{
-    BatchId, CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation,
-};
+use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation};
 use super::node::NodeProcessor;
 use super::ports::IpEnrichmentProvider;
 use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit};
@@ -97,13 +95,13 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 stats.success.fetch_add(1, Ordering::Relaxed);
                 stats.discovered_node_states.fetch_add(1, Ordering::Relaxed);
 
-                let discovered_count = visit.discovered.len();
+                let discovered_peer_addresses_count = visit.discovered.len();
                 let raw = RawNodeObservation::from_success(
                     Utc::now(),
                     run_id.clone(),
                     visit.node.clone(),
                     &visit.state,
-                    discovered_count,
+                    discovered_peer_addresses_count,
                     visit.latency,
                 );
                 let persisted = build_persisted_observation(raw, enrichment_provider.as_ref());
@@ -150,7 +148,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                         process_ms = process_elapsed.as_millis(),
                         state_lock_wait_ms = state_lock_wait.as_millis(),
                         state_lock_hold_ms = state_lock_hold.as_millis(),
-                        discovered_nodes = discovered_count,
+                        discovered_peer_addresses = discovered_peer_addresses_count,
                         queued_nodes = queued_count,
                         node_total_ms = node_cycle_started.elapsed().as_millis(),
                         "[crawler] worker timing"
@@ -245,11 +243,7 @@ fn build_persisted_observation(
         IpEnrichment::not_applicable()
     };
 
-    raw.into_persisted(
-        ObservationId::new(format!("observation-{:016x}", rand::random::<u64>())),
-        BatchId::new(format!("batch-{:016x}", rand::random::<u64>())),
-        enrichment,
-    )
+    raw.into_persisted(ObservationId::now_v7(), enrichment)
 }
 
 pub(crate) async fn seed_initial_nodes(
@@ -333,7 +327,7 @@ mod tests {
     use super::*;
     use crate::crawler::node::NodeProcessor;
     use crate::crawler::types::NodeVisitResult;
-    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus, ObservationConfidence};
+    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus};
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::HashMap;
@@ -516,7 +510,7 @@ mod tests {
         });
         run_worker(WorkerContext {
             config,
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             state,
             stats: Arc::clone(&stats),
             stop,
@@ -566,7 +560,7 @@ mod tests {
 
         run_worker(WorkerContext {
             config,
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             state: Arc::clone(&state),
             stats: Arc::clone(&stats),
             stop,
@@ -587,7 +581,6 @@ mod tests {
         assert_eq!(out_rx.try_recv().ok(), Some(discovered.clone()));
         assert!(out_rx.try_recv().is_err());
         assert_eq!(persisted.raw.handshake_status, HandshakeStatus::Succeeded);
-        assert_eq!(persisted.raw.confidence, ObservationConfidence::Verified);
         assert_eq!(persisted.enrichment.asn, Some(64512));
 
         let guard = state.lock().await;
@@ -632,7 +625,7 @@ mod tests {
 
         run_worker(WorkerContext {
             config,
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             state,
             stats: Arc::clone(&stats),
             stop,
@@ -689,7 +682,7 @@ mod tests {
     fn build_persisted_observation_uses_not_applicable_for_non_routable_endpoint() {
         let raw = RawNodeObservation::from_failure(
             Utc::now(),
-            CrawlRunId::new("run-1"),
+            CrawlRunId::from_u128(1),
             CrawlEndpoint::new(
                 "10.0.0.2",
                 8333,
