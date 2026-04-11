@@ -1,0 +1,21 @@
+services:
+  postgres-migrate:
+    image: rust:1.93.1-bookworm
+    working_dir: /workspace
+    container_name: btc-network-postgres-migrate
+    profiles: ["crawler", "api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      CARGO_HOME: /cargo
+      CARGO_TARGET_DIR: /cargo-target
+      BTC_NETWORK_POSTGRES_URL: postgresql://btc_network_dev:btc_network_dev@postgres:5432/btc_network
+      BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: 5
+    command: cargo run -p btc-network-postgres-migrate --locked --
+    restart: "no"
+    volumes:
+      - .:/workspace
+      - cargo-registry:/cargo/registry
+      - cargo-git:/cargo/git
+      - cargo-target:/cargo-target

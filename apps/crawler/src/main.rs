@@ -25,57 +25,106 @@ struct Cli {
 #[derive(Args, Debug)]
 struct CrawlArgs {
     /// Maximum number of worker tasks processing nodes concurrently.
-    #[arg(long, default_value_t = 1000, value_parser = parse_positive_usize)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_MAX_CONCURRENCY",
+        default_value_t = 1000,
+        value_parser = parse_positive_usize
+    )]
     max_concurrency: usize,
 
     /// Hard cap on unique endpoints tracked in-memory during a run.
     ///
     /// Once this limit is reached, newly discovered endpoints are ignored.
-    #[arg(long, default_value_t = 100_000, value_parser = parse_positive_usize)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES",
+        default_value_t = 100_000,
+        value_parser = parse_positive_usize
+    )]
     max_tracked_nodes: usize,
 
     /// Wall-clock limit for the full crawl before shutdown begins.
-    #[arg(long, default_value_t = 60, value_parser = parse_positive_u64)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_MAX_RUNTIME_MINUTES",
+        default_value_t = 60,
+        value_parser = parse_positive_u64
+    )]
     max_runtime_minutes: u64,
 
     /// Stop after this many minutes without queueing any newly discovered nodes.
-    #[arg(long, default_value_t = 5, value_parser = parse_positive_u64)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_IDLE_TIMEOUT_MINUTES",
+        default_value_t = 5,
+        value_parser = parse_positive_u64
+    )]
     idle_timeout_minutes: u64,
 
     /// Seconds between periodic durable checkpoints and recovery points.
-    #[arg(long, default_value_t = 30, value_parser = parse_positive_u64)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_CHECKPOINT_INTERVAL_SECS",
+        default_value_t = 30,
+        value_parser = parse_positive_u64
+    )]
     checkpoint_interval_secs: u64,
 
     /// Timeout for a single TCP connect attempt to a peer.
-    #[arg(long, default_value_t = 30, value_parser = parse_positive_u64)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_CONNECT_TIMEOUT_SECS",
+        default_value_t = 30,
+        value_parser = parse_positive_u64
+    )]
     connect_timeout_secs: u64,
 
     /// Maximum number of TCP connect attempts per node, including the first try.
     ///
     /// Retries are only applied to connect failures, not later handshake or
     /// peer-discovery failures.
-    #[arg(long, default_value_t = 3, value_parser = parse_positive_usize)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS",
+        default_value_t = 3,
+        value_parser = parse_positive_usize
+    )]
     connect_max_attempts: usize,
 
     /// Base exponential backoff in milliseconds between failed connect attempts.
     ///
     /// With the default settings, retries wait 250ms, 500ms, 1000ms, and so on.
-    #[arg(long, default_value_t = 250)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_CONNECT_RETRY_BACKOFF_MS",
+        default_value_t = 250
+    )]
     connect_retry_backoff_ms: u64,
 
     /// Timeout for read and write operations after a TCP connection is established.
-    #[arg(long, default_value_t = 10, value_parser = parse_positive_u64)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS",
+        default_value_t = 10,
+        value_parser = parse_positive_u64
+    )]
     io_timeout_secs: u64,
 
     /// Maximum number of seconds to wait for worker tasks to drain during shutdown.
     ///
     /// If the grace period expires, remaining worker tasks are aborted so the
     /// process can exit instead of hanging in the terminal.
-    #[arg(long, default_value_t = 15, value_parser = parse_positive_u64)]
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_SHUTDOWN_GRACE_PERIOD_SECS",
+        default_value_t = 15,
+        value_parser = parse_positive_u64
+    )]
     shutdown_grace_period_secs: u64,
 
     /// Emit per-node timing and retry logs.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, env = "BTC_NETWORK_CRAWLER_VERBOSE", default_value_t = false)]
     verbose: bool,
 
     #[command(flatten)]

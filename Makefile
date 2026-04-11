@@ -26,6 +26,10 @@ MAKEFLAGS += --no-print-directory
 	infra-postgres-up \
 	infra-postgres-down \
 	infra-postgres-reset \
+	infra-crawler-up \
+	infra-api-up \
+	infra-crawler-api-up \
+	infra-compose-down \
 	crawler-mmdb-update \
 	api \
 	listener \
@@ -91,6 +95,21 @@ infra-postgres-reset: ## Reset local PostgreSQL data under .dev-data/postgres
 	@$(DOCKER_COMPOSE) rm -fs postgres >/dev/null 2>&1 || true
 	@mkdir -p .dev-data/postgres
 	@docker run --rm -v "$(CURDIR)/.dev-data/postgres:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
+
+infra-crawler-up: ## Start postgres, migrations, and the crawler via the crawler Compose profile
+	@mkdir -p .dev-data/postgres
+	@$(DOCKER_COMPOSE) --profile crawler up
+
+infra-api-up: ## Start postgres, migrations, and the API via the api Compose profile
+	@mkdir -p .dev-data/postgres
+	@$(DOCKER_COMPOSE) --profile api up
+
+infra-crawler-api-up: ## Start postgres, migrations, crawler, and API via both Compose profiles
+	@mkdir -p .dev-data/postgres
+	@$(DOCKER_COMPOSE) --profile crawler --profile api up
+
+infra-compose-down: ## Stop and remove all local Compose services in this repository stack
+	@$(DOCKER_COMPOSE) down
 
 crawler-mmdb-update: ## Download or refresh local MMDB files for crawler development
 	@bash scripts/update-crawler-mmdb.sh

@@ -90,6 +90,28 @@ make crawler
 For the preferred local crawler setup with the shared Docker-backed PostgreSQL service and local MMDB files, see [apps/crawler/README.md](apps/crawler/README.md).
 That guide also documents how to fetch and refresh the local MMDB datasets used by the crawler.
 
+Docker Compose profiles:
+
+```bash
+docker compose up postgres
+docker compose --profile crawler up
+docker compose --profile crawler --profile api up
+```
+
+`postgres` is the shared unprofiled service. Enabling the `crawler` or `api`
+profiles also runs the one-shot `postgres-migrate` service before the app
+containers start.
+
+Equivalent `make` wrappers:
+
+```bash
+make infra-postgres-up
+make infra-crawler-up
+make infra-api-up
+make infra-crawler-api-up
+make infra-compose-down
+```
+
 Desktop app:
 
 ```bash

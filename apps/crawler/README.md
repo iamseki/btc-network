@@ -4,7 +4,12 @@ The preferred local crawler path now uses:
 
 - Docker Compose for the shared local PostgreSQL service used by the crawler and API
 - host-managed MMDB files under `.dev-data/mmdb/`
-- explicit migrations before the crawler starts
+- explicit migrations before host-run crawler startup, or the profiled `postgres-migrate` container path
+
+There are now two supported local paths:
+
+- host-run binaries with explicit `make postgres-migrate`
+- Docker Compose profiles where `postgres-migrate` runs as a one-shot dependency
 
 ## Typical Local Flow
 
@@ -62,6 +67,58 @@ the old `/var/lib/postgresql/data` mount layout, run `make infra-postgres-reset`
 once before bringing the service back up. That clears incompatible dev data and
 lets PostgreSQL 18 initialize the new versioned data directory layout.
 
+## Compose Profiles
+
+The repository root `docker-compose.yml` keeps `postgres` unprofiled so it can
+act as the shared base service, then layers app services behind Docker
+profiles:
+
+- `crawler` profile: `postgres` + `postgres-migrate` + `crawler`
+- `api` profile: `postgres` + `postgres-migrate` + `api`
+- both profiles together: `postgres` + `postgres-migrate` + `crawler` + `api`
+
+Useful commands from the repository root:
+
+```bash
+docker compose up postgres
+docker compose --profile crawler up
+docker compose --profile crawler --profile api up
+docker compose down
+```
+
+Equivalent `make` wrappers:
+
+```bash
+make infra-postgres-up
+make infra-crawler-up
+make infra-crawler-api-up
+make infra-compose-down
+```
+
+The profiled services run the checked-in Rust binaries inside a shared
+`rust:1.93.1-bookworm` container image and reuse named Cargo caches for
+dependency downloads and build artifacts.
+
+The profiled crawler service also sets default runtime tuning through
+environment variables in `compose/crawler.yml`, including:
+
+- `BTC_NETWORK_CRAWLER_MAX_CONCURRENCY=20000`
+- `BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES=500000`
+- `BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS=10`
+- `BTC_NETWORK_CRAWLER_CONNECT_RETRY_BACKOFF_MS=250`
+- `BTC_NETWORK_CRAWLER_CONNECT_TIMEOUT_SECS=30`
+- `BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS=20`
+- `BTC_NETWORK_MMDB_ASN_PATH=/workspace/.dev-data/mmdb/GeoLite2-ASN.mmdb`
+- `BTC_NETWORK_MMDB_COUNTRY_PATH=/workspace/.dev-data/mmdb/GeoLite2-Country.mmdb`
+
+Compose resource defaults are also set there:
+
+- `BTC_NETWORK_CRAWLER_CPUS=6.0`
+- `BTC_NETWORK_CRAWLER_MEM_LIMIT=12g`
+
+Override any of these by exporting them in your shell or by adding them to a
+repository-root `.env` file before running `docker compose`.
+
 ## Apply Migrations
 
 Migrations stay explicit. They are not tied to crawler startup.
@@ -71,6 +128,10 @@ make postgres-migrate
 ```
 
 That uses the preferred local PostgreSQL defaults automatically.
+
+This explicit migration step applies to the host-run workflow above. When you
+use the Compose profiles, `postgres-migrate` runs automatically before the
+`crawler` or `api` service starts.
 
 ## Run The Crawler
 
@@ -97,6 +158,15 @@ Optional crawler tuning overrides:
 - `--shutdown-grace-period-secs`
 
 The crawler still runs without MMDB files, but enrichment will be unavailable and ASN/country data will not be persisted.
+
+The profiled `crawler` container now defaults to the checked-out
+`.dev-data/mmdb/*.mmdb` paths. Run `make crawler-mmdb-update` before starting
+the Compose crawler stack so those files exist on the bind-mounted workspace.
+
+Do not bake MMDB files into a crawler image for this local workflow. They are
+host-managed datasets refreshed on a weekly cadence, so bind-mounting the
+checked-out repository data is simpler and avoids rebuilding an image just to
+pick up fresh GeoLite files.
 
 ## Inspect Data
 
