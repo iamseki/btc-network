@@ -9,6 +9,8 @@ on:
 env:
   CARGO_HOME: ${{ github.workspace }}/.cargo-home
   RUST_TOOLCHAIN: 1.93.1
+  CARGO_AUDIT_VERSION: 0.22.1
+  CARGO_DENY_VERSION: 0.19.0
 
 concurrency:
   group: ci-cd-${{ github.ref }}
@@ -121,10 +123,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            ${{ env.CARGO_HOME }}/bin
             ${{ env.CARGO_HOME }}/registry
             ${{ env.CARGO_HOME }}/git
-          key: ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+            ${{ env.CARGO_HOME }}/.crates2.json
+            ${{ env.CARGO_HOME }}/.crates.toml
+          key: ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ env.CARGO_AUDIT_VERSION }}-${{ env.CARGO_DENY_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
+            ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ env.CARGO_AUDIT_VERSION }}-${{ env.CARGO_DENY_VERSION }}-
             ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-
             ${{ runner.os }}-cargo-security-
 
@@ -141,7 +147,9 @@ jobs:
         run: echo "${CARGO_HOME}/bin" >> "$GITHUB_PATH"
 
       - name: Install Rust security tools
-        run: cargo install --locked --force cargo-audit cargo-deny
+        run: |
+          cargo install --locked cargo-audit --version "${CARGO_AUDIT_VERSION}"
+          cargo install --locked cargo-deny --version "${CARGO_DENY_VERSION}"
 
       - name: Show Rust security tool versions
         run: |
