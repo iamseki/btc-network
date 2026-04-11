@@ -196,9 +196,8 @@ security-web: ## Run frontend dependency security checks when the npm registry i
 		echo "Skipping web security checks: npm registry is unreachable"; \
 	fi
 
-security: ## Run all dependency security checks
-	@$(MAKE) security-rust
-	@$(MAKE) security-web
+security: ## Run all dependency security checks with concise output; set SECURITY_VERBOSE=1 for full tool output
+	@bash scripts/security_summary.sh
 
 ##@ Help
 

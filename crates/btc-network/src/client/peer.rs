@@ -1,4 +1,3 @@
-use rand::Rng;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, Write};
@@ -400,7 +399,7 @@ pub fn handshake_session(
 
 /// Reuses an existing session to perform a ping roundtrip.
 pub fn ping_session(node: &str, session: &mut Session) -> Result<PingSummary, Box<dyn Error>> {
-    let nonce: u64 = rand::thread_rng().r#gen();
+    let nonce = getrandom::u64().map_err(|err| io::Error::other(err.to_string()))?;
     let echoed_nonce = session.ping(nonce)?;
     Ok(PingSummary {
         node: node.to_owned(),

@@ -2,6 +2,12 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 DROP TABLE IF EXISTS node_observations;
 
+-- Historical benchmark schema note:
+-- This synthetic schema is intentionally kept for BNDD-0002 benchmark reproducibility.
+-- It does not mirror the current runtime PostgreSQL schema exactly.
+-- The live crawler now uses UUIDv7-backed crawl_run_id/observation_id and does not
+-- persist confidence_level.
+
 -- Daily chunk variant for short recent-window analytics.
 -- This is the comparison case against the monthly production-oriented default.
 -- Hypercore columnstore is enabled so this variant also measures compressed TimescaleDB.

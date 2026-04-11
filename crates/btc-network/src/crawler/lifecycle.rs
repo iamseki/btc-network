@@ -245,7 +245,7 @@ fn log_progress_summary(checkpoint: &CrawlRunCheckpoint) {
     };
 
     info!(
-        run_id = %checkpoint.run_id.as_str(),
+        run_id = %checkpoint.run_id,
         phase = ?checkpoint.phase,
         scheduled_tasks = metrics.scheduled_tasks,
         successful_handshakes = metrics.successful_handshakes,
@@ -537,7 +537,7 @@ mod tests {
 
         let handle = tokio::spawn(run_checkpoint_emitter(CheckpointEmitterContext {
             repository: repository_trait,
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             phase: Arc::clone(&phase),
             state: Arc::clone(&state),
             stats: Arc::clone(&stats),
@@ -688,7 +688,7 @@ mod tests {
 
         let err = run_checkpoint_emitter(CheckpointEmitterContext {
             repository,
-            run_id: CrawlRunId::new("run-1"),
+            run_id: CrawlRunId::from_u128(1),
             phase,
             state,
             stats,

@@ -10,9 +10,10 @@ btc-network = { path = "../btc-network" }
 chrono = "0.4.44"
 hex = "0.4.3"
 sha2 = "0.10"
-sqlx-core = { version = "0.8.6", features = ["chrono", "migrate", "_rt-tokio", "_tls-rustls-ring-webpki"] }
-sqlx-postgres = { version = "0.8.6", features = ["chrono", "migrate"] }
+sqlx-core = { version = "0.8.6", features = ["chrono", "migrate", "uuid", "_rt-tokio", "_tls-rustls-ring-webpki"] }
+sqlx-postgres = { version = "0.8.6", features = ["chrono", "migrate", "uuid"] }
 tokio = { version = "1", features = ["rt", "sync"] }
+uuid = { version = "1", features = ["v7"] }
 
 [dev-dependencies]
 btc-network-mmdb = { path = "../btc-network-mmdb" }

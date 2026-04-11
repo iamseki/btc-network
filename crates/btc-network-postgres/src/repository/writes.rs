@@ -5,8 +5,8 @@ use sqlx_core::query::query;
 use sqlx_postgres::{PgPool, Postgres};
 
 use crate::values::{
-    confidence_to_str, crawl_network_to_str, crawl_phase_to_str, duration_to_millis,
-    enrichment_status_to_str, failure_classification_to_str, handshake_status_to_str, usize_to_i64,
+    crawl_network_to_str, crawl_phase_to_str, duration_to_millis, enrichment_status_to_str,
+    failure_classification_to_str, handshake_status_to_str, usize_to_i64,
 };
 
 use super::map_postgres_err;
@@ -37,17 +37,15 @@ INSERT INTO node_observations (
     observed_at,
     crawl_run_id,
     observation_id,
-    batch_id,
     endpoint,
     network_type,
     handshake_status,
-    confidence_level,
     protocol_version,
     services,
     user_agent,
     start_height,
     relay,
-    discovered_count,
+    discovered_peer_addresses_count,
     latency_ms,
     failure_classification,
     enrichment_status,
@@ -57,24 +55,24 @@ INSERT INTO node_observations (
     prefix
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
 )
 ",
         )
         .bind(observation.raw.observed_at)
-        .bind(observation.raw.crawl_run_id.as_str())
-        .bind(observation.observation_id.as_str())
-        .bind(observation.batch_id.as_str())
+        .bind(observation.raw.crawl_run_id.as_uuid())
+        .bind(observation.observation_id.as_uuid())
         .bind(endpoint)
         .bind(network_type)
         .bind(handshake_status_to_str(observation.raw.handshake_status))
-        .bind(confidence_to_str(observation.raw.confidence))
         .bind(observation.raw.protocol_version)
         .bind(services)
         .bind(observation.raw.user_agent)
         .bind(observation.raw.start_height)
         .bind(observation.raw.relay)
-        .bind(usize_to_i64(observation.raw.discovered_count))
+        .bind(usize_to_i64(
+            observation.raw.discovered_peer_addresses_count,
+        ))
         .bind(latency_ms)
         .bind(failure_classification)
         .bind(enrichment_status_to_str(observation.enrichment.status))
@@ -124,7 +122,7 @@ VALUES (
 )
 ",
     )
-    .bind(checkpoint.run_id.as_str())
+    .bind(checkpoint.run_id.as_uuid())
     .bind(crawl_phase_to_str(checkpoint.phase))
     .bind(checkpoint.checkpointed_at)
     .bind(checkpoint.checkpoint_sequence as i64)
@@ -183,7 +181,7 @@ VALUES (
 )
 ",
     )
-    .bind(recovery_point.run_id.as_str())
+    .bind(recovery_point.run_id.as_uuid())
     .bind(crawl_phase_to_str(recovery_point.phase))
     .bind(recovery_point.checkpointed_at)
     .bind(recovery_point.checkpoint_sequence as i64)

@@ -1,91 +1,83 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::Duration;
+use uuid::Uuid;
 
 use super::types::{CrawlerConfig, NodeState};
 
 /// Stable identifier for one crawler run.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CrawlRunId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CrawlRunId(Uuid);
 
 impl CrawlRunId {
-    /// Creates a crawl run identifier from a caller-provided string.
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+    /// Creates a crawl run identifier from a caller-provided UUID.
+    pub fn new(value: Uuid) -> Self {
+        Self(value)
     }
 
-    /// Returns the identifier as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// Generates a new time-ordered identifier.
+    pub fn now_v7() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    /// Parses a crawl run identifier from its canonical UUID string.
+    pub fn parse_str(value: &str) -> Result<Self, uuid::Error> {
+        Uuid::parse_str(value).map(Self)
+    }
+
+    /// Builds a deterministic identifier from a fixed integer.
+    pub fn from_u128(value: u128) -> Self {
+        Self(Uuid::from_u128(value))
+    }
+
+    /// Returns the identifier as a UUID value.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
     }
 }
 
-impl From<String> for CrawlRunId {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for CrawlRunId {
-    fn from(value: &str) -> Self {
-        Self::new(value)
+impl Display for CrawlRunId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
 /// Stable identifier for one persisted node observation row.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ObservationId(String);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ObservationId(Uuid);
 
 impl ObservationId {
-    /// Creates an observation identifier from a caller-provided string.
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+    /// Creates an observation identifier from a caller-provided UUID.
+    pub fn new(value: Uuid) -> Self {
+        Self(value)
     }
 
-    /// Returns the identifier as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl From<String> for ObservationId {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for ObservationId {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-/// Stable identifier for a batch of persisted observations.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BatchId(String);
-
-impl BatchId {
-    /// Creates a batch identifier from a caller-provided string.
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
+    /// Generates a new time-ordered identifier.
+    pub fn now_v7() -> Self {
+        Self(Uuid::now_v7())
     }
 
-    /// Returns the identifier as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// Parses an observation identifier from its canonical UUID string.
+    pub fn parse_str(value: &str) -> Result<Self, uuid::Error> {
+        Uuid::parse_str(value).map(Self)
+    }
+
+    /// Builds a deterministic identifier from a fixed integer.
+    pub fn from_u128(value: u128) -> Self {
+        Self(Uuid::from_u128(value))
+    }
+
+    /// Returns the identifier as a UUID value.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
     }
 }
 
-impl From<String> for BatchId {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for BatchId {
-    fn from(value: &str) -> Self {
-        Self::new(value)
+impl Display for ObservationId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -300,14 +292,6 @@ pub enum HandshakeStatus {
     NotAttempted,
 }
 
-/// Confidence level assigned to an observation before persistence.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObservationConfidence {
-    Verified,
-    Failed,
-    Rumored,
-}
-
 /// Stage at which a node visit failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FailureClassification {
@@ -396,13 +380,12 @@ pub struct RawNodeObservation {
     pub crawl_run_id: CrawlRunId,
     pub endpoint: CrawlEndpoint,
     pub handshake_status: HandshakeStatus,
-    pub confidence: ObservationConfidence,
     pub protocol_version: Option<i32>,
     pub services: Option<u64>,
     pub user_agent: Option<String>,
     pub start_height: Option<i32>,
     pub relay: Option<bool>,
-    pub discovered_count: usize,
+    pub discovered_peer_addresses_count: usize,
     pub latency: Option<Duration>,
     pub failure_classification: Option<FailureClassification>,
 }
@@ -413,7 +396,7 @@ impl RawNodeObservation {
         crawl_run_id: CrawlRunId,
         endpoint: CrawlEndpoint,
         state: &NodeState,
-        discovered_count: usize,
+        discovered_peer_addresses_count: usize,
         latency: Duration,
     ) -> Self {
         Self {
@@ -421,13 +404,12 @@ impl RawNodeObservation {
             crawl_run_id,
             endpoint,
             handshake_status: HandshakeStatus::Succeeded,
-            confidence: ObservationConfidence::Verified,
             protocol_version: Some(state.version),
             services: Some(state.services),
             user_agent: Some(state.user_agent.clone()),
             start_height: Some(state.start_height),
             relay: state.relay,
-            discovered_count,
+            discovered_peer_addresses_count,
             latency: Some(latency),
             failure_classification: None,
         }
@@ -445,13 +427,12 @@ impl RawNodeObservation {
             crawl_run_id,
             endpoint,
             handshake_status: HandshakeStatus::Failed,
-            confidence: ObservationConfidence::Failed,
             protocol_version: None,
             services: None,
             user_agent: None,
             start_height: None,
             relay: None,
-            discovered_count: 0,
+            discovered_peer_addresses_count: 0,
             latency: Some(latency),
             failure_classification: Some(classification),
         }
@@ -464,12 +445,10 @@ impl RawNodeObservation {
     pub fn into_persisted(
         self,
         observation_id: ObservationId,
-        batch_id: BatchId,
         enrichment: IpEnrichment,
     ) -> PersistedNodeObservation {
         PersistedNodeObservation {
             observation_id,
-            batch_id,
             raw: self,
             enrichment,
         }
@@ -479,7 +458,6 @@ impl RawNodeObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedNodeObservation {
     pub observation_id: ObservationId,
-    pub batch_id: BatchId,
     pub raw: RawNodeObservation,
     pub enrichment: IpEnrichment,
 }
@@ -582,16 +560,15 @@ mod tests {
     fn sample_raw_observation(endpoint: CrawlEndpoint) -> RawNodeObservation {
         RawNodeObservation {
             observed_at: Utc::now(),
-            crawl_run_id: CrawlRunId::new("run-1"),
+            crawl_run_id: CrawlRunId::from_u128(1),
             endpoint,
             handshake_status: HandshakeStatus::Succeeded,
-            confidence: ObservationConfidence::Verified,
             protocol_version: Some(70016),
             services: Some(1),
             user_agent: Some("/Satoshi:27.0.0/".to_string()),
             start_height: Some(900_000),
             relay: Some(true),
-            discovered_count: 8,
+            discovered_peer_addresses_count: 8,
             latency: Some(Duration::from_millis(150)),
             failure_classification: None,
         }
@@ -692,14 +669,9 @@ mod tests {
             Some("198.51.100.0/24".to_string()),
         );
 
-        let persisted = raw.into_persisted(
-            ObservationId::new("observation-1"),
-            BatchId::new("batch-1"),
-            enrichment.clone(),
-        );
+        let persisted = raw.into_persisted(ObservationId::from_u128(1), enrichment.clone());
 
-        assert_eq!(persisted.observation_id.as_str(), "observation-1");
-        assert_eq!(persisted.batch_id.as_str(), "batch-1");
+        assert_eq!(persisted.observation_id, ObservationId::from_u128(1));
         assert_eq!(persisted.raw.observed_at, observed_at);
         assert_eq!(persisted.raw.crawl_run_id, crawl_run_id);
         assert_eq!(persisted.raw.endpoint, endpoint);

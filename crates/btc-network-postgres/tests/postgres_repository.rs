@@ -7,10 +7,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
 use btc_network::crawler::{
-    BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
-    CrawlRunId, CrawlRunMetrics, CrawlRunRecoveryPoint, CrawlerAnalyticsReader, CrawlerRepository,
-    HandshakeStatus, IpEnrichment, IpEnrichmentProvider, ObservationConfidence, ObservationId,
-    PersistedNodeObservation, RawNodeObservation, RecoveryPayloadEncoding,
+    CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
+    CrawlRunMetrics, CrawlRunRecoveryPoint, CrawlerAnalyticsReader, CrawlerRepository,
+    HandshakeStatus, IpEnrichment, IpEnrichmentProvider, ObservationId, PersistedNodeObservation,
+    RawNodeObservation, RecoveryPayloadEncoding,
 };
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_postgres::{
@@ -29,6 +29,14 @@ use testcontainers_modules::{
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 const TEST_POSTGRES_PASSWORD: &str = "btc-network-test";
 const TEST_POSTGRES_USER: &str = "postgres";
+
+fn run_id(value: u128) -> CrawlRunId {
+    CrawlRunId::from_u128(value)
+}
+
+fn observation_id(value: u128) -> ObservationId {
+    ObservationId::from_u128(value)
+}
 
 struct TestDatabase {
     _container: ContainerAsync<postgres::Postgres>,
@@ -201,7 +209,7 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
     db.apply_migrations().await?;
     let repository = PostgresCrawlerRepository::new(&db.config)?;
 
-    let run_id = CrawlRunId::new("run-live-1");
+    let run_id = run_id(1);
     let base_time = Utc::now();
 
     repository
@@ -209,7 +217,7 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                "observation-a1",
+                101,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
@@ -218,7 +226,7 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.8",
-                "observation-b1",
+                102,
                 base_time + Duration::seconds(1),
                 None,
                 None,
@@ -227,18 +235,13 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.9",
-                "observation-c1",
+                103,
                 base_time + Duration::seconds(2),
                 Some(64513),
                 Some("Transit ASN"),
                 Some("DE"),
             ),
-            sample_failed_observation(
-                &run_id,
-                "1.1.1.9",
-                "observation-c2",
-                base_time + Duration::seconds(3),
-            ),
+            sample_failed_observation(&run_id, "1.1.1.9", 104, base_time + Duration::seconds(3)),
         ])
         .await?;
 
@@ -305,7 +308,7 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     db.apply_migrations().await?;
     let repository = PostgresCrawlerRepository::new(&db.config)?;
 
-    let run_id = CrawlRunId::new("run-live-tied");
+    let run_id = run_id(2);
     let tied_time = Utc::now();
 
     repository
@@ -355,7 +358,7 @@ async fn repository_latest_active_checkpoint_ignores_terminal_latest_row() -> Te
     db.apply_migrations().await?;
     let repository = PostgresCrawlerRepository::new(&db.config)?;
 
-    let run_id = CrawlRunId::new("run-latest-terminal");
+    let run_id = run_id(3);
     let base_time = Utc::now();
 
     repository
@@ -389,7 +392,7 @@ async fn repository_round_trips_recovery_points_and_observed_endpoints() -> Test
     db.apply_migrations().await?;
     let repository = PostgresCrawlerRepository::new(&db.config)?;
 
-    let run_id = CrawlRunId::new("run-recovery-live");
+    let run_id = run_id(4);
     let base_time = Utc::now();
 
     repository
@@ -397,22 +400,17 @@ async fn repository_round_trips_recovery_points_and_observed_endpoints() -> Test
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                "observation-r1",
+                201,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
                 Some("US"),
             ),
-            sample_failed_observation(
-                &run_id,
-                "8.8.8.8",
-                "observation-r2",
-                base_time + Duration::seconds(1),
-            ),
+            sample_failed_observation(&run_id, "8.8.8.8", 202, base_time + Duration::seconds(1)),
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                "observation-r3",
+                203,
                 base_time + Duration::seconds(2),
                 Some(64512),
                 Some("Example ASN"),
@@ -486,7 +484,7 @@ async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicabl
     let provider =
         MmdbIpEnrichmentProvider::new(MmdbEnrichmentConfig::new(asn_path, country_path))?;
 
-    let run_id = CrawlRunId::new("run-mmdb-live-1");
+    let run_id = run_id(5);
     let observed_at = Utc::now();
     let public_endpoint = CrawlEndpoint::new(
         "1.1.1.7",
@@ -506,14 +504,14 @@ async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicabl
             sample_verified_observation_for_endpoint(
                 &run_id,
                 &public_endpoint,
-                "observation-mmdb-public",
+                301,
                 observed_at,
                 provider.enrich(&public_endpoint),
             ),
             sample_verified_observation_for_endpoint(
                 &run_id,
                 &private_endpoint,
-                "observation-mmdb-private",
+                302,
                 observed_at + Duration::seconds(1),
                 provider.enrich(&private_endpoint),
             ),
@@ -572,7 +570,7 @@ async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
 
     repository
         .insert_run_checkpoint(sample_checkpoint(
-            &CrawlRunId::new("run-older"),
+            &run_id(6),
             CrawlPhase::Completed,
             base_time,
             1,
@@ -581,7 +579,7 @@ async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
         .await?;
     repository
         .insert_run_checkpoint(sample_checkpoint(
-            &CrawlRunId::new("run-newer"),
+            &run_id(7),
             CrawlPhase::Failed,
             base_time + Duration::seconds(5),
             1,
@@ -592,7 +590,7 @@ async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
     let runs = CrawlerAnalyticsReader::list_crawl_runs(&repository, 1).await?;
 
     assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].run_id, "run-newer");
+    assert_eq!(runs[0].run_id, run_id(7).to_string());
     assert_eq!(runs[0].phase, "failed");
     assert_eq!(runs[0].success_pct, 133.33);
     assert_eq!(runs[0].scheduled_pct, 50.0);
@@ -606,7 +604,7 @@ async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns
     let db = TestDatabase::start().await?;
     db.apply_migrations().await?;
     let repository = PostgresCrawlerRepository::new(&db.config)?;
-    let run_id = CrawlRunId::new("run-detail-1");
+    let run_id = run_id(8);
     let base_time = Utc::now();
 
     repository
@@ -614,18 +612,13 @@ async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                "observation-a1",
+                401,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
                 Some("US"),
             ),
-            sample_failed_observation(
-                &run_id,
-                "1.1.1.9",
-                "observation-a2",
-                base_time + Duration::seconds(1),
-            ),
+            sample_failed_observation(&run_id, "1.1.1.9", 402, base_time + Duration::seconds(1)),
         ])
         .await?;
     repository
@@ -651,7 +644,7 @@ async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns
         .await?
         .expect("run detail");
 
-    assert_eq!(detail.run.run_id, "run-detail-1");
+    assert_eq!(detail.run.run_id, run_id.to_string());
     assert_eq!(detail.run.phase, "failed");
     assert_eq!(detail.checkpoints.len(), 2);
     assert_eq!(detail.checkpoints[0].phase, "failed");
@@ -673,7 +666,7 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
     let db = TestDatabase::start().await?;
     db.apply_migrations().await?;
     let repository = PostgresCrawlerRepository::new(&db.config)?;
-    let run_id = CrawlRunId::new("run-asn-limit");
+    let run_id = run_id(9);
     let base_time = Utc::now();
 
     repository
@@ -681,7 +674,7 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                "observation-a1",
+                501,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
@@ -690,7 +683,7 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "8.8.8.8",
-                "observation-a2",
+                502,
                 base_time + Duration::seconds(1),
                 Some(15169),
                 Some("Google LLC"),
@@ -718,7 +711,7 @@ fn unique_database_name() -> String {
 fn sample_verified_observation(
     run_id: &CrawlRunId,
     host: &str,
-    observation_id: &str,
+    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
     asn: Option<u32>,
     asn_organization: Option<&str>,
@@ -734,19 +727,17 @@ fn sample_verified_observation(
             Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
         ),
         handshake_status: HandshakeStatus::Succeeded,
-        confidence: ObservationConfidence::Verified,
         protocol_version: Some(70016),
         services: Some(1),
         user_agent: Some("/Satoshi:27.0.0/".to_string()),
         start_height: Some(900_000),
         relay: Some(true),
-        discovered_count: 8,
+        discovered_peer_addresses_count: 8,
         latency: Some(std::time::Duration::from_millis(125)),
         failure_classification: None,
     }
     .into_persisted(
-        ObservationId::new(observation_id),
-        BatchId::new(format!("batch-{observation_id}")),
+        observation_id(observation_id_value),
         IpEnrichment::matched(
             asn,
             asn_organization.map(ToString::to_string),
@@ -759,7 +750,7 @@ fn sample_verified_observation(
 fn sample_verified_observation_for_endpoint(
     run_id: &CrawlRunId,
     endpoint: &CrawlEndpoint,
-    observation_id: &str,
+    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
     enrichment: IpEnrichment,
 ) -> PersistedNodeObservation {
@@ -768,27 +759,22 @@ fn sample_verified_observation_for_endpoint(
         crawl_run_id: run_id.clone(),
         endpoint: endpoint.clone(),
         handshake_status: HandshakeStatus::Succeeded,
-        confidence: ObservationConfidence::Verified,
         protocol_version: Some(70016),
         services: Some(1),
         user_agent: Some("/Satoshi:27.0.0/".to_string()),
         start_height: Some(900_000),
         relay: Some(true),
-        discovered_count: 8,
+        discovered_peer_addresses_count: 8,
         latency: Some(std::time::Duration::from_millis(125)),
         failure_classification: None,
     }
-    .into_persisted(
-        ObservationId::new(observation_id),
-        BatchId::new(format!("batch-{observation_id}")),
-        enrichment,
-    )
+    .into_persisted(observation_id(observation_id_value), enrichment)
 }
 
 fn sample_failed_observation(
     run_id: &CrawlRunId,
     host: &str,
-    observation_id: &str,
+    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
 ) -> PersistedNodeObservation {
     RawNodeObservation {
@@ -801,19 +787,17 @@ fn sample_failed_observation(
             Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
         ),
         handshake_status: HandshakeStatus::Failed,
-        confidence: ObservationConfidence::Failed,
         protocol_version: None,
         services: None,
         user_agent: None,
         start_height: None,
         relay: None,
-        discovered_count: 0,
+        discovered_peer_addresses_count: 0,
         latency: Some(std::time::Duration::from_millis(300)),
         failure_classification: Some(btc_network::crawler::FailureClassification::Handshake),
     }
     .into_persisted(
-        ObservationId::new(observation_id),
-        BatchId::new(format!("batch-{observation_id}")),
+        observation_id(observation_id_value),
         IpEnrichment::matched(
             Some(64513),
             Some("Transit ASN".to_string()),

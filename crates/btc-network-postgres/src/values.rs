@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use btc_network::crawler::{
     CrawlNetwork, CrawlPhase, FailureClassification, HandshakeStatus, IpEnrichmentStatus,
-    ObservationConfidence,
 };
 
 pub(crate) fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
@@ -44,14 +43,6 @@ pub(crate) fn crawl_network_to_str(value: CrawlNetwork) -> &'static str {
         CrawlNetwork::Cjdns => "cjdns",
         CrawlNetwork::Yggdrasil => "yggdrasil",
         CrawlNetwork::Unknown => "unknown",
-    }
-}
-
-pub(crate) fn confidence_to_str(value: ObservationConfidence) -> &'static str {
-    match value {
-        ObservationConfidence::Verified => "verified",
-        ObservationConfidence::Failed => "failed",
-        ObservationConfidence::Rumored => "rumored",
     }
 }
 

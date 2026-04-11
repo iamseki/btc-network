@@ -126,6 +126,9 @@ run_timed "clickhouse_schema" \
 
 TIMESCALE_LOAD_SQL="$(cat <<SQL
 TRUNCATE TABLE node_observations;
+-- Historical benchmark workload note:
+-- The synthetic benchmark schema below is preserved for BNDD-0002 comparability and
+-- does not mirror the current runtime crawler schema exactly.
 INSERT INTO node_observations (
     observed_at,
     crawl_run_id,
@@ -235,6 +238,9 @@ SQL
 
 CLICKHOUSE_LOAD_SQL="$(cat <<SQL
 TRUNCATE TABLE btc_bench.node_observations;
+-- Historical benchmark workload note:
+-- The synthetic benchmark schema below is preserved for BNDD-0002 comparability and
+-- does not mirror the current runtime crawler schema exactly.
 INSERT INTO btc_bench.node_observations
 SELECT
     now() - toIntervalSecond(((number) % (${DAYS} * 24 * 240)) * 15) AS observed_at,

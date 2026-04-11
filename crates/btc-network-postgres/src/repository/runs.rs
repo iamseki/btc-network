@@ -4,6 +4,7 @@ use btc_network::crawler::{
 };
 use sqlx_core::{query::query, row::Row};
 use sqlx_postgres::{PgPool, PgRow, Postgres};
+use uuid::Uuid;
 
 use crate::values::crawl_phase_from_str;
 
@@ -40,7 +41,7 @@ ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
 LIMIT 1
 ",
     )
-    .bind(run_id.as_str())
+    .bind(run_id.as_uuid())
     .fetch_optional(pool)
     .await
     .map_err(|err| map_postgres_err("fetch latest run checkpoint", err))?;
@@ -201,7 +202,7 @@ GROUP BY endpoint, network_type
 ORDER BY endpoint ASC
 ",
     )
-    .bind(run_id.as_str())
+    .bind(run_id.as_uuid())
     .fetch_all(pool)
     .await
     .map_err(|err| map_postgres_err("list observed endpoints for run", err))?;
@@ -273,7 +274,7 @@ pub(super) fn row_to_checkpoint(row: PgRow) -> Result<CrawlRunCheckpoint, Crawle
 
     Ok(CrawlRunCheckpoint {
         run_id: CrawlRunId::new(
-            row.try_get::<String, _>("run_id")
+            row.try_get::<Uuid, _>("run_id")
                 .map_err(|err| map_postgres_err("decode run_id", err))?,
         ),
         phase: crawl_phase_from_str(
@@ -311,7 +312,7 @@ fn row_to_recovery_point(row: PgRow) -> Result<CrawlRunRecoveryPoint, CrawlerRep
 
     Ok(CrawlRunRecoveryPoint {
         run_id: CrawlRunId::new(
-            row.try_get::<String, _>("run_id")
+            row.try_get::<Uuid, _>("run_id")
                 .map_err(|err| map_postgres_err("decode run_id", err))?,
         ),
         phase: crawl_phase_from_str(

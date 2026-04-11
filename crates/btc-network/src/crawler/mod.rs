@@ -21,11 +21,10 @@ pub use analytics::{
     FailureClassificationCount, NetworkOutcomeCount,
 };
 pub use domain::{
-    BatchId, CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint,
-    CrawlRunId, CrawlRunMetrics, CrawlRunRecoveryPoint, FailureClassification, HandshakeStatus,
-    IpEnrichment, IpEnrichmentStatus, ObservationConfidence, ObservationId,
-    PersistedNodeObservation, RawNodeObservation, RecoveryPayloadEncoding, StartCrawlRequest,
-    StopCrawlRequest,
+    CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
+    CrawlRunMetrics, CrawlRunRecoveryPoint, FailureClassification, HandshakeStatus, IpEnrichment,
+    IpEnrichmentStatus, ObservationId, PersistedNodeObservation, RawNodeObservation,
+    RecoveryPayloadEncoding, StartCrawlRequest, StopCrawlRequest,
 };
 use lifecycle::{
     CheckpointEmitterContext, capture_snapshot, checkpoint_from_capture,
@@ -126,11 +125,7 @@ impl Crawler {
 
         let started_at = Instant::now();
         let started_at_utc = Utc::now();
-        let run_id = CrawlRunId::new(format!(
-            "crawl-{}-{:016x}",
-            started_at_utc.timestamp_millis(),
-            rand::random::<u64>()
-        ));
+        let run_id = CrawlRunId::now_v7();
 
         self.run_active_request(run_id, request, processor, started_at, started_at_utc)
             .await
@@ -165,7 +160,7 @@ impl Crawler {
         let started_at = recovered_started_at(recovery_point.started_at);
 
         info!(
-            run_id = %run_id.as_str(),
+            run_id = %run_id,
             checkpoint_phase = ?recovery_point.phase,
             checkpoint_sequence = recovery_point.checkpoint_sequence,
             "[crawler] recovering active run from durable recovery point"
@@ -182,7 +177,7 @@ impl Crawler {
         reason: String,
     ) -> Result<(), CrawlerRepositoryError> {
         warn!(
-            run_id = %recovery_point.run_id.as_str(),
+            run_id = %recovery_point.run_id,
             checkpoint_phase = ?recovery_point.phase,
             checkpoint_sequence = recovery_point.checkpoint_sequence,
             reason = %reason,
@@ -245,7 +240,7 @@ impl Crawler {
             let from_phase = *guard;
             *guard = CrawlPhase::Crawling;
             info!(
-                run_id = %run_id.as_str(),
+                run_id = %run_id,
                 from_phase = ?from_phase,
                 to_phase = ?CrawlPhase::Crawling,
                 "[crawler] phase transition"
@@ -294,7 +289,7 @@ impl Crawler {
         };
 
         info!(
-            run_id = %run_id.as_str(),
+            run_id = %run_id,
             from_phase = ?recovery_point.phase,
             to_phase = ?CrawlPhase::Crawling,
             "[crawler] phase transition"
@@ -447,7 +442,7 @@ impl Crawler {
             let from_phase = *guard;
             *guard = CrawlPhase::Draining;
             info!(
-                run_id = %checkpoint_context.run_id.as_str(),
+                run_id = %checkpoint_context.run_id,
                 from_phase = ?from_phase,
                 to_phase = ?CrawlPhase::Draining,
                 "[crawler] phase transition"
@@ -496,7 +491,7 @@ impl Crawler {
             let from_phase = *guard;
             *guard = final_phase;
             info!(
-                run_id = %checkpoint_context.run_id.as_str(),
+                run_id = %checkpoint_context.run_id,
                 from_phase = ?from_phase,
                 to_phase = ?final_phase,
                 "[crawler] phase transition"
@@ -1598,7 +1593,7 @@ mod tests {
         .await
         .expect("snapshot capture");
         let recovery_point = recovery_point_from_capture(
-            CrawlRunId::new("run-recover-1"),
+            CrawlRunId::from_u128(1),
             CrawlPhase::Crawling,
             Utc::now(),
             &capture,
@@ -1670,7 +1665,7 @@ mod tests {
     #[tokio::test]
     async fn startup_recovery_marks_invalid_recovery_point_failed_before_new_run() {
         let invalid_recovery_point = CrawlRunRecoveryPoint {
-            run_id: CrawlRunId::new("run-recover-bad"),
+            run_id: CrawlRunId::from_u128(2),
             phase: CrawlPhase::Crawling,
             checkpointed_at: Utc::now(),
             checkpoint_sequence: 7,

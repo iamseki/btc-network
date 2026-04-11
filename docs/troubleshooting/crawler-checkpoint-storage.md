@@ -195,7 +195,7 @@ SELECT
     length(ifNull(resume_state, '')) AS resume_state_bytes,
     formatReadableSize(length(ifNull(resume_state, ''))) AS resume_state_raw
 FROM btc_network.crawler_run_checkpoints
-WHERE run_id = '<target-run-id>'
+WHERE run_id = '<target-run-uuid>'
 ORDER BY checkpoint_sequence ASC;
 ```
 

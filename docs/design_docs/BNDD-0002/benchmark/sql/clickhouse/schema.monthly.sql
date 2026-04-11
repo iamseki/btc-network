@@ -3,6 +3,12 @@ USE btc_bench;
 
 DROP TABLE IF EXISTS node_observations;
 
+-- Historical benchmark schema note:
+-- This synthetic schema is intentionally kept for BNDD-0002 benchmark reproducibility.
+-- It does not mirror the current runtime crawler schema exactly.
+-- The live crawler now uses UUIDv7-backed crawl_run_id/observation_id and does not
+-- persist confidence_level.
+
 -- Synthetic crawler observations for the BNDD-0002 benchmark.
 --
 -- Field notes for the less obvious columns:

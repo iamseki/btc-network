@@ -146,9 +146,11 @@ async fn get_crawl_run(
     State(state): State<AppState>,
     Path(run_id): Path<String>,
 ) -> Result<Json<CrawlRunDetail>, ApiError> {
+    let run_id = CrawlRunId::parse_str(&run_id)
+        .map_err(|_| ApiError::bad_request("invalid crawl run id"))?;
     let detail = state
         .analytics_reader
-        .get_crawl_run(&CrawlRunId::new(run_id), DEFAULT_CHECKPOINT_LIMIT)
+        .get_crawl_run(&run_id, DEFAULT_CHECKPOINT_LIMIT)
         .await
         .map_err(ApiError::internal)?;
 
@@ -413,7 +415,7 @@ mod tests {
 
     fn sample_run() -> CrawlRunListItem {
         CrawlRunListItem {
-            run_id: "crawl-1".to_string(),
+            run_id: "00000000-0000-0000-0000-000000000001".to_string(),
             phase: "completed".to_string(),
             started_at: "2026-03-30T12:00:00+00:00".to_string(),
             last_checkpointed_at: "2026-03-30T12:10:00+00:00".to_string(),
@@ -509,7 +511,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/v1/crawler/runs/crawl-missing")
+                    .uri("/api/v1/crawler/runs/00000000-0000-0000-0000-000000000099")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -529,7 +531,7 @@ mod tests {
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/v1/crawler/runs/crawl-1")
+                    .uri("/api/v1/crawler/runs/00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -537,6 +539,23 @@ mod tests {
             .expect("response");
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn get_run_rejects_invalid_uuid() {
+        let app = build_router(Arc::new(StubAnalyticsReader::default()));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/crawler/runs/not-a-uuid")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

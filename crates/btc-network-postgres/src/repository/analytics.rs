@@ -92,13 +92,13 @@ SELECT
 FROM (
     SELECT DISTINCT ON (endpoint)
         endpoint,
-        confidence_level,
+        handshake_status,
         asn,
         asn_organization
     FROM node_observations
     ORDER BY endpoint, observed_at DESC, observation_id DESC
 ) latest_by_endpoint
-WHERE confidence_level = 'verified'
+WHERE handshake_status = 'succeeded'
 GROUP BY asn, asn_organization
 ORDER BY verified_nodes DESC, asn ASC NULLS FIRST
 LIMIT $1
@@ -162,7 +162,7 @@ ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
 LIMIT $2
 ",
     )
-    .bind(run_id.as_str())
+    .bind(run_id.as_uuid())
     .bind(limit)
     .fetch_all(pool)
     .await
@@ -188,7 +188,7 @@ GROUP BY failure_classification
 ORDER BY observations DESC, classification ASC
 ",
     )
-    .bind(run_id.as_str())
+    .bind(run_id.as_uuid())
     .fetch_all(pool)
     .await
     .map_err(|err| map_postgres_err("list failure classification counts", err))?;
@@ -220,12 +220,13 @@ async fn list_network_outcomes(
 SELECT
     network_type,
     COUNT(*) AS observations,
-    COUNT(*) FILTER (WHERE confidence_level = 'verified') AS verified_nodes,
-    COUNT(*) FILTER (WHERE confidence_level = 'failed') AS failed_nodes,
+    COUNT(*) FILTER (WHERE handshake_status = 'succeeded') AS verified_nodes,
+    COUNT(*) FILTER (WHERE handshake_status = 'failed') AS failed_nodes,
     COALESCE(
         ROUND(
             (
-                100.0 * COUNT(*) FILTER (WHERE confidence_level = 'verified') / NULLIF(COUNT(*), 0)
+                100.0 * COUNT(*) FILTER (WHERE handshake_status = 'succeeded')
+                / NULLIF(COUNT(*), 0)
             )::numeric,
             2
         )::double precision,
@@ -237,7 +238,7 @@ GROUP BY network_type
 ORDER BY observations DESC, network_type ASC
 ",
     )
-    .bind(run_id.as_str())
+    .bind(run_id.as_uuid())
     .fetch_all(pool)
     .await
     .map_err(|err| map_postgres_err("list network outcomes", err))?;

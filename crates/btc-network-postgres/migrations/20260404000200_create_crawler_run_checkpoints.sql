@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS crawler_run_checkpoints (
-    run_id TEXT NOT NULL,
+    run_id UUID NOT NULL,
     phase TEXT NOT NULL,
     checkpointed_at TIMESTAMPTZ NOT NULL,
     checkpoint_sequence BIGINT NOT NULL,

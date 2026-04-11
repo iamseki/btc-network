@@ -409,13 +409,14 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "chrono",
+ "getrandom 0.3.4",
  "hex",
- "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",
  "tokio",
  "tracing",
+ "uuid",
  "zstd",
 ]
 
@@ -514,6 +515,7 @@ dependencies = [
  "sqlx-postgres",
  "testcontainers-modules",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -4277,6 +4279,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
+ "uuid",
  "webpki-roots 0.26.11",
 ]
 
@@ -4315,6 +4318,7 @@ dependencies = [
  "stringprep",
  "thiserror 2.0.18",
  "tracing",
+ "uuid",
  "whoami",
 ]
 

@@ -31,7 +31,7 @@ impl CrawlRunListItem {
         let unique_nodes = checkpoint.metrics.unique_nodes;
 
         Self {
-            run_id: checkpoint.run_id.as_str().to_string(),
+            run_id: checkpoint.run_id.to_string(),
             phase: crawl_phase_to_str(checkpoint.phase).to_string(),
             started_at: to_rfc3339(checkpoint.started_at),
             last_checkpointed_at: to_rfc3339(checkpoint.checkpointed_at),
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn crawl_run_list_item_derives_percentages_from_checkpoint() {
         let checkpoint = CrawlRunCheckpoint {
-            run_id: CrawlRunId::new("crawl-1"),
+            run_id: CrawlRunId::from_u128(1),
             phase: CrawlPhase::Completed,
             checkpointed_at: Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap(),
             checkpoint_sequence: 3,
@@ -206,7 +206,7 @@ mod tests {
 
         let item = CrawlRunListItem::from_checkpoint(&checkpoint);
 
-        assert_eq!(item.run_id, "crawl-1");
+        assert_eq!(item.run_id, CrawlRunId::from_u128(1).to_string());
         assert_eq!(item.phase, "completed");
         assert_eq!(item.success_pct, 25.0);
         assert_eq!(item.scheduled_pct, 80.0);
