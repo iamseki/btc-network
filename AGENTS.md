@@ -96,8 +96,10 @@ Run the smallest relevant scope while working. Run the broader gate before finis
 - Developers may opt into the repo-local `commit-msg` hook with `make setup-git-hooks` to validate commit subjects locally
 - If an `implementation-plan.md` exists, keep its progress tracker aligned with the active branch or PR when the work spans multiple commits or PRs
 - When work is being done on a dedicated implementation branch, open the corresponding PR or update the existing PR before treating the task as complete unless the user explicitly says not to
+- Open PRs as ready for review by default; use draft only when the user explicitly asks for a draft PR or the work is knowingly incomplete
 - When opening a PR, use a short body with `## Summary`, `## Changes`, and `## Why` only when the reason is not already obvious from the summary and changes
 - Prefer a repository PR template when present instead of inventing a new structure
+- Repo-local PR workflow and description rules override generic agent publish workflow defaults
 
 ## Notes for Agents
 
