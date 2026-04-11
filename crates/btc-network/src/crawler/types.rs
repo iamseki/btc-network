@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,8 @@ pub struct CrawlerConfig {
     pub io_timeout: Duration,
     /// Maximum time to wait for worker tasks to drain after shutdown starts.
     pub shutdown_grace_period: Duration,
+    /// Hard cap on concurrent in-flight connect/handshake attempts.
+    pub max_connect_in_flight: usize,
     /// Enables extra per-node logs.
     pub verbose: bool,
 }
@@ -49,6 +51,7 @@ impl Default for CrawlerConfig {
             connect_retry_backoff: Duration::from_millis(250),
             io_timeout: Duration::from_secs(10),
             shutdown_grace_period: Duration::from_secs(15),
+            max_connect_in_flight: 512,
             verbose: false,
         }
     }
@@ -92,6 +95,11 @@ pub(crate) struct CrawlerStats {
     pub(crate) discovered_node_states: AtomicUsize,
     pub(crate) persisted_rows: AtomicUsize,
     pub(crate) writer_backlog: AtomicUsize,
+    pub(crate) queue_lock_wait_micros_total: AtomicU64,
+    pub(crate) queue_lock_hold_micros_total: AtomicU64,
+    pub(crate) state_lock_wait_micros_total: AtomicU64,
+    pub(crate) state_lock_hold_micros_total: AtomicU64,
+    pub(crate) queue_empty_polls_total: AtomicU64,
 }
 
 #[derive(Debug)]

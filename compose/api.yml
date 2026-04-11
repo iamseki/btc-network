@@ -20,7 +20,10 @@ services:
       - "8080:8080"
     restart: unless-stopped
     volumes:
-      - .:/workspace
+      - ./Cargo.toml:/workspace/Cargo.toml:ro
+      - ./Cargo.lock:/workspace/Cargo.lock:ro
+      - ./apps:/workspace/apps
+      - ./crates:/workspace/crates
       - cargo-registry:/cargo/registry
       - cargo-git:/cargo/git
       - cargo-target:/cargo-target

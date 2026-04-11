@@ -15,7 +15,10 @@ services:
     command: cargo run -p btc-network-postgres-migrate --locked --
     restart: "no"
     volumes:
-      - .:/workspace
+      - ./Cargo.toml:/workspace/Cargo.toml:ro
+      - ./Cargo.lock:/workspace/Cargo.lock:ro
+      - ./apps:/workspace/apps
+      - ./crates:/workspace/crates
       - cargo-registry:/cargo/registry
       - cargo-git:/cargo/git
       - cargo-target:/cargo-target

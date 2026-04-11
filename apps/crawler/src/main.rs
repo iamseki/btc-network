@@ -123,6 +123,15 @@ struct CrawlArgs {
     )]
     shutdown_grace_period_secs: u64,
 
+    /// Maximum number of concurrent connect/handshake attempts in-flight.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_MAX_CONNECT_IN_FLIGHT",
+        default_value_t = 512,
+        value_parser = parse_positive_usize
+    )]
+    max_connect_in_flight: usize,
+
     /// Emit per-node timing and retry logs.
     #[arg(long, env = "BTC_NETWORK_CRAWLER_VERBOSE", default_value_t = false)]
     verbose: bool,
@@ -236,6 +245,7 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
         connect_retry_backoff: Duration::from_millis(args.connect_retry_backoff_ms),
         io_timeout: Duration::from_secs(args.io_timeout_secs),
         shutdown_grace_period: Duration::from_secs(args.shutdown_grace_period_secs),
+        max_connect_in_flight: args.max_connect_in_flight,
         verbose: args.verbose,
         ..CrawlerConfig::default()
     }
@@ -281,6 +291,7 @@ mod tests {
             connect_retry_backoff_ms: 500,
             io_timeout_secs: 10,
             shutdown_grace_period_secs: 20,
+            max_connect_in_flight: 256,
             verbose: false,
             postgres: PostgresArgs {
                 postgres_url:
@@ -300,6 +311,7 @@ mod tests {
         assert_eq!(config.connect_max_attempts, 4);
         assert_eq!(config.connect_retry_backoff, Duration::from_millis(500));
         assert_eq!(config.shutdown_grace_period, Duration::from_secs(20));
+        assert_eq!(config.max_connect_in_flight, 256);
     }
 
     #[test]

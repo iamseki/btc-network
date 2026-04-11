@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 use tokio::task::{JoinError, JoinHandle};
 use tracing::{info, warn};
 
@@ -392,6 +392,9 @@ impl Crawler {
             AbortOnDropHandle::new(tokio::spawn(run_signal_shutdown(Arc::clone(&stop))));
 
         let worker_count = effective_worker_count(config.max_concurrency);
+        let connect_limiter = Arc::new(Semaphore::new(
+            config.max_connect_in_flight.max(1).min(worker_count),
+        ));
         let mut workers = Vec::with_capacity(worker_count);
         for _ in 0..worker_count {
             workers.push(AbortOnDropHandle::new(tokio::spawn(run_worker(
@@ -406,6 +409,7 @@ impl Crawler {
                     observation_tx: observation_tx.clone(),
                     processor: Arc::clone(&processor),
                     enrichment_provider: Arc::clone(&self.enrichment_provider),
+                    connect_limiter: Arc::clone(&connect_limiter),
                 },
             ))));
         }
@@ -513,8 +517,31 @@ impl Crawler {
         }
 
         let state_guard = state.lock().await;
+        let scheduled_tasks = stats.scheduled.load(Ordering::Relaxed);
+        let queue_empty_polls_total = stats.queue_empty_polls_total.load(Ordering::Relaxed);
+        let queue_lock_wait_micros_total =
+            stats.queue_lock_wait_micros_total.load(Ordering::Relaxed);
+        let queue_lock_hold_micros_total =
+            stats.queue_lock_hold_micros_total.load(Ordering::Relaxed);
+        let state_lock_wait_micros_total =
+            stats.state_lock_wait_micros_total.load(Ordering::Relaxed);
+        let state_lock_hold_micros_total =
+            stats.state_lock_hold_micros_total.load(Ordering::Relaxed);
+
+        if scheduled_tasks > 0 || queue_empty_polls_total > 0 {
+            info!(
+                scheduled_tasks,
+                queue_empty_polls_total,
+                queue_lock_wait_ms_total = queue_lock_wait_micros_total / 1000,
+                queue_lock_hold_ms_total = queue_lock_hold_micros_total / 1000,
+                state_lock_wait_ms_total = state_lock_wait_micros_total / 1000,
+                state_lock_hold_ms_total = state_lock_hold_micros_total / 1000,
+                "[crawler] contention summary"
+            );
+        }
+
         Ok(CrawlSummary {
-            scheduled_tasks: stats.scheduled.load(Ordering::Relaxed),
+            scheduled_tasks,
             successful_handshakes: stats.success.load(Ordering::Relaxed),
             failed_tasks: stats.failed.load(Ordering::Relaxed),
             queued_nodes_total: stats.queued_total.load(Ordering::Relaxed),
@@ -530,11 +557,17 @@ fn effective_worker_count(max_concurrency: usize) -> usize {
 }
 
 fn writer_channel_capacity(config: CrawlerConfig) -> usize {
-    effective_worker_count(config.max_concurrency).max(1) * 2
+    effective_worker_count(config.max_concurrency)
+        .max(1)
+        .saturating_mul(2)
+        .clamp(256, 8192)
 }
 
 fn writer_batch_size(config: CrawlerConfig) -> usize {
-    effective_worker_count(config.max_concurrency).max(1)
+    effective_worker_count(config.max_concurrency)
+        .max(1)
+        .div_ceil(4)
+        .clamp(64, 1024)
 }
 
 async fn pending_frontier(state: &Arc<Mutex<CrawlState>>) -> Vec<CrawlEndpoint> {
@@ -1463,6 +1496,7 @@ mod tests {
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 shutdown_grace_period: Duration::from_secs(1),
+                max_connect_in_flight: 1,
                 verbose: false,
             },
             repository,
@@ -1503,6 +1537,7 @@ mod tests {
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 shutdown_grace_period: Duration::from_millis(20),
+                max_connect_in_flight: 1,
                 verbose: false,
             },
             repository.clone(),
@@ -1615,6 +1650,7 @@ mod tests {
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 shutdown_grace_period: Duration::from_millis(400),
+                max_connect_in_flight: 1,
                 verbose: false,
             },
             repository.clone(),
@@ -1706,6 +1742,7 @@ mod tests {
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 shutdown_grace_period: Duration::from_millis(400),
+                max_connect_in_flight: 1,
                 verbose: false,
             },
             repository.clone(),

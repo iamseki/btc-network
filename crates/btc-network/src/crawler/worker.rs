@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 use tracing::{info, warn};
 
 use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation};
@@ -23,6 +23,7 @@ pub(crate) struct WorkerContext {
     pub(crate) observation_tx: mpsc::Sender<PersistedNodeObservation>,
     pub(crate) processor: Arc<dyn NodeProcessor>,
     pub(crate) enrichment_provider: Arc<dyn IpEnrichmentProvider>,
+    pub(crate) connect_limiter: Arc<Semaphore>,
 }
 
 /// Runs one crawler worker loop.
@@ -47,6 +48,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         observation_tx,
         processor,
         enrichment_provider,
+        connect_limiter,
     } = context;
 
     loop {
@@ -55,25 +57,32 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         }
 
         let node_cycle_started = Instant::now();
-        let next = tokio::time::timeout(Duration::from_millis(250), async {
-            let queue_lock_wait_started = Instant::now();
-            let mut guard = queue_rx.lock().await;
-            let queue_lock_wait = queue_lock_wait_started.elapsed();
-            let recv_wait_started = Instant::now();
-            let item = guard.recv().await;
-            let recv_wait = recv_wait_started.elapsed();
-            let queue_lock_hold = queue_lock_wait_started.elapsed();
-            (item, queue_lock_wait, recv_wait, queue_lock_hold)
-        })
-        .await;
-
-        let (maybe_endpoint, queue_lock_wait, queue_recv_wait, queue_lock_hold) = match next {
-            Ok(v) => v,
-            Err(_) => continue,
+        let queue_lock_wait_started = Instant::now();
+        let mut guard = queue_rx.lock().await;
+        let queue_lock_wait = queue_lock_wait_started.elapsed();
+        let queue_lock_hold_started = Instant::now();
+        let maybe_endpoint = match guard.try_recv() {
+            Ok(endpoint) => Some(endpoint),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => None,
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => return,
         };
+        let queue_lock_hold = queue_lock_hold_started.elapsed();
+        drop(guard);
+
+        observe_lock_contention(
+            &stats,
+            queue_lock_wait,
+            queue_lock_hold,
+            Duration::ZERO,
+            Duration::ZERO,
+        );
 
         let Some(endpoint) = maybe_endpoint else {
-            return;
+            stats
+                .queue_empty_polls_total
+                .fetch_add(1, Ordering::Relaxed);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            continue;
         };
 
         {
@@ -87,6 +96,14 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         let _in_flight_guard = InFlightGuard::new(stats.as_ref());
 
         let process_started = Instant::now();
+        let Ok(_connect_permit) = connect_limiter.acquire().await else {
+            stop.store(true, Ordering::Relaxed);
+            warn!(
+                "[crawler] connect limiter closed while processing {}",
+                endpoint.canonical
+            );
+            return;
+        };
         let visit_result = processor.process(endpoint.clone(), config).await;
         let process_elapsed = process_started.elapsed();
 
@@ -125,6 +142,13 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 let discovered = apply_visit_to_state(&mut guard, visit, config.max_tracked_nodes);
                 let state_lock_hold = state_lock_hold_started.elapsed();
                 drop(guard);
+                observe_lock_contention(
+                    &stats,
+                    Duration::ZERO,
+                    Duration::ZERO,
+                    state_lock_wait,
+                    state_lock_hold,
+                );
                 let queued_count = discovered.len();
 
                 if !discovered.is_empty() {
@@ -143,7 +167,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     info!(
                         node = %endpoint.canonical,
                         queue_lock_wait_ms = queue_lock_wait.as_millis(),
-                        queue_recv_wait_ms = queue_recv_wait.as_millis(),
+                        queue_recv_wait_ms = 0,
                         queue_lock_hold_ms = queue_lock_hold.as_millis(),
                         process_ms = process_elapsed.as_millis(),
                         state_lock_wait_ms = state_lock_wait.as_millis(),
@@ -184,7 +208,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     info!(
                         node = %endpoint.canonical,
                         queue_lock_wait_ms = queue_lock_wait.as_millis(),
-                        queue_recv_wait_ms = queue_recv_wait.as_millis(),
+                        queue_recv_wait_ms = 0,
                         queue_lock_hold_ms = queue_lock_hold.as_millis(),
                         process_ms = process_elapsed.as_millis(),
                         node_total_ms = node_cycle_started.elapsed().as_millis(),
@@ -198,6 +222,27 @@ pub(crate) async fn run_worker(context: WorkerContext) {
             }
         }
     }
+}
+
+fn observe_lock_contention(
+    stats: &CrawlerStats,
+    queue_lock_wait: Duration,
+    queue_lock_hold: Duration,
+    state_lock_wait: Duration,
+    state_lock_hold: Duration,
+) {
+    stats
+        .queue_lock_wait_micros_total
+        .fetch_add(queue_lock_wait.as_micros() as u64, Ordering::Relaxed);
+    stats
+        .queue_lock_hold_micros_total
+        .fetch_add(queue_lock_hold.as_micros() as u64, Ordering::Relaxed);
+    stats
+        .state_lock_wait_micros_total
+        .fetch_add(state_lock_wait.as_micros() as u64, Ordering::Relaxed);
+    stats
+        .state_lock_hold_micros_total
+        .fetch_add(state_lock_hold.as_micros() as u64, Ordering::Relaxed);
 }
 
 struct InFlightGuard<'a> {
@@ -400,6 +445,7 @@ mod tests {
             connect_retry_backoff: Duration::ZERO,
             io_timeout: Duration::from_millis(50),
             shutdown_grace_period: Duration::from_secs(1),
+            max_connect_in_flight: 1,
             verbose: false,
         }
     }
@@ -519,6 +565,7 @@ mod tests {
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
             enrichment_provider: enrichment,
+            connect_limiter: Arc::new(Semaphore::new(1)),
         })
         .await;
 
@@ -569,6 +616,7 @@ mod tests {
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
             enrichment_provider: enrichment,
+            connect_limiter: Arc::new(Semaphore::new(1)),
         })
         .await;
 
@@ -634,6 +682,7 @@ mod tests {
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
             enrichment_provider: enrichment,
+            connect_limiter: Arc::new(Semaphore::new(1)),
         })
         .await;
 

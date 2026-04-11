@@ -108,6 +108,7 @@ environment variables in `compose/crawler.yml`, including:
 - `BTC_NETWORK_CRAWLER_CONNECT_RETRY_BACKOFF_MS=250`
 - `BTC_NETWORK_CRAWLER_CONNECT_TIMEOUT_SECS=30`
 - `BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS=20`
+- `BTC_NETWORK_CRAWLER_MAX_CONNECT_IN_FLIGHT=512`
 - `BTC_NETWORK_MMDB_ASN_PATH=/workspace/.dev-data/mmdb/GeoLite2-ASN.mmdb`
 - `BTC_NETWORK_MMDB_COUNTRY_PATH=/workspace/.dev-data/mmdb/GeoLite2-Country.mmdb`
 
@@ -156,6 +157,7 @@ Optional crawler tuning overrides:
 - `--connect-retry-backoff-ms`
 - `--io-timeout-secs`
 - `--shutdown-grace-period-secs`
+- `--max-connect-in-flight`
 
 The crawler still runs without MMDB files, but enrichment will be unavailable and ASN/country data will not be persisted.
 
