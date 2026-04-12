@@ -300,11 +300,9 @@ mod tests {
                 failed_tasks: 1,
                 queued_nodes_total: 5,
                 unique_nodes: 5,
-                discovered_node_states: 4,
                 persisted_observation_rows: 2,
                 writer_backlog: 0,
             },
-            caller: Some("test".to_string()),
         }
     }
 

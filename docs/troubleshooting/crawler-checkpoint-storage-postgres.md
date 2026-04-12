@@ -61,10 +61,8 @@ SELECT
     pg_size_pretty(sum(pg_column_size(failed_tasks))) AS failed_tasks_total,
     pg_size_pretty(sum(pg_column_size(queued_nodes_total))) AS queued_nodes_total_total,
     pg_size_pretty(sum(pg_column_size(unique_nodes))) AS unique_nodes_total,
-    pg_size_pretty(sum(pg_column_size(discovered_node_states))) AS discovered_node_states_total,
     pg_size_pretty(sum(pg_column_size(persisted_observation_rows))) AS persisted_observation_rows_total,
-    pg_size_pretty(sum(pg_column_size(writer_backlog))) AS writer_backlog_total,
-    pg_size_pretty(sum(pg_column_size(caller))) AS caller_total
+    pg_size_pretty(sum(pg_column_size(writer_backlog))) AS writer_backlog_total
 FROM crawler_run_checkpoints;
 ```
 
@@ -154,10 +152,8 @@ SELECT
     pg_size_pretty(sum(pg_column_size(failed_tasks))) AS failed_tasks_total,
     pg_size_pretty(sum(pg_column_size(queued_nodes_total))) AS queued_nodes_total_total,
     pg_size_pretty(sum(pg_column_size(unique_nodes))) AS unique_nodes_total,
-    pg_size_pretty(sum(pg_column_size(discovered_node_states))) AS discovered_node_states_total,
     pg_size_pretty(sum(pg_column_size(persisted_observation_rows))) AS persisted_observation_rows_total,
-    pg_size_pretty(sum(pg_column_size(writer_backlog))) AS writer_backlog_total,
-    pg_size_pretty(sum(pg_column_size(caller))) AS caller_total
+    pg_size_pretty(sum(pg_column_size(writer_backlog))) AS writer_backlog_total
 FROM crawler_run_checkpoints;
 ```
 
@@ -172,7 +168,6 @@ SELECT
     checkpointed_at,
     frontier_size,
     unique_nodes,
-    discovered_node_states,
     pg_size_pretty(pg_column_size(resume_state)::bigint) AS resume_state_bytes
 FROM crawler_run_checkpoints
 ORDER BY pg_column_size(resume_state) DESC
@@ -191,7 +186,6 @@ SELECT
     max(checkpointed_at) AS last_checkpointed_at,
     max(unique_nodes) AS max_unique_nodes,
     max(frontier_size) AS max_frontier_size,
-    max(discovered_node_states) AS max_discovered_node_states,
     pg_size_pretty(sum(pg_column_size(resume_state))::bigint) AS total_resume_state,
     pg_size_pretty(avg(pg_column_size(resume_state))::bigint) AS avg_resume_state,
     pg_size_pretty(max(pg_column_size(resume_state))::bigint) AS max_resume_state

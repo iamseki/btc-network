@@ -354,7 +354,6 @@ impl Crawler {
             failed_tasks: stats.failed.load(Ordering::Relaxed),
             queued_nodes_total: stats.queued_total.load(Ordering::Relaxed),
             unique_nodes: state_guard.seen_nodes.len(),
-            discovered_node_states: stats.discovered_node_states.load(Ordering::Relaxed),
             elapsed: started_at.elapsed(),
         })
     }

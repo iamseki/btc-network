@@ -30,10 +30,8 @@ SELECT
     failed_tasks,
     queued_nodes_total,
     unique_nodes,
-    discovered_node_states,
     persisted_observation_rows,
-    writer_backlog,
-    caller
+    writer_backlog
 FROM crawler_run_checkpoints
 WHERE run_id = $1
 ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
@@ -70,10 +68,8 @@ FROM (
         failed_tasks,
         queued_nodes_total,
         unique_nodes,
-        discovered_node_states,
         persisted_observation_rows,
-        writer_backlog,
-        caller
+        writer_backlog
     FROM crawler_run_checkpoints
     ORDER BY run_id, checkpointed_at DESC, checkpoint_sequence DESC
 ) latest_runs
@@ -120,10 +116,6 @@ pub(super) fn row_to_checkpoint(row: PgRow) -> Result<CrawlRunCheckpoint, Crawle
             .try_get::<i64, _>("unique_nodes")
             .map_err(|err| map_postgres_err("decode unique_nodes", err))?
             .max(0) as usize,
-        discovered_node_states: row
-            .try_get::<i64, _>("discovered_node_states")
-            .map_err(|err| map_postgres_err("decode discovered_node_states", err))?
-            .max(0) as usize,
         persisted_observation_rows: row
             .try_get::<i64, _>("persisted_observation_rows")
             .map_err(|err| map_postgres_err("decode persisted_observation_rows", err))?
@@ -158,8 +150,5 @@ pub(super) fn row_to_checkpoint(row: PgRow) -> Result<CrawlRunCheckpoint, Crawle
             .try_get("failure_reason")
             .map_err(|err| map_postgres_err("decode failure_reason", err))?,
         metrics,
-        caller: row
-            .try_get("caller")
-            .map_err(|err| map_postgres_err("decode caller", err))?,
     })
 }

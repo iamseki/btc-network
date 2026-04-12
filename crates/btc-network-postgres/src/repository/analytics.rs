@@ -152,10 +152,8 @@ SELECT
     failed_tasks,
     queued_nodes_total,
     unique_nodes,
-    discovered_node_states,
     persisted_observation_rows,
-    writer_backlog,
-    caller
+    writer_backlog
 FROM crawler_run_checkpoints
 WHERE run_id = $1
 ORDER BY checkpointed_at DESC, checkpoint_sequence DESC

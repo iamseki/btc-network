@@ -104,7 +104,6 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         match visit_result {
             Ok(visit) => {
                 stats.success.fetch_add(1, Ordering::Relaxed);
-                stats.discovered_node_states.fetch_add(1, Ordering::Relaxed);
 
                 let discovered_peer_addresses_count = visit.discovered.len();
                 let raw = RawNodeObservation::from_success(
@@ -752,7 +751,6 @@ mod tests {
         assert_eq!(stats.success.load(Ordering::Relaxed), 1);
         assert_eq!(stats.failed.load(Ordering::Relaxed), 0);
         assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
-        assert_eq!(stats.discovered_node_states.load(Ordering::Relaxed), 1);
         assert_eq!(
             out_rx.try_recv().ok().map(|queued| queued.endpoint),
             Some(discovered.clone())

@@ -129,7 +129,6 @@ SELECT
     checkpointed_at,
     frontier_size,
     unique_nodes,
-    discovered_node_states,
     formatReadableSize(length(ifNull(resume_state, ''))) AS resume_state_raw
 FROM btc_network.crawler_run_checkpoints
 ORDER BY length(ifNull(resume_state, '')) DESC
@@ -148,7 +147,6 @@ SELECT
     max(checkpointed_at) AS last_checkpointed_at,
     max(unique_nodes) AS max_unique_nodes,
     max(frontier_size) AS max_frontier_size,
-    max(discovered_node_states) AS max_discovered_node_states,
     formatReadableSize(sum(length(ifNull(resume_state, '')))) AS total_resume_state_raw,
     formatReadableSize(avg(length(ifNull(resume_state, '')))) AS avg_resume_state_raw,
     formatReadableSize(max(length(ifNull(resume_state, '')))) AS max_resume_state_raw
@@ -191,7 +189,6 @@ SELECT
     checkpointed_at,
     frontier_size,
     unique_nodes,
-    discovered_node_states,
     length(ifNull(resume_state, '')) AS resume_state_bytes,
     formatReadableSize(length(ifNull(resume_state, ''))) AS resume_state_raw
 FROM btc_network.crawler_run_checkpoints

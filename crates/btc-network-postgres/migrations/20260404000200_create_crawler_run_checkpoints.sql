@@ -13,10 +13,8 @@ CREATE TABLE IF NOT EXISTS crawler_run_checkpoints (
     failed_tasks BIGINT NOT NULL,
     queued_nodes_total BIGINT NOT NULL,
     unique_nodes BIGINT NOT NULL,
-    discovered_node_states BIGINT NOT NULL,
     persisted_observation_rows BIGINT NOT NULL,
-    writer_backlog BIGINT NOT NULL,
-    caller TEXT
+    writer_backlog BIGINT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS crawler_run_checkpoints_run_latest_idx

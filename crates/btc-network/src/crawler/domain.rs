@@ -471,7 +471,6 @@ pub struct CrawlRunMetrics {
     pub failed_tasks: usize,
     pub queued_nodes_total: usize,
     pub unique_nodes: usize,
-    pub discovered_node_states: usize,
     pub persisted_observation_rows: usize,
     pub writer_backlog: usize,
 }
@@ -494,7 +493,6 @@ pub struct CrawlRunCheckpoint {
     pub stop_reason: Option<String>,
     pub failure_reason: Option<String>,
     pub metrics: CrawlRunMetrics,
-    pub caller: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

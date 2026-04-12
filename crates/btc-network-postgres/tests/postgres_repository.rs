@@ -720,10 +720,8 @@ fn sample_checkpoint(
             failed_tasks: 1,
             queued_nodes_total: 5,
             unique_nodes: 6,
-            discovered_node_states: 7,
             persisted_observation_rows: 8,
             writer_backlog: 0,
         },
-        caller: Some("integration-test".to_string()),
     }
 }

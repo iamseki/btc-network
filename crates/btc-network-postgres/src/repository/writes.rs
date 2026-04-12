@@ -110,13 +110,11 @@ INSERT INTO crawler_run_checkpoints (
     failed_tasks,
     queued_nodes_total,
     unique_nodes,
-    discovered_node_states,
     persisted_observation_rows,
-    writer_backlog,
-    caller
+    writer_backlog
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 )
 ",
     )
@@ -134,10 +132,8 @@ VALUES (
     .bind(usize_to_i64(checkpoint.metrics.failed_tasks))
     .bind(usize_to_i64(checkpoint.metrics.queued_nodes_total))
     .bind(usize_to_i64(checkpoint.metrics.unique_nodes))
-    .bind(usize_to_i64(checkpoint.metrics.discovered_node_states))
     .bind(usize_to_i64(checkpoint.metrics.persisted_observation_rows))
     .bind(usize_to_i64(checkpoint.metrics.writer_backlog))
-    .bind(checkpoint.caller)
     .execute(pool)
     .await
     .map_err(|err| map_postgres_err("write checkpoint row", err))?;

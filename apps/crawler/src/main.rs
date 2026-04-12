@@ -227,7 +227,6 @@ async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
     info!("failed tasks: {}", summary.failed_tasks);
     info!("total queued nodes: {}", summary.queued_nodes_total);
     info!("unique nodes discovered: {}", summary.unique_nodes);
-    info!("node states captured: {}", summary.discovered_node_states);
     info!("elapsed: {:.2?}", summary.elapsed);
 
     Ok(())

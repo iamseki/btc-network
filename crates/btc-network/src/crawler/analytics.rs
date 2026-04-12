@@ -197,11 +197,9 @@ mod tests {
                 failed_tasks: 60,
                 queued_nodes_total: 120,
                 unique_nodes: 100,
-                discovered_node_states: 20,
                 persisted_observation_rows: 80,
                 writer_backlog: 0,
             },
-            caller: None,
         };
 
         let item = CrawlRunListItem::from_checkpoint(&checkpoint);
