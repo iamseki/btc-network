@@ -114,7 +114,7 @@ impl Crawler {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stats = Arc::new(CrawlerStats::default());
         let checkpoint_sequence = Arc::new(AtomicU64::new(0));
-        let phase = Arc::new(Mutex::new(CrawlPhase::Bootstrap));
+        let phase = Arc::new(Mutex::new(CrawlPhase::Crawling));
 
         let checkpoint_context = CheckpointWriteContext {
             repository: Arc::clone(&self.repository),
@@ -135,19 +135,6 @@ impl Crawler {
             request.config.max_tracked_nodes,
         )
         .await;
-        write_progress_snapshot(&checkpoint_context, CrawlPhase::Bootstrap, None, None).await?;
-
-        {
-            let mut guard = phase.lock().await;
-            let from_phase = *guard;
-            *guard = CrawlPhase::Crawling;
-            info!(
-                run_id = %run_id,
-                from_phase = ?from_phase,
-                to_phase = ?CrawlPhase::Crawling,
-                "[crawler] phase transition"
-            );
-        }
         write_progress_snapshot(&checkpoint_context, CrawlPhase::Crawling, None, None).await?;
 
         self.run_loaded_request(
@@ -196,8 +183,9 @@ impl Crawler {
 
         let queue_rx = Arc::new(Mutex::new(queue_rx));
         let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let worker_count = config.max_concurrency.max(1);
         let (observation_tx, observation_rx) =
-            mpsc::channel::<PersistedNodeObservation>(writer_channel_capacity(config));
+            mpsc::channel::<PersistedNodeObservation>(worker_count * 2);
 
         // Split long-running crawler responsibilities into focused tasks:
         // workers visit nodes and enqueue observations, the writer persists
@@ -209,7 +197,7 @@ impl Crawler {
             Arc::clone(&stats),
             Arc::clone(&stop),
             observation_rx,
-            writer_batch_size(config),
+            worker_count,
         )));
         let lifecycle_handle = AbortOnDropHandle::new(tokio::spawn(run_lifecycle(
             Arc::clone(&state),
@@ -237,7 +225,6 @@ impl Crawler {
         let signal_handle =
             AbortOnDropHandle::new(tokio::spawn(run_signal_shutdown(Arc::clone(&stop))));
 
-        let worker_count = effective_worker_count(config.max_concurrency);
         let mut workers = Vec::with_capacity(worker_count);
         for _ in 0..worker_count {
             workers.push(AbortOnDropHandle::new(tokio::spawn(run_worker(
@@ -371,18 +358,6 @@ impl Crawler {
             elapsed: started_at.elapsed(),
         })
     }
-}
-
-fn effective_worker_count(max_concurrency: usize) -> usize {
-    max_concurrency.max(1)
-}
-
-fn writer_channel_capacity(config: CrawlerConfig) -> usize {
-    effective_worker_count(config.max_concurrency).max(1) * 2
-}
-
-fn writer_batch_size(config: CrawlerConfig) -> usize {
-    effective_worker_count(config.max_concurrency).max(1)
 }
 
 fn record_failure(failure_reason: &mut Option<String>, reason: String) {
@@ -692,13 +667,6 @@ mod tests {
     use std::sync::Mutex as StdSyncMutex;
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
-
-    #[test]
-    fn worker_count_is_at_least_one() {
-        assert_eq!(effective_worker_count(0), 1);
-        assert_eq!(effective_worker_count(1), 1);
-        assert_eq!(effective_worker_count(8), 8);
-    }
 
     #[derive(Clone)]
     struct StaticNodeProcessor {
