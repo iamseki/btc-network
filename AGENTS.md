@@ -39,6 +39,13 @@ When a decision has scalability, storage-growth, latency, concurrency, or throug
 - Read BNDDs only for architectural or deployment changes
 - When implementing an accepted BNDD, also read its sibling `implementation-plan.md` if present
 
+## Communication Rule
+
+- Prefer terse, low-token responses by default
+- If the environment supports the `caveman` skill, use `caveman full`
+- Switch to normal prose for security warnings, irreversible actions, and multi-step instructions where fragments could cause confusion
+- Treat the skill name as a hint, not a requirement; plain-language brevity instructions still apply when the skill system is unavailable
+
 ## Non-Negotiable Boundaries
 
 - Do not add protocol parsing logic to CLI, desktop commands, or React components
