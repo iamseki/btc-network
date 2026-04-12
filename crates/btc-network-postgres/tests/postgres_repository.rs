@@ -8,9 +8,8 @@ use std::{env, fs};
 
 use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
-    CrawlRunMetrics, CrawlRunRecoveryPoint, CrawlerAnalyticsReader, CrawlerRepository,
-    HandshakeStatus, IpEnrichment, IpEnrichmentProvider, ObservationId, PersistedNodeObservation,
-    RawNodeObservation, RecoveryPayloadEncoding,
+    CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, HandshakeStatus, IpEnrichment,
+    IpEnrichmentProvider, ObservationId, PersistedNodeObservation, RawNodeObservation,
 };
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_postgres::{
@@ -163,20 +162,20 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
 
     assert_eq!(
         first_report.applied_versions,
-        vec!["20260404000100", "20260404000200", "20260405000100",]
+        vec!["20260404000100", "20260404000200",]
     );
     assert!(first_report.skipped_versions.is_empty());
     assert!(second_report.applied_versions.is_empty());
     assert_eq!(
         second_report.skipped_versions,
-        vec!["20260404000100", "20260404000200", "20260405000100",]
+        vec!["20260404000100", "20260404000200",]
     );
     assert_eq!(
         applied
             .iter()
             .map(|row| row.version.as_str())
             .collect::<Vec<_>>(),
-        vec!["20260404000100", "20260404000200", "20260405000100",]
+        vec!["20260404000100", "20260404000200",]
     );
 
     let client = db.connect().await?;
@@ -196,7 +195,6 @@ ORDER BY tablename
         .collect::<Vec<_>>();
 
     assert!(table_names.contains(&"crawler_run_checkpoints".to_string()));
-    assert!(table_names.contains(&"crawler_run_recovery_points".to_string()));
     assert!(table_names.contains(&"node_observations".to_string()));
     assert!(table_names.contains(&"schema_migrations".to_string()));
 
@@ -348,114 +346,6 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     assert_eq!(run.stop_reason.as_deref(), Some("checkpoint tie"));
     assert_eq!(run.metrics.unique_nodes, 6);
     assert_eq!(run.metrics.persisted_observation_rows, 8);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn repository_latest_active_checkpoint_ignores_terminal_latest_row() -> TestResult {
-    let db = TestDatabase::start().await?;
-    db.apply_migrations().await?;
-    let repository = PostgresCrawlerRepository::new(&db.config)?;
-
-    let run_id = run_id(3);
-    let base_time = Utc::now();
-
-    repository
-        .insert_run_checkpoint(sample_checkpoint(
-            &run_id,
-            CrawlPhase::Crawling,
-            base_time,
-            1,
-            None,
-        ))
-        .await?;
-    repository
-        .insert_run_checkpoint(sample_checkpoint(
-            &run_id,
-            CrawlPhase::Failed,
-            base_time + Duration::seconds(1),
-            2,
-            Some("terminal".to_string()),
-        ))
-        .await?;
-
-    let latest_active = repository.get_latest_active_run_checkpoint().await?;
-    assert!(latest_active.is_none());
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn repository_round_trips_recovery_points_and_observed_endpoints() -> TestResult {
-    let db = TestDatabase::start().await?;
-    db.apply_migrations().await?;
-    let repository = PostgresCrawlerRepository::new(&db.config)?;
-
-    let run_id = run_id(4);
-    let base_time = Utc::now();
-
-    repository
-        .insert_observations_stream(vec![
-            sample_verified_observation(
-                &run_id,
-                "1.1.1.7",
-                201,
-                base_time,
-                Some(64512),
-                Some("Example ASN"),
-                Some("US"),
-            ),
-            sample_failed_observation(&run_id, "8.8.8.8", 202, base_time + Duration::seconds(1)),
-            sample_verified_observation(
-                &run_id,
-                "1.1.1.7",
-                203,
-                base_time + Duration::seconds(2),
-                Some(64512),
-                Some("Example ASN"),
-                Some("US"),
-            ),
-        ])
-        .await?;
-
-    repository
-        .insert_run_recovery_point(sample_recovery_point(
-            &run_id,
-            CrawlPhase::Crawling,
-            base_time + Duration::seconds(3),
-            1,
-            vec![0x01, 0x02],
-            2,
-        ))
-        .await?;
-    repository
-        .insert_run_recovery_point(sample_recovery_point(
-            &run_id,
-            CrawlPhase::Draining,
-            base_time + Duration::seconds(3),
-            2,
-            vec![0x03, 0x04, 0x05],
-            3,
-        ))
-        .await?;
-
-    let latest = repository
-        .get_latest_active_run_recovery_point()
-        .await?
-        .expect("recovery point");
-    assert_eq!(latest.phase, CrawlPhase::Draining);
-    assert_eq!(latest.checkpoint_sequence, 2);
-    assert_eq!(latest.payload_encoding, RecoveryPayloadEncoding::ZstdJsonV1);
-    assert_eq!(latest.frontier_payload, vec![0x03, 0x04, 0x05]);
-    assert_eq!(latest.frontier_size, 3);
-
-    let observed = repository.list_observed_endpoints_for_run(&run_id).await?;
-    let observed_canonicals = observed
-        .into_iter()
-        .map(|endpoint| endpoint.canonical)
-        .collect::<Vec<_>>();
-    assert_eq!(observed_canonicals, vec!["1.1.1.7:8333", "8.8.8.8:8333"]);
 
     Ok(())
 }
@@ -834,41 +724,6 @@ fn sample_checkpoint(
             persisted_observation_rows: 8,
             writer_backlog: 0,
         },
-        caller: Some("integration-test".to_string()),
-    }
-}
-
-fn sample_recovery_point(
-    run_id: &CrawlRunId,
-    phase: CrawlPhase,
-    checkpointed_at: chrono::DateTime<Utc>,
-    checkpoint_sequence: u64,
-    frontier_payload: Vec<u8>,
-    frontier_size: usize,
-) -> CrawlRunRecoveryPoint {
-    CrawlRunRecoveryPoint {
-        run_id: run_id.clone(),
-        phase,
-        checkpointed_at,
-        checkpoint_sequence,
-        started_at: checkpointed_at - Duration::seconds(10),
-        stop_reason: None,
-        failure_reason: None,
-        metrics: CrawlRunMetrics {
-            frontier_size: 1,
-            in_flight_work: 2,
-            scheduled_tasks: 3,
-            successful_handshakes: 4,
-            failed_tasks: 1,
-            queued_nodes_total: 5,
-            unique_nodes: 6,
-            discovered_node_states: 7,
-            persisted_observation_rows: 8,
-            writer_backlog: 0,
-        },
-        payload_encoding: RecoveryPayloadEncoding::ZstdJsonV1,
-        frontier_payload,
-        frontier_size,
         caller: Some("integration-test".to_string()),
     }
 }

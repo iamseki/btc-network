@@ -497,42 +497,6 @@ pub struct CrawlRunCheckpoint {
     pub caller: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RecoveryPayloadEncoding {
-    ZstdJsonV1,
-}
-
-impl RecoveryPayloadEncoding {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::ZstdJsonV1 => "zstd-json-v1",
-        }
-    }
-
-    pub fn from_str(value: &str) -> Option<Self> {
-        match value {
-            "zstd-json-v1" => Some(Self::ZstdJsonV1),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CrawlRunRecoveryPoint {
-    pub run_id: CrawlRunId,
-    pub phase: CrawlPhase,
-    pub checkpointed_at: DateTime<Utc>,
-    pub checkpoint_sequence: u64,
-    pub started_at: DateTime<Utc>,
-    pub stop_reason: Option<String>,
-    pub failure_reason: Option<String>,
-    pub metrics: CrawlRunMetrics,
-    pub payload_encoding: RecoveryPayloadEncoding,
-    pub frontier_payload: Vec<u8>,
-    pub frontier_size: usize,
-    pub caller: Option<String>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartCrawlRequest {
     pub config: CrawlerConfig,

@@ -1,6 +1,4 @@
-use btc_network::crawler::{
-    CrawlRunCheckpoint, CrawlRunRecoveryPoint, CrawlerRepositoryError, PersistedNodeObservation,
-};
+use btc_network::crawler::{CrawlRunCheckpoint, CrawlerRepositoryError, PersistedNodeObservation};
 use sqlx_core::query::query;
 use sqlx_postgres::{PgPool, Postgres};
 
@@ -143,70 +141,6 @@ VALUES (
     .execute(pool)
     .await
     .map_err(|err| map_postgres_err("write checkpoint row", err))?;
-
-    Ok(())
-}
-
-pub(super) async fn insert_run_recovery_point(
-    pool: &PgPool,
-    recovery_point: CrawlRunRecoveryPoint,
-) -> Result<(), CrawlerRepositoryError> {
-    query::<Postgres>(
-        "
-INSERT INTO crawler_run_recovery_points (
-    run_id,
-    phase,
-    checkpointed_at,
-    checkpoint_sequence,
-    started_at,
-    stop_reason,
-    failure_reason,
-    frontier_size,
-    in_flight_work,
-    scheduled_tasks,
-    successful_handshakes,
-    failed_tasks,
-    queued_nodes_total,
-    unique_nodes,
-    discovered_node_states,
-    persisted_observation_rows,
-    writer_backlog,
-    payload_encoding,
-    frontier_payload,
-    recovery_frontier_size,
-    caller
-)
-VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
-)
-",
-    )
-    .bind(recovery_point.run_id.as_uuid())
-    .bind(crawl_phase_to_str(recovery_point.phase))
-    .bind(recovery_point.checkpointed_at)
-    .bind(recovery_point.checkpoint_sequence as i64)
-    .bind(recovery_point.started_at)
-    .bind(recovery_point.stop_reason)
-    .bind(recovery_point.failure_reason)
-    .bind(usize_to_i64(recovery_point.metrics.frontier_size))
-    .bind(usize_to_i64(recovery_point.metrics.in_flight_work))
-    .bind(usize_to_i64(recovery_point.metrics.scheduled_tasks))
-    .bind(usize_to_i64(recovery_point.metrics.successful_handshakes))
-    .bind(usize_to_i64(recovery_point.metrics.failed_tasks))
-    .bind(usize_to_i64(recovery_point.metrics.queued_nodes_total))
-    .bind(usize_to_i64(recovery_point.metrics.unique_nodes))
-    .bind(usize_to_i64(recovery_point.metrics.discovered_node_states))
-    .bind(usize_to_i64(
-        recovery_point.metrics.persisted_observation_rows,
-    ))
-    .bind(usize_to_i64(recovery_point.metrics.writer_backlog))
-    .bind(recovery_point.payload_encoding.as_str())
-    .bind(recovery_point.frontier_payload)
-    .bind(usize_to_i64(recovery_point.frontier_size))
-    .bind(recovery_point.caller)
-    .execute(pool)
-    .await
-    .map_err(|err| map_postgres_err("write recovery point row", err))?;
 
     Ok(())
 }

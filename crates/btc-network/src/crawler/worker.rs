@@ -7,11 +7,11 @@ use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinSet;
 use tracing::{info, warn};
 
-use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation};
-use super::node::connect_retry_delay;
-use super::node::NodeProcessor;
-use super::ports::IpEnrichmentProvider;
 use super::FailureClassification;
+use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation};
+use super::node::NodeProcessor;
+use super::node::connect_retry_delay;
+use super::ports::IpEnrichmentProvider;
 use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit, QueuedNode};
 use crate::crawler::PersistedNodeObservation;
 
@@ -90,7 +90,9 @@ pub(crate) async fn run_worker(context: WorkerContext) {
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
         if endpoint.socket_addr().is_some() {
-            stats.connectable_tasks_started.fetch_add(1, Ordering::Relaxed);
+            stats
+                .connectable_tasks_started
+                .fetch_add(1, Ordering::Relaxed);
         }
         stats.in_flight.fetch_add(1, Ordering::Relaxed);
         let _in_flight_guard = InFlightGuard::new(stats.as_ref());
@@ -366,7 +368,9 @@ async fn maybe_schedule_retry(
     let stats = Arc::clone(stats);
     let stop = Arc::clone(stop);
     let queue_tx = queue_tx.clone();
-    stats.connect_retries_started.fetch_add(1, Ordering::Relaxed);
+    stats
+        .connect_retries_started
+        .fetch_add(1, Ordering::Relaxed);
     stats.delayed_retry_backlog.fetch_add(1, Ordering::Relaxed);
     if config.verbose {
         info!(
@@ -390,10 +394,16 @@ async fn maybe_schedule_retry(
         }
 
         let mut guard = state.lock().await;
-        if !guard.pending_nodes.contains(&retry_plan.retry_node.endpoint)
-            && !guard.in_flight_nodes.contains(&retry_plan.retry_node.endpoint)
+        if !guard
+            .pending_nodes
+            .contains(&retry_plan.retry_node.endpoint)
+            && !guard
+                .in_flight_nodes
+                .contains(&retry_plan.retry_node.endpoint)
         {
-            guard.pending_nodes.insert(retry_plan.retry_node.endpoint.clone());
+            guard
+                .pending_nodes
+                .insert(retry_plan.retry_node.endpoint.clone());
             drop(guard);
             let _ = queue_tx.send(retry_plan.retry_node);
         }
@@ -440,10 +450,14 @@ fn retry_plan(
 fn record_connect_failure(stats: &CrawlerStats, error_kind: Option<std::io::ErrorKind>) {
     match error_kind {
         Some(std::io::ErrorKind::TimedOut) => {
-            stats.connect_timeout_failures.fetch_add(1, Ordering::Relaxed);
+            stats
+                .connect_timeout_failures
+                .fetch_add(1, Ordering::Relaxed);
         }
         Some(std::io::ErrorKind::ConnectionRefused) => {
-            stats.connect_refused_failures.fetch_add(1, Ordering::Relaxed);
+            stats
+                .connect_refused_failures
+                .fetch_add(1, Ordering::Relaxed);
         }
         Some(
             std::io::ErrorKind::HostUnreachable
@@ -964,7 +978,14 @@ mod tests {
             connect_error_kind: None,
         };
 
-        assert!(retry_plan(&config, &QueuedNode::initial(node.clone()), &handshake_failure).is_none());
+        assert!(
+            retry_plan(
+                &config,
+                &QueuedNode::initial(node.clone()),
+                &handshake_failure
+            )
+            .is_none()
+        );
         assert!(retry_plan(&config, &exhausted, &connect_failure(node)).is_none());
     }
 
@@ -980,12 +1001,14 @@ mod tests {
         let second_failure = connect_failure(endpoint.clone());
         let third_failure = connect_failure(endpoint.clone());
 
-        let first = retry_plan(&config, &QueuedNode::initial(endpoint.clone()), &first_failure)
-            .expect("first retry");
-        let second = retry_plan(&config, &first.retry_node, &second_failure)
-            .expect("second retry");
-        let third = retry_plan(&config, &second.retry_node, &third_failure)
-            .expect("third retry");
+        let first = retry_plan(
+            &config,
+            &QueuedNode::initial(endpoint.clone()),
+            &first_failure,
+        )
+        .expect("first retry");
+        let second = retry_plan(&config, &first.retry_node, &second_failure).expect("second retry");
+        let third = retry_plan(&config, &second.retry_node, &third_failure).expect("third retry");
 
         assert_eq!(first.backoff, Duration::from_millis(25));
         assert_eq!(second.backoff, Duration::from_millis(50));
@@ -1120,7 +1143,10 @@ mod tests {
 
         assert_eq!(stats.connect_timeout_failures.load(Ordering::Relaxed), 1);
         assert_eq!(stats.connect_refused_failures.load(Ordering::Relaxed), 1);
-        assert_eq!(stats.connect_unreachable_failures.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            stats.connect_unreachable_failures.load(Ordering::Relaxed),
+            1
+        );
         assert_eq!(stats.connect_other_failures.load(Ordering::Relaxed), 1);
     }
 

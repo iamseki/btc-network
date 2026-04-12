@@ -121,37 +121,6 @@ impl CrawlState {
             last_new_node_at: Instant::now(),
         }
     }
-
-    pub(crate) fn recovery_frontier(&self) -> Vec<CrawlEndpoint> {
-        let mut frontier = self
-            .pending_nodes
-            .iter()
-            .chain(self.in_flight_nodes.iter())
-            .cloned()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        frontier.sort_by(|left, right| left.canonical.cmp(&right.canonical));
-        frontier
-    }
-
-    pub(crate) fn from_recovery_frontier(
-        frontier: Vec<CrawlEndpoint>,
-        observed_endpoints: Vec<CrawlEndpoint>,
-    ) -> Self {
-        let mut state = Self::new();
-
-        for endpoint in observed_endpoints {
-            state.seen_nodes.insert(endpoint);
-        }
-
-        for endpoint in frontier {
-            state.seen_nodes.insert(endpoint.clone());
-            state.pending_nodes.insert(endpoint);
-        }
-
-        state
-    }
 }
 
 #[derive(Debug, Clone)]
