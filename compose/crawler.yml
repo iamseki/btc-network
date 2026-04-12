@@ -13,7 +13,7 @@ services:
       CARGO_HOME: /cargo
       CARGO_TARGET_DIR: /cargo-target
       BTC_NETWORK_POSTGRES_URL: postgresql://btc_network_dev:btc_network_dev@postgres:5432/btc_network
-      BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: 100
+      BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: ${BTC_NETWORK_POSTGRES_MAX_CONNECTIONS:-16}
       BTC_NETWORK_CRAWLER_MAX_CONCURRENCY: ${BTC_NETWORK_CRAWLER_MAX_CONCURRENCY:-10000}
       BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES: ${BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES:-500000}
       BTC_NETWORK_CRAWLER_MAX_RUNTIME_MINUTES: ${BTC_NETWORK_CRAWLER_MAX_RUNTIME_MINUTES:-60}
@@ -33,3 +33,7 @@ services:
       - cargo-registry:/cargo/registry
       - cargo-git:/cargo/git
       - cargo-target:/cargo-target
+    ulimits:
+      nofile:
+        soft: ${BTC_NETWORK_CRAWLER_NOFILE_SOFT:-65536}
+        hard: ${BTC_NETWORK_CRAWLER_NOFILE_HARD:-65536}

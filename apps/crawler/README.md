@@ -102,8 +102,9 @@ dependency downloads and build artifacts.
 The profiled crawler service also sets default runtime tuning through
 environment variables in `compose/crawler.yml`, including:
 
-- `BTC_NETWORK_CRAWLER_MAX_CONCURRENCY=20000`
+- `BTC_NETWORK_CRAWLER_MAX_CONCURRENCY=10000`
 - `BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES=500000`
+- `BTC_NETWORK_POSTGRES_MAX_CONNECTIONS=16`
 - `BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS=10`
 - `BTC_NETWORK_CRAWLER_CONNECT_RETRY_BACKOFF_MS=250`
 - `BTC_NETWORK_CRAWLER_CONNECT_TIMEOUT_SECS=30`
@@ -115,9 +116,23 @@ Compose resource defaults are also set there:
 
 - `BTC_NETWORK_CRAWLER_CPUS=6.0`
 - `BTC_NETWORK_CRAWLER_MEM_LIMIT=12g`
+- `BTC_NETWORK_CRAWLER_NOFILE_SOFT=65536`
+- `BTC_NETWORK_CRAWLER_NOFILE_HARD=65536`
 
 Override any of these by exporting them in your shell or by adding them to a
 repository-root `.env` file before running `docker compose`.
+
+High crawler concurrency needs a high container open-file limit. Each in-flight
+peer visit consumes at least one socket file descriptor, and the process also
+needs descriptors for PostgreSQL, epoll/event-loop state, MMDB files, and
+stdio. The Compose crawler service sets `ulimits.nofile` to `65536` by default
+so high concurrency does not fail later with `Too many open files (os error
+24)` during checkpoint or observation writes.
+
+The crawler only has a small number of concurrent PostgreSQL writers, so the
+Compose default also keeps `BTC_NETWORK_POSTGRES_MAX_CONNECTIONS` modest at
+`16`. That preserves file descriptors for peer sockets instead of reserving an
+oversized database pool that the crawler does not use.
 
 ## Apply Migrations
 
