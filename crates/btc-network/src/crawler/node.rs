@@ -67,7 +67,14 @@ pub(crate) async fn process_node(
         })
     })?;
     let connect_started = Instant::now();
-    let stream = connect_once(&endpoint, connect_addr, config, total_started, connect_limiter).await?;
+    let stream = connect_once(
+        &endpoint,
+        connect_addr,
+        config,
+        total_started,
+        connect_limiter,
+    )
+    .await?;
     let connect_elapsed = connect_started.elapsed();
     let mut session = AsyncSession::new(stream, config.io_timeout);
 
@@ -152,7 +159,8 @@ async fn connect_once(
                 )
             })?
         },
-    ).await
+    )
+    .await
 }
 
 async fn connect_once_using<T, Connect, ConnectFuture>(
@@ -185,18 +193,15 @@ async fn acquire_connect_permit(
     endpoint: CrawlEndpoint,
     total_started: Instant,
 ) -> Result<OwnedSemaphorePermit, Box<NodeVisitFailure>> {
-    connect_limiter
-        .acquire_owned()
-        .await
-        .map_err(|_| {
-            Box::new(NodeVisitFailure {
-                node: endpoint,
-                latency: total_started.elapsed(),
-                classification: FailureClassification::Connect,
-                message: "connect limiter closed".to_string(),
-                connect_error_kind: None,
-            })
+    connect_limiter.acquire_owned().await.map_err(|_| {
+        Box::new(NodeVisitFailure {
+            node: endpoint,
+            latency: total_started.elapsed(),
+            classification: FailureClassification::Connect,
+            message: "connect limiter closed".to_string(),
+            connect_error_kind: None,
         })
+    })
 }
 
 pub(crate) fn connect_retry_delay(base: Duration, retry_number: usize) -> Duration {
@@ -506,7 +511,10 @@ mod tests {
 
         assert_eq!(attempts.load(Ordering::Relaxed), 1);
         assert_eq!(err.classification, FailureClassification::Connect);
-        assert_eq!(err.connect_error_kind, Some(io::ErrorKind::ConnectionRefused));
+        assert_eq!(
+            err.connect_error_kind,
+            Some(io::ErrorKind::ConnectionRefused)
+        );
         assert!(err.message.contains("connect 1.1.1.8:8333"));
     }
 

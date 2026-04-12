@@ -312,19 +312,6 @@ LIMIT 10;
 
 ```sql
 SELECT
-    run_id,
-    phase,
-    checkpointed_at,
-    recovery_frontier_size,
-    octet_length(frontier_payload) AS compressed_payload_bytes,
-    payload_encoding
-FROM crawler_run_recovery_points
-ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
-LIMIT 10;
-```
-
-```sql
-SELECT
     endpoint,
     network_type,
     handshake_status,
@@ -337,4 +324,7 @@ ORDER BY observed_at DESC, observation_id DESC
 LIMIT 20;
 ```
 
-`crawler_run_checkpoints` is progress history only. Crash-restart state lives in `crawler_run_recovery_points` as a compressed frontier payload.
+`crawler_run_checkpoints` is crawler runtime history and operator progress history.
+The crawler now always starts fresh after a crash or manual restart. Older
+databases may still contain a legacy `crawler_run_recovery_points` table from
+earlier experiments, but current crawler code no longer writes or reads it.

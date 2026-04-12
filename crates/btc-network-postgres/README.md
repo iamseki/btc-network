@@ -14,8 +14,12 @@ The current crawler storage split is:
 
 - `node_observations` for append-only observation history
 - `crawler_run_checkpoints` for append-only progress history
-- `crawler_run_recovery_points` for append-only durable recovery payloads
 - `schema_migrations` for the migration ledger
+
+Older databases may also contain `crawler_run_recovery_points` from the
+deprecated crash-recovery design. The current repository keeps that migration
+for historical compatibility, but the crawler no longer reads or writes that
+table.
 
 ## Create A Migration
 

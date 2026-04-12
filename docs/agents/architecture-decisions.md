@@ -32,8 +32,8 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - persisted observations use `handshake_status` for success/failure outcome and `failure_classification` for the exact failure stage; there is no separate `confidence_level` column in the current schema
 - persisted observations do not carry a separate `batch_id` column in the current schema
 - `handshake_status` in persisted observations is a historical field name; failed rows can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
-- crawler startup recovery assumes one coordinator process writes to a given persistence database at a time; that single-active-run constraint is enforced outside the crawler implementation, and overlapping writers are a deployment bug
-- under that single-writer assumption, startup recovery may treat the newest checkpoint row overall as the only candidate active run
+- crawler no longer performs durable startup recovery; after crash or manual restart, operators start a fresh run from seed nodes
+- overlapping crawler writers against the same persistence database are still a deployment bug, but checkpoints are now operator history only rather than restart state
 - the default crawler persistence adapter is PostgreSQL in `crates/btc-network-postgres`
 
 ## Frontend Architecture
