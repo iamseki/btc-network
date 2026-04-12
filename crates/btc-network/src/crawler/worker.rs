@@ -123,6 +123,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 )
                 .await
                 {
+                    clear_in_flight_endpoint(&state, &endpoint).await;
                     return;
                 }
 
@@ -185,10 +186,11 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 )
                 .await
                 {
+                    clear_in_flight_endpoint(&state, &endpoint).await;
                     return;
                 }
 
-                state.lock().await.in_flight_nodes.remove(&endpoint);
+                clear_in_flight_endpoint(&state, &endpoint).await;
                 maybe_schedule_retry(
                     &config,
                     &state,
@@ -252,6 +254,10 @@ async fn enqueue_observation(
         return false;
     }
     true
+}
+
+async fn clear_in_flight_endpoint(state: &Arc<Mutex<CrawlState>>, endpoint: &CrawlEndpoint) {
+    state.lock().await.in_flight_nodes.remove(endpoint);
 }
 
 fn build_persisted_observation(
@@ -425,7 +431,7 @@ fn retry_plan(
         retry_node: queued_node.retry_after_failure(error.classification.clone()),
         backoff: connect_retry_delay(config.connect_retry_backoff, completed_attempts),
         previous_attempt_age: queued_node
-            .last_attempt_at
+            .retry_scheduled_at
             .map(|attempted_at| attempted_at.elapsed()),
         previous_failure_classification: queued_node.last_failure_classification.clone(),
     })
@@ -870,6 +876,50 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn worker_clears_in_flight_state_when_observation_writer_is_closed() {
+        let config = test_config();
+        let node = public_endpoint(21);
+        let mut crawl_state = CrawlState::new();
+        crawl_state.pending_nodes.insert(node.clone());
+        let state = Arc::new(Mutex::new(crawl_state));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (in_tx, in_rx) = mpsc::unbounded_channel();
+        let (out_tx, _out_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let (obs_tx, obs_rx) = mpsc::channel(1);
+        drop(obs_rx);
+        let _ = in_tx.send(QueuedNode::initial(node.clone()));
+        drop(in_tx);
+
+        let mut responses = HashMap::new();
+        responses.insert(node.clone(), Ok(visit_for(node.clone(), vec![])));
+        let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(responses));
+        let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
+            enrichment: IpEnrichment::unavailable(),
+        });
+
+        run_worker(WorkerContext {
+            config,
+            run_id: CrawlRunId::from_u128(1),
+            state: Arc::clone(&state),
+            stats: Arc::clone(&stats),
+            stop: Arc::clone(&stop),
+            queue_rx: Arc::new(Mutex::new(in_rx)),
+            queue_tx: out_tx,
+            retry_tasks,
+            observation_tx: obs_tx,
+            processor,
+            enrichment_provider: enrichment,
+        })
+        .await;
+
+        assert!(stop.load(Ordering::Relaxed));
+        let guard = state.lock().await;
+        assert!(!guard.in_flight_nodes.contains(&node));
+    }
+
     #[test]
     fn retry_plan_requeues_retryable_connect_failures() {
         let config = CrawlerConfig {
@@ -889,7 +939,7 @@ mod tests {
             Some(FailureClassification::Connect)
         );
         assert_eq!(plan.backoff, Duration::from_millis(25));
-        assert!(plan.retry_node.last_attempt_at.is_some());
+        assert!(plan.retry_node.retry_scheduled_at.is_some());
     }
 
     #[test]
@@ -903,7 +953,7 @@ mod tests {
         let exhausted = QueuedNode {
             endpoint: node.clone(),
             attempt_count: 1,
-            last_attempt_at: None,
+            retry_scheduled_at: None,
             last_failure_classification: None,
         };
         let handshake_failure = crate::crawler::types::NodeVisitFailure {

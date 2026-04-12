@@ -179,7 +179,8 @@ pub(crate) struct QueuedNode {
     pub(crate) endpoint: CrawlEndpoint,
     /// Completed connect attempts for this endpoint so far.
     pub(crate) attempt_count: usize,
-    pub(crate) last_attempt_at: Option<Instant>,
+    /// When the most recent delayed retry was scheduled for this endpoint.
+    pub(crate) retry_scheduled_at: Option<Instant>,
     pub(crate) last_failure_classification: Option<FailureClassification>,
 }
 
@@ -188,7 +189,7 @@ impl QueuedNode {
         Self {
             endpoint,
             attempt_count: 0,
-            last_attempt_at: None,
+            retry_scheduled_at: None,
             last_failure_classification: None,
         }
     }
@@ -201,7 +202,7 @@ impl QueuedNode {
         Self {
             endpoint: self.endpoint.clone(),
             attempt_count: self.completed_attempts_after_current_failure(),
-            last_attempt_at: Some(Instant::now()),
+            retry_scheduled_at: Some(Instant::now()),
             last_failure_classification: Some(classification),
         }
     }
