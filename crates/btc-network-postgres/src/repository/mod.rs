@@ -62,12 +62,6 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         Box::pin(async move { runs::get_run_checkpoint(&self.pool, run_id).await })
     }
 
-    fn get_latest_active_run_checkpoint<'a>(
-        &'a self,
-    ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
-        Box::pin(async move { runs::get_latest_active_run_checkpoint(&self.pool).await })
-    }
-
     fn list_runs<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {

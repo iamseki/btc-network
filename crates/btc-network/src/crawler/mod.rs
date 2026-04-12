@@ -111,27 +111,6 @@ impl Crawler {
         let started_at = Instant::now();
         let started_at_utc = Utc::now();
         let run_id = CrawlRunId::now_v7();
-
-        self.run_active_request(
-            run_id,
-            request,
-            processor,
-            connect_limiter,
-            started_at,
-            started_at_utc,
-        )
-        .await
-    }
-
-    async fn run_active_request(
-        &self,
-        run_id: CrawlRunId,
-        request: StartCrawlRequest,
-        processor: Arc<dyn NodeProcessor>,
-        connect_limiter: Option<Arc<Semaphore>>,
-        started_at: Instant,
-        started_at_utc: DateTime<Utc>,
-    ) -> Result<CrawlSummary, Box<dyn Error>> {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stats = Arc::new(CrawlerStats::default());
         let checkpoint_sequence = Arc::new(AtomicU64::new(0));
@@ -146,7 +125,7 @@ impl Crawler {
             started_at: started_at_utc,
         };
 
-        let (queue_tx, _queue_rx) = mpsc::unbounded_channel::<QueuedNode>();
+        let (queue_tx, queue_rx) = mpsc::unbounded_channel::<QueuedNode>();
 
         seed_initial_nodes(
             &state,
@@ -171,8 +150,6 @@ impl Crawler {
         }
         write_progress_snapshot(&checkpoint_context, CrawlPhase::Crawling, None, None).await?;
 
-        let initial_frontier = pending_frontier(&state).await;
-
         self.run_loaded_request(
             run_id,
             request.config,
@@ -184,7 +161,8 @@ impl Crawler {
             stats,
             checkpoint_sequence,
             phase,
-            initial_frontier,
+            queue_tx,
+            queue_rx,
         )
         .await
     }
@@ -202,7 +180,8 @@ impl Crawler {
         stats: Arc<CrawlerStats>,
         checkpoint_sequence: Arc<AtomicU64>,
         phase: Arc<Mutex<CrawlPhase>>,
-        initial_frontier: Vec<CrawlEndpoint>,
+        queue_tx: mpsc::UnboundedSender<QueuedNode>,
+        queue_rx: mpsc::UnboundedReceiver<QueuedNode>,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let stop = Arc::new(AtomicBool::new(false));
 
@@ -215,10 +194,6 @@ impl Crawler {
             started_at: started_at_utc,
         };
 
-        let (queue_tx, queue_rx) = mpsc::unbounded_channel::<QueuedNode>();
-        for endpoint in initial_frontier {
-            let _ = queue_tx.send(QueuedNode::initial(endpoint));
-        }
         let queue_rx = Arc::new(Mutex::new(queue_rx));
         let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (observation_tx, observation_rx) =
@@ -408,18 +383,6 @@ fn writer_channel_capacity(config: CrawlerConfig) -> usize {
 
 fn writer_batch_size(config: CrawlerConfig) -> usize {
     effective_worker_count(config.max_concurrency).max(1)
-}
-
-async fn pending_frontier(state: &Arc<Mutex<CrawlState>>) -> Vec<CrawlEndpoint> {
-    let mut pending = state
-        .lock()
-        .await
-        .pending_nodes
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>();
-    pending.sort_by(|left, right| left.canonical.cmp(&right.canonical));
-    pending
 }
 
 fn record_failure(failure_reason: &mut Option<String>, reason: String) {
@@ -710,12 +673,6 @@ impl CrawlerRepository for NoopCrawlerRepository {
         Box::pin(async { Ok(Vec::new()) })
     }
 
-    fn get_latest_active_run_checkpoint<'a>(
-        &'a self,
-    ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
-        Box::pin(async { Ok(None) })
-    }
-
     fn count_nodes_by_asn<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
@@ -836,27 +793,6 @@ mod tests {
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
             Box::pin(async { Ok(self.checkpoints.lock().expect("checkpoints lock").clone()) })
-        }
-
-        fn get_latest_active_run_checkpoint<'a>(
-            &'a self,
-        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
-        {
-            Box::pin(async {
-                Ok(self
-                    .checkpoints
-                    .lock()
-                    .expect("checkpoints lock")
-                    .iter()
-                    .rev()
-                    .find(|checkpoint| {
-                        matches!(
-                            checkpoint.phase,
-                            CrawlPhase::Bootstrap | CrawlPhase::Crawling | CrawlPhase::Draining
-                        )
-                    })
-                    .cloned())
-            })
         }
 
         fn count_nodes_by_asn<'a>(
@@ -999,13 +935,6 @@ mod tests {
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError>> {
             Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn get_latest_active_run_checkpoint<'a>(
-            &'a self,
-        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(None) })
         }
 
         fn count_nodes_by_asn<'a>(

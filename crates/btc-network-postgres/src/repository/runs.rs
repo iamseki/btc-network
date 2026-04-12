@@ -48,55 +48,6 @@ LIMIT 1
     row.map(row_to_checkpoint).transpose()
 }
 
-pub(super) async fn get_latest_active_run_checkpoint(
-    pool: &PgPool,
-) -> Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError> {
-    let row = query::<Postgres>(
-        "
-SELECT
-    run_id,
-    phase,
-    checkpointed_at,
-    checkpoint_sequence,
-    started_at,
-    stop_reason,
-    failure_reason,
-    frontier_size,
-    in_flight_work,
-    scheduled_tasks,
-    successful_handshakes,
-    failed_tasks,
-    queued_nodes_total,
-    unique_nodes,
-    discovered_node_states,
-    persisted_observation_rows,
-    writer_backlog,
-    caller
-FROM crawler_run_checkpoints
-ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
-LIMIT 1
-",
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(|err| map_postgres_err("fetch latest active run checkpoint", err))?;
-
-    let Some(checkpoint) = row.map(row_to_checkpoint).transpose()? else {
-        return Ok(None);
-    };
-
-    if matches!(
-        checkpoint.phase,
-        btc_network::crawler::CrawlPhase::Bootstrap
-            | btc_network::crawler::CrawlPhase::Crawling
-            | btc_network::crawler::CrawlPhase::Draining
-    ) {
-        Ok(Some(checkpoint))
-    } else {
-        Ok(None)
-    }
-}
-
 pub(super) async fn list_runs(
     pool: &PgPool,
 ) -> Result<Vec<CrawlRunCheckpoint>, CrawlerRepositoryError> {

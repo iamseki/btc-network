@@ -78,12 +78,6 @@ pub trait CrawlerRepository: Send + Sync {
         run_id: &'a CrawlRunId,
     ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>;
 
-    /// Returns the latest durable checkpoint when it still represents an active
-    /// crawler run.
-    fn get_latest_active_run_checkpoint<'a>(
-        &'a self,
-    ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>;
-
     /// Returns one latest checkpoint summary per run.
     ///
     /// Implementations must aggregate fields from the same winning checkpoint row and
@@ -221,34 +215,6 @@ mod tests {
             Box::pin(async move { Ok(self.checkpoints.lock().expect("checkpoints lock").clone()) })
         }
 
-        fn get_latest_active_run_checkpoint<'a>(
-            &'a self,
-        ) -> RepositoryFuture<'a, Result<Option<CrawlRunCheckpoint>, CrawlerRepositoryError>>
-        {
-            Box::pin(async move {
-                let checkpoint = self
-                    .checkpoints
-                    .lock()
-                    .expect("checkpoints lock")
-                    .iter()
-                    .filter(|checkpoint| {
-                        matches!(
-                            checkpoint.phase,
-                            crate::crawler::CrawlPhase::Bootstrap
-                                | crate::crawler::CrawlPhase::Crawling
-                                | crate::crawler::CrawlPhase::Draining
-                        )
-                    })
-                    .max_by(|left, right| {
-                        left.checkpointed_at
-                            .cmp(&right.checkpointed_at)
-                            .then_with(|| left.checkpoint_sequence.cmp(&right.checkpoint_sequence))
-                    })
-                    .cloned();
-                Ok(checkpoint)
-            })
-        }
-
         fn count_nodes_by_asn<'a>(
             &'a self,
         ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
@@ -380,15 +346,9 @@ mod tests {
             .await
             .expect("get checkpoint")
             .expect("checkpoint exists");
-        let latest_active = repository
-            .get_latest_active_run_checkpoint()
-            .await
-            .expect("get latest active checkpoint")
-            .expect("active checkpoint exists");
         let runs = repository.list_runs().await.expect("list runs");
 
         assert_eq!(saved_checkpoint, checkpoint);
-        assert_eq!(latest_active, checkpoint);
         assert_eq!(runs, vec![checkpoint]);
 
         repository
