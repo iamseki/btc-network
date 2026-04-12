@@ -4,12 +4,15 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use tokio::sync::{Mutex, mpsc};
+use tokio::task::JoinSet;
 use tracing::{info, warn};
 
 use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation};
+use super::node::connect_retry_delay;
 use super::node::NodeProcessor;
 use super::ports::IpEnrichmentProvider;
-use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit};
+use super::FailureClassification;
+use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit, QueuedNode};
 use crate::crawler::PersistedNodeObservation;
 
 pub(crate) struct WorkerContext {
@@ -18,8 +21,9 @@ pub(crate) struct WorkerContext {
     pub(crate) state: Arc<Mutex<CrawlState>>,
     pub(crate) stats: Arc<CrawlerStats>,
     pub(crate) stop: Arc<AtomicBool>,
-    pub(crate) queue_rx: Arc<Mutex<mpsc::UnboundedReceiver<CrawlEndpoint>>>,
-    pub(crate) queue_tx: mpsc::UnboundedSender<CrawlEndpoint>,
+    pub(crate) queue_rx: Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
+    pub(crate) queue_tx: mpsc::UnboundedSender<QueuedNode>,
+    pub(crate) retry_tasks: Arc<Mutex<JoinSet<()>>>,
     pub(crate) observation_tx: mpsc::Sender<PersistedNodeObservation>,
     pub(crate) processor: Arc<dyn NodeProcessor>,
     pub(crate) enrichment_provider: Arc<dyn IpEnrichmentProvider>,
@@ -44,6 +48,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         stop,
         queue_rx,
         queue_tx,
+        retry_tasks,
         observation_tx,
         processor,
         enrichment_provider,
@@ -72,9 +77,10 @@ pub(crate) async fn run_worker(context: WorkerContext) {
             Err(_) => continue,
         };
 
-        let Some(endpoint) = maybe_endpoint else {
+        let Some(queued_node) = maybe_endpoint else {
             return;
         };
+        let endpoint = queued_node.endpoint.clone();
 
         {
             let mut guard = state.lock().await;
@@ -83,6 +89,9 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         }
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
+        if endpoint.socket_addr().is_some() {
+            stats.connectable_tasks_started.fetch_add(1, Ordering::Relaxed);
+        }
         stats.in_flight.fetch_add(1, Ordering::Relaxed);
         let _in_flight_guard = InFlightGuard::new(stats.as_ref());
 
@@ -114,6 +123,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 )
                 .await
                 {
+                    clear_in_flight_endpoint(&state, &endpoint).await;
                     return;
                 }
 
@@ -135,7 +145,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                         if stop.load(Ordering::Relaxed) {
                             break;
                         }
-                        let _ = queue_tx.send(candidate);
+                        let _ = queue_tx.send(QueuedNode::initial(candidate));
                     }
                 }
 
@@ -157,6 +167,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
             }
             Err(err) => {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
+                record_connect_failure(stats.as_ref(), err.connect_error_kind);
 
                 let raw = RawNodeObservation::from_failure(
                     Utc::now(),
@@ -175,10 +186,22 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 )
                 .await
                 {
+                    clear_in_flight_endpoint(&state, &endpoint).await;
                     return;
                 }
 
-                state.lock().await.in_flight_nodes.remove(&endpoint);
+                clear_in_flight_endpoint(&state, &endpoint).await;
+                maybe_schedule_retry(
+                    &config,
+                    &state,
+                    &stats,
+                    &stop,
+                    &queue_tx,
+                    &retry_tasks,
+                    &queued_node,
+                    err.as_ref(),
+                )
+                .await;
 
                 if config.verbose {
                     info!(
@@ -233,6 +256,10 @@ async fn enqueue_observation(
     true
 }
 
+async fn clear_in_flight_endpoint(state: &Arc<Mutex<CrawlState>>, endpoint: &CrawlEndpoint) {
+    state.lock().await.in_flight_nodes.remove(endpoint);
+}
+
 fn build_persisted_observation(
     raw: RawNodeObservation,
     enrichment_provider: &dyn IpEnrichmentProvider,
@@ -249,7 +276,7 @@ fn build_persisted_observation(
 pub(crate) async fn seed_initial_nodes(
     state: &Arc<Mutex<CrawlState>>,
     stats: &Arc<CrawlerStats>,
-    queue_tx: &mpsc::UnboundedSender<CrawlEndpoint>,
+    queue_tx: &mpsc::UnboundedSender<QueuedNode>,
     seeds: Vec<CrawlEndpoint>,
     max_tracked_nodes: usize,
 ) {
@@ -269,7 +296,7 @@ pub(crate) async fn seed_initial_nodes(
             .queued_total
             .fetch_add(newly_queued.len(), Ordering::Relaxed);
         for endpoint in newly_queued {
-            let _ = queue_tx.send(endpoint);
+            let _ = queue_tx.send(QueuedNode::initial(endpoint));
         }
     }
 }
@@ -322,18 +349,130 @@ fn try_track_endpoint(
     state.seen_nodes.insert(endpoint)
 }
 
+async fn maybe_schedule_retry(
+    config: &CrawlerConfig,
+    state: &Arc<Mutex<CrawlState>>,
+    stats: &Arc<CrawlerStats>,
+    stop: &Arc<AtomicBool>,
+    queue_tx: &mpsc::UnboundedSender<QueuedNode>,
+    retry_tasks: &Arc<Mutex<JoinSet<()>>>,
+    queued_node: &QueuedNode,
+    error: &crate::crawler::types::NodeVisitFailure,
+) {
+    let Some(retry_plan) = retry_plan(config, queued_node, error) else {
+        return;
+    };
+    let state = Arc::clone(state);
+    let stats = Arc::clone(stats);
+    let stop = Arc::clone(stop);
+    let queue_tx = queue_tx.clone();
+    stats.connect_retries_started.fetch_add(1, Ordering::Relaxed);
+    stats.delayed_retry_backlog.fetch_add(1, Ordering::Relaxed);
+    if config.verbose {
+        info!(
+            node = %queued_node.endpoint.canonical,
+            retry_attempt = retry_plan.retry_node.attempt_count + 1,
+            previous_attempt_age_ms = retry_plan.previous_attempt_age.map(|age| age.as_millis()),
+            previous_failure_classification = ?retry_plan.previous_failure_classification,
+            retry_backoff_ms = retry_plan.backoff.as_millis(),
+            "[crawler] scheduling delayed retry"
+        );
+    }
+
+    retry_tasks.lock().await.spawn(async move {
+        if !retry_plan.backoff.is_zero() {
+            tokio::time::sleep(retry_plan.backoff).await;
+        }
+
+        if stop.load(Ordering::Relaxed) {
+            stats.delayed_retry_backlog.fetch_sub(1, Ordering::Relaxed);
+            return;
+        }
+
+        let mut guard = state.lock().await;
+        if !guard.pending_nodes.contains(&retry_plan.retry_node.endpoint)
+            && !guard.in_flight_nodes.contains(&retry_plan.retry_node.endpoint)
+        {
+            guard.pending_nodes.insert(retry_plan.retry_node.endpoint.clone());
+            drop(guard);
+            let _ = queue_tx.send(retry_plan.retry_node);
+        }
+        stats.delayed_retry_backlog.fetch_sub(1, Ordering::Relaxed);
+    });
+}
+
+#[derive(Debug, Clone)]
+struct RetryPlan {
+    retry_node: QueuedNode,
+    backoff: Duration,
+    previous_attempt_age: Option<Duration>,
+    previous_failure_classification: Option<FailureClassification>,
+}
+
+fn retry_plan(
+    config: &CrawlerConfig,
+    queued_node: &QueuedNode,
+    error: &crate::crawler::types::NodeVisitFailure,
+) -> Option<RetryPlan> {
+    if error.classification != FailureClassification::Connect {
+        return None;
+    }
+
+    if error.node.socket_addr().is_none() {
+        return None;
+    }
+
+    let completed_attempts = queued_node.completed_attempts_after_current_failure();
+    if completed_attempts >= config.connect_max_attempts.max(1) {
+        return None;
+    }
+
+    Some(RetryPlan {
+        retry_node: queued_node.retry_after_failure(error.classification.clone()),
+        backoff: connect_retry_delay(config.connect_retry_backoff, completed_attempts),
+        previous_attempt_age: queued_node
+            .retry_scheduled_at
+            .map(|attempted_at| attempted_at.elapsed()),
+        previous_failure_classification: queued_node.last_failure_classification.clone(),
+    })
+}
+
+fn record_connect_failure(stats: &CrawlerStats, error_kind: Option<std::io::ErrorKind>) {
+    match error_kind {
+        Some(std::io::ErrorKind::TimedOut) => {
+            stats.connect_timeout_failures.fetch_add(1, Ordering::Relaxed);
+        }
+        Some(std::io::ErrorKind::ConnectionRefused) => {
+            stats.connect_refused_failures.fetch_add(1, Ordering::Relaxed);
+        }
+        Some(
+            std::io::ErrorKind::HostUnreachable
+            | std::io::ErrorKind::NetworkUnreachable
+            | std::io::ErrorKind::AddrNotAvailable,
+        ) => {
+            stats
+                .connect_unreachable_failures
+                .fetch_add(1, Ordering::Relaxed);
+        }
+        Some(_) | None => {
+            stats.connect_other_failures.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::crawler::node::NodeProcessor;
     use crate::crawler::types::NodeVisitResult;
-    use crate::crawler::{CrawlNetwork, CrawlRunId, HandshakeStatus};
+    use crate::crawler::{CrawlNetwork, CrawlRunId, FailureClassification, HandshakeStatus};
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::HashMap;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
     use std::sync::Mutex as StdMutex;
     use std::sync::atomic::AtomicUsize;
+    use tokio::task::JoinSet;
 
     struct MockProcessor {
         calls: AtomicUsize,
@@ -370,6 +509,7 @@ mod tests {
                             "missing mock response".to_string(),
                         ),
                         message: "missing mock response".to_string(),
+                        connect_error_kind: None,
                     }))
                 });
             Box::pin(async move { result })
@@ -390,6 +530,7 @@ mod tests {
     fn test_config() -> CrawlerConfig {
         CrawlerConfig {
             max_concurrency: 1,
+            max_in_flight_connects: 1,
             max_tracked_nodes: 16,
             max_runtime: Duration::from_secs(1),
             idle_timeout: Duration::from_secs(1),
@@ -436,6 +577,22 @@ mod tests {
             discovered,
             latency: Duration::from_millis(10),
         }
+    }
+
+    fn connect_failure(node: CrawlEndpoint) -> crate::crawler::types::NodeVisitFailure {
+        crate::crawler::types::NodeVisitFailure {
+            node,
+            latency: Duration::from_millis(10),
+            classification: FailureClassification::Connect,
+            message: "connect failed".to_string(),
+            connect_error_kind: Some(std::io::ErrorKind::TimedOut),
+        }
+    }
+
+    async fn abort_and_drain_retry_tasks(retry_tasks: &Arc<Mutex<JoinSet<()>>>) {
+        let mut retry_tasks = retry_tasks.lock().await;
+        retry_tasks.abort_all();
+        while retry_tasks.join_next().await.is_some() {}
     }
 
     #[test]
@@ -500,8 +657,9 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(true));
         let (in_tx, in_rx) = mpsc::unbounded_channel();
         let (out_tx, _out_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (obs_tx, _obs_rx) = mpsc::channel(1);
-        let _ = in_tx.send(test_endpoint(2));
+        let _ = in_tx.send(QueuedNode::initial(test_endpoint(2)));
         drop(in_tx);
 
         let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(HashMap::new()));
@@ -516,6 +674,7 @@ mod tests {
             stop,
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_tasks,
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
             enrichment_provider: enrichment,
@@ -533,11 +692,12 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let (in_tx, in_rx) = mpsc::unbounded_channel();
         let (out_tx, mut out_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (obs_tx, mut obs_rx) = mpsc::channel(4);
 
         let node = public_endpoint(2);
         let discovered = public_endpoint(3);
-        let _ = in_tx.send(node.clone());
+        let _ = in_tx.send(QueuedNode::initial(node.clone()));
         drop(in_tx);
 
         let mut responses = HashMap::new();
@@ -566,6 +726,7 @@ mod tests {
             stop,
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_tasks,
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
             enrichment_provider: enrichment,
@@ -578,7 +739,10 @@ mod tests {
         assert_eq!(stats.failed.load(Ordering::Relaxed), 0);
         assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
         assert_eq!(stats.discovered_node_states.load(Ordering::Relaxed), 1);
-        assert_eq!(out_rx.try_recv().ok(), Some(discovered.clone()));
+        assert_eq!(
+            out_rx.try_recv().ok().map(|queued| queued.endpoint),
+            Some(discovered.clone())
+        );
         assert!(out_rx.try_recv().is_err());
         assert_eq!(persisted.raw.handshake_status, HandshakeStatus::Succeeded);
         assert_eq!(persisted.enrichment.asn, Some(64512));
@@ -597,10 +761,11 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let (in_tx, in_rx) = mpsc::unbounded_channel();
         let (out_tx, _out_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (obs_tx, mut obs_rx) = mpsc::channel(4);
 
         let node = overlay_endpoint();
-        let _ = in_tx.send(node.clone());
+        let _ = in_tx.send(QueuedNode::initial(node.clone()));
         drop(in_tx);
 
         let mut responses = HashMap::new();
@@ -611,6 +776,7 @@ mod tests {
                 latency: Duration::from_millis(10),
                 classification: crate::crawler::FailureClassification::Connect,
                 message: "connect failed".to_string(),
+                connect_error_kind: None,
             })),
         );
         let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(responses));
@@ -631,6 +797,7 @@ mod tests {
             stop,
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_tasks,
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
             enrichment_provider: enrichment,
@@ -668,7 +835,7 @@ mod tests {
         let first = queue_rx.try_recv().expect("first queued");
         let second = queue_rx.try_recv().expect("second queued");
         assert!(queue_rx.try_recv().is_err());
-        assert_ne!(first, second);
+        assert_ne!(first.endpoint, second.endpoint);
 
         let guard = state.lock().await;
         assert_eq!(guard.seen_nodes.len(), 2);
@@ -707,6 +874,254 @@ mod tests {
             persisted.enrichment.status,
             crate::crawler::IpEnrichmentStatus::NotApplicable
         );
+    }
+
+    #[tokio::test]
+    async fn worker_clears_in_flight_state_when_observation_writer_is_closed() {
+        let config = test_config();
+        let node = public_endpoint(21);
+        let mut crawl_state = CrawlState::new();
+        crawl_state.pending_nodes.insert(node.clone());
+        let state = Arc::new(Mutex::new(crawl_state));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (in_tx, in_rx) = mpsc::unbounded_channel();
+        let (out_tx, _out_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let (obs_tx, obs_rx) = mpsc::channel(1);
+        drop(obs_rx);
+        let _ = in_tx.send(QueuedNode::initial(node.clone()));
+        drop(in_tx);
+
+        let mut responses = HashMap::new();
+        responses.insert(node.clone(), Ok(visit_for(node.clone(), vec![])));
+        let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(responses));
+        let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
+            enrichment: IpEnrichment::unavailable(),
+        });
+
+        run_worker(WorkerContext {
+            config,
+            run_id: CrawlRunId::from_u128(1),
+            state: Arc::clone(&state),
+            stats: Arc::clone(&stats),
+            stop: Arc::clone(&stop),
+            queue_rx: Arc::new(Mutex::new(in_rx)),
+            queue_tx: out_tx,
+            retry_tasks,
+            observation_tx: obs_tx,
+            processor,
+            enrichment_provider: enrichment,
+        })
+        .await;
+
+        assert!(stop.load(Ordering::Relaxed));
+        let guard = state.lock().await;
+        assert!(!guard.in_flight_nodes.contains(&node));
+    }
+
+    #[test]
+    fn retry_plan_requeues_retryable_connect_failures() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::from_millis(25),
+            ..test_config()
+        };
+        let queued = QueuedNode::initial(public_endpoint(22));
+        let failure = connect_failure(queued.endpoint.clone());
+
+        let plan = retry_plan(&config, &queued, &failure).expect("retry plan");
+
+        assert_eq!(plan.retry_node.endpoint, queued.endpoint);
+        assert_eq!(plan.retry_node.attempt_count, 1);
+        assert_eq!(
+            plan.retry_node.last_failure_classification,
+            Some(FailureClassification::Connect)
+        );
+        assert_eq!(plan.backoff, Duration::from_millis(25));
+        assert!(plan.retry_node.retry_scheduled_at.is_some());
+    }
+
+    #[test]
+    fn retry_plan_skips_non_connect_or_exhausted_failures() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 2,
+            connect_retry_backoff: Duration::from_millis(25),
+            ..test_config()
+        };
+        let node = public_endpoint(23);
+        let exhausted = QueuedNode {
+            endpoint: node.clone(),
+            attempt_count: 1,
+            retry_scheduled_at: None,
+            last_failure_classification: None,
+        };
+        let handshake_failure = crate::crawler::types::NodeVisitFailure {
+            node: node.clone(),
+            latency: Duration::from_millis(10),
+            classification: FailureClassification::Handshake,
+            message: "handshake failed".to_string(),
+            connect_error_kind: None,
+        };
+
+        assert!(retry_plan(&config, &QueuedNode::initial(node.clone()), &handshake_failure).is_none());
+        assert!(retry_plan(&config, &exhausted, &connect_failure(node)).is_none());
+    }
+
+    #[test]
+    fn retry_plan_backoff_grows_with_attempt_count() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 5,
+            connect_retry_backoff: Duration::from_millis(25),
+            ..test_config()
+        };
+        let endpoint = public_endpoint(27);
+        let first_failure = connect_failure(endpoint.clone());
+        let second_failure = connect_failure(endpoint.clone());
+        let third_failure = connect_failure(endpoint.clone());
+
+        let first = retry_plan(&config, &QueuedNode::initial(endpoint.clone()), &first_failure)
+            .expect("first retry");
+        let second = retry_plan(&config, &first.retry_node, &second_failure)
+            .expect("second retry");
+        let third = retry_plan(&config, &second.retry_node, &third_failure)
+            .expect("third retry");
+
+        assert_eq!(first.backoff, Duration::from_millis(25));
+        assert_eq!(second.backoff, Duration::from_millis(50));
+        assert_eq!(third.backoff, Duration::from_millis(100));
+    }
+
+    #[tokio::test]
+    async fn maybe_schedule_retry_enqueues_after_backoff() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::from_millis(5),
+            ..test_config()
+        };
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let queued = QueuedNode::initial(public_endpoint(24));
+        let failure = connect_failure(queued.endpoint.clone());
+
+        maybe_schedule_retry(
+            &config,
+            &state,
+            &stats,
+            &stop,
+            &queue_tx,
+            &retry_tasks,
+            &queued,
+            &failure,
+        )
+        .await;
+
+        assert_eq!(stats.connect_retries_started.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.delayed_retry_backlog.load(Ordering::Relaxed), 1);
+        assert!(queue_rx.try_recv().is_err());
+
+        tokio::time::sleep(Duration::from_millis(15)).await;
+
+        let retry = queue_rx.try_recv().expect("retry should be queued");
+        assert_eq!(retry.endpoint, queued.endpoint);
+        assert_eq!(retry.attempt_count, 1);
+        assert_eq!(
+            retry.last_failure_classification,
+            Some(FailureClassification::Connect)
+        );
+        assert_eq!(stats.delayed_retry_backlog.load(Ordering::Relaxed), 0);
+
+        let guard = state.lock().await;
+        assert!(guard.pending_nodes.contains(&queued.endpoint));
+    }
+
+    #[tokio::test]
+    async fn maybe_schedule_retry_skips_enqueue_when_endpoint_already_pending() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::ZERO,
+            ..test_config()
+        };
+        let endpoint = public_endpoint(25);
+        let queued = QueuedNode::initial(endpoint.clone());
+        let failure = connect_failure(endpoint.clone());
+        let mut crawl_state = CrawlState::new();
+        crawl_state.pending_nodes.insert(endpoint.clone());
+        let state = Arc::new(Mutex::new(crawl_state));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
+
+        maybe_schedule_retry(
+            &config,
+            &state,
+            &stats,
+            &stop,
+            &queue_tx,
+            &retry_tasks,
+            &queued,
+            &failure,
+        )
+        .await;
+        tokio::task::yield_now().await;
+
+        assert!(queue_rx.try_recv().is_err());
+        assert_eq!(stats.delayed_retry_backlog.load(Ordering::Relaxed), 0);
+        abort_and_drain_retry_tasks(&retry_tasks).await;
+    }
+
+    #[tokio::test]
+    async fn maybe_schedule_retry_respects_stop_before_enqueue() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::from_millis(5),
+            ..test_config()
+        };
+        let endpoint = public_endpoint(26);
+        let queued = QueuedNode::initial(endpoint.clone());
+        let failure = connect_failure(endpoint);
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
+
+        maybe_schedule_retry(
+            &config,
+            &state,
+            &stats,
+            &stop,
+            &queue_tx,
+            &retry_tasks,
+            &queued,
+            &failure,
+        )
+        .await;
+        stop.store(true, Ordering::Relaxed);
+        tokio::time::sleep(Duration::from_millis(15)).await;
+
+        assert!(queue_rx.try_recv().is_err());
+        assert_eq!(stats.delayed_retry_backlog.load(Ordering::Relaxed), 0);
+        abort_and_drain_retry_tasks(&retry_tasks).await;
+    }
+
+    #[test]
+    fn record_connect_failure_classifies_common_error_kinds() {
+        let stats = CrawlerStats::default();
+
+        record_connect_failure(&stats, Some(std::io::ErrorKind::TimedOut));
+        record_connect_failure(&stats, Some(std::io::ErrorKind::ConnectionRefused));
+        record_connect_failure(&stats, Some(std::io::ErrorKind::HostUnreachable));
+        record_connect_failure(&stats, Some(std::io::ErrorKind::Other));
+
+        assert_eq!(stats.connect_timeout_failures.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.connect_refused_failures.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.connect_unreachable_failures.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.connect_other_failures.load(Ordering::Relaxed), 1);
     }
 
     #[test]

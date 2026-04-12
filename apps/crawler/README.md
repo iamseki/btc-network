@@ -103,6 +103,7 @@ The profiled crawler service also sets default runtime tuning through
 environment variables in `compose/crawler.yml`, including:
 
 - `BTC_NETWORK_CRAWLER_MAX_CONCURRENCY=10000`
+- `BTC_NETWORK_CRAWLER_MAX_IN_FLIGHT_CONNECTS=512`
 - `BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES=500000`
 - `BTC_NETWORK_POSTGRES_MAX_CONNECTIONS=16`
 - `BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS=10`
@@ -116,23 +117,123 @@ Compose resource defaults are also set there:
 
 - `BTC_NETWORK_CRAWLER_CPUS=6.0`
 - `BTC_NETWORK_CRAWLER_MEM_LIMIT=12g`
-- `BTC_NETWORK_CRAWLER_NOFILE_SOFT=65536`
-- `BTC_NETWORK_CRAWLER_NOFILE_HARD=65536`
+- `BTC_NETWORK_CRAWLER_NOFILE_SOFT=1024`
+- `BTC_NETWORK_CRAWLER_NOFILE_HARD=1024`
 
 Override any of these by exporting them in your shell or by adding them to a
 repository-root `.env` file before running `docker compose`.
 
-High crawler concurrency needs a high container open-file limit. Each in-flight
+High crawler concurrency still needs enough open-file headroom. Each in-flight
 peer visit consumes at least one socket file descriptor, and the process also
 needs descriptors for PostgreSQL, epoll/event-loop state, MMDB files, and
-stdio. The Compose crawler service sets `ulimits.nofile` to `65536` by default
-so high concurrency does not fail later with `Too many open files (os error
-24)` during checkpoint or observation writes.
+stdio. For local development, the Compose crawler service now uses a more
+conservative `ulimits.nofile=1024` default instead of assuming laptop and local
+Docker environments should run at `65536`.
+
+That conservative default is intentional:
+
+- many local shells still report `ulimit -n = 1024`
+- a very high container `nofile` does not mean the host, router, or upstream network path can safely support equivalent connect pressure
+- the crawler now has a separate `max_in_flight_connects` budget, so local defaults should favor realism over headline maximums
+
+If your environment is stronger and you have validated higher safe values, raise
+`BTC_NETWORK_CRAWLER_NOFILE_SOFT` and `BTC_NETWORK_CRAWLER_NOFILE_HARD`
+explicitly rather than assuming the repository default should be very high.
 
 The crawler only has a small number of concurrent PostgreSQL writers, so the
 Compose default also keeps `BTC_NETWORK_POSTGRES_MAX_CONNECTIONS` modest at
 `16`. That preserves file descriptors for peer sockets instead of reserving an
 oversized database pool that the crawler does not use.
+
+Worker concurrency and connect concurrency are now separate controls:
+
+- `max_concurrency` bounds total worker throughput across dequeue, handshake, peer discovery, and persistence handoff
+- `max_in_flight_connects` bounds only the outbound TCP connect phase, which is the part most likely to saturate local routers or upstream NAT state
+
+That means you can keep a high worker count for overall crawl throughput while
+holding active connect pressure to a lower, environment-specific budget.
+
+## Troubleshooting Network Pressure
+
+If the crawler makes your local network unstable, the first thing to determine
+is whether the bottleneck is outbound peer-connect pressure or PostgreSQL.
+
+The crawler's periodic progress summary now includes:
+
+- `open_fd_count`
+- `tcp_established`
+- `tcp_syn_sent`
+- `tcp_time_wait`
+- `connect_slots_in_use`
+- `connectable_tasks_started`
+- `connect_retries_started`
+- `delayed_retry_backlog`
+- `connect_timeout_failures`
+- `connect_refused_failures`
+- `connect_unreachable_failures`
+- `connect_other_failures`
+- `postgres_pool_size`
+- `postgres_pool_idle`
+- `postgres_pool_acquired`
+
+Interpret them like this:
+
+- high `tcp_syn_sent` with low PostgreSQL acquisition means outbound connects are saturating the network path
+- high `open_fd_count` means the process has already created many live kernel objects, usually sockets
+- low `tcp_established` plus high `tcp_syn_sent` means most connect attempts are stuck before the TCP handshake finishes
+- `connect_slots_in_use` near the configured limit means the admission gate is actively capping new outbound connects
+- `connectable_tasks_started` counts connect-eligible endpoints that workers started processing; it is broader than raw TCP syscall count
+- rising `connect_retries_started` and `delayed_retry_backlog` mean the crawler is deferring retryable connect failures instead of hammering them inline
+- failure counters help distinguish timeout-heavy runs from refusal-heavy or unreachable-heavy runs
+- high `writer_backlog` with high PostgreSQL acquisition would suggest persistence pressure instead
+
+Useful local checks:
+
+```bash
+# host shell open-file limit
+ulimit -n
+
+# crawler container open-file limit
+docker exec btc-network-crawler sh -lc 'ulimit -n'
+
+# host conntrack table capacity
+sysctl -n net.netfilter.nf_conntrack_max
+
+# host ephemeral port range
+sysctl -n net.ipv4.ip_local_port_range
+
+# kernel SYN retry budget
+sysctl -n net.ipv4.tcp_syn_retries
+
+# optional, if conntrack tooling is installed
+conntrack -S
+```
+
+Important caveat:
+
+- these commands tell you about the Linux host and container limits
+- they do not reveal the effective NAT or conntrack budget of a home router or ISP CPE upstream from the host
+
+That means the host may look healthy while the upstream network path is already
+overloaded. If you see very high `tcp_syn_sent`, try lowering connect pressure
+first by reducing concurrency, retry count, or connect timeout.
+
+## Peer Reliability Assumptions
+
+Broad Bitcoin P2P crawling naturally encounters many bad or unhelpful peers.
+
+Normal failure modes include:
+
+- TCP endpoints that no longer accept inbound connections
+- peers that time out or drop during handshake
+- peers that accept the connection but return no useful discovery data
+- stale, unroutable, or rate-limited addresses learned from peer gossip
+
+That means low handshake success is not automatically a crawler bug. The more
+important question is whether the crawler keeps pressure bounded while sampling
+the network effectively. If retries and concurrent connects are too aggressive,
+the crawler can overload the local network path even when many failures are
+simply normal peer behavior.
 
 ## Apply Migrations
 
@@ -162,6 +263,7 @@ Optional PostgreSQL overrides:
 Optional crawler tuning overrides:
 
 - `--max-concurrency`
+- `--max-in-flight-connects`
 - `--max-tracked-nodes`
 - `--max-runtime-minutes`
 - `--idle-timeout-minutes`
