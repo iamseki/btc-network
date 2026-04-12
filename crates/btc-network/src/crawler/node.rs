@@ -9,6 +9,7 @@ use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream as AsyncTcpStream;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{info, warn};
 
 use super::domain::{CrawlEndpoint, CrawlNetwork, FailureClassification};
@@ -22,7 +23,17 @@ pub(crate) trait NodeProcessor: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = NodeVisitResult> + Send + 'a>>;
 }
 
-pub(crate) struct DefaultNodeProcessor;
+pub(crate) struct DefaultNodeProcessor {
+    connect_limiter: Arc<Semaphore>,
+}
+
+use std::sync::Arc;
+
+impl DefaultNodeProcessor {
+    pub(crate) fn new(connect_limiter: Arc<Semaphore>) -> Self {
+        Self { connect_limiter }
+    }
+}
 
 impl NodeProcessor for DefaultNodeProcessor {
     fn process<'a>(
@@ -30,13 +41,15 @@ impl NodeProcessor for DefaultNodeProcessor {
         endpoint: CrawlEndpoint,
         config: CrawlerConfig,
     ) -> Pin<Box<dyn Future<Output = NodeVisitResult> + Send + 'a>> {
-        Box::pin(async move { process_node(endpoint, config).await })
+        let connect_limiter = Arc::clone(&self.connect_limiter);
+        Box::pin(async move { process_node(endpoint, config, connect_limiter).await })
     }
 }
 
 pub(crate) async fn process_node(
     endpoint: CrawlEndpoint,
     config: CrawlerConfig,
+    connect_limiter: Arc<Semaphore>,
 ) -> NodeVisitResult {
     info!(
         node = %endpoint.canonical,
@@ -50,10 +63,11 @@ pub(crate) async fn process_node(
             latency: total_started.elapsed(),
             classification: FailureClassification::Connect,
             message: format!("endpoint {} is not connectable", endpoint.canonical),
+            connect_error_kind: None,
         })
     })?;
     let connect_started = Instant::now();
-    let stream = connect_with_retries(&endpoint, connect_addr, config, total_started).await?;
+    let stream = connect_once(&endpoint, connect_addr, config, total_started, connect_limiter).await?;
     let connect_elapsed = connect_started.elapsed();
     let mut session = AsyncSession::new(stream, config.io_timeout);
 
@@ -64,6 +78,7 @@ pub(crate) async fn process_node(
             latency: total_started.elapsed(),
             classification: FailureClassification::Handshake,
             message: message.to_string(),
+            connect_error_kind: None,
         })
     })?;
     let handshake_elapsed = handshake_started.elapsed();
@@ -77,6 +92,7 @@ pub(crate) async fn process_node(
                 latency: total_started.elapsed(),
                 classification: FailureClassification::PeerDiscovery,
                 message,
+                connect_error_kind: None,
             })
         })?;
     let get_addr_elapsed = get_addr_started.elapsed();
@@ -110,17 +126,19 @@ pub(crate) async fn process_node(
     Ok(visit)
 }
 
-async fn connect_with_retries(
+async fn connect_once(
     endpoint: &CrawlEndpoint,
     connect_addr: SocketAddr,
     config: CrawlerConfig,
     total_started: Instant,
+    connect_limiter: Arc<Semaphore>,
 ) -> Result<AsyncTcpStream, Box<NodeVisitFailure>> {
-    connect_with_retries_using(
+    connect_once_using(
         endpoint,
         connect_addr,
         config,
         total_started,
+        acquire_connect_permit(connect_limiter, endpoint.clone(), total_started).await?,
         || async move {
             tokio::time::timeout(
                 config.connect_timeout,
@@ -134,72 +152,54 @@ async fn connect_with_retries(
                 )
             })?
         },
-        tokio::time::sleep,
-    )
-    .await
+    ).await
 }
 
-async fn connect_with_retries_using<T, Connect, ConnectFuture, Sleep, SleepFuture>(
+async fn connect_once_using<T, Connect, ConnectFuture>(
     endpoint: &CrawlEndpoint,
     connect_target: impl ToString,
-    config: CrawlerConfig,
+    _config: CrawlerConfig,
     total_started: Instant,
-    mut connect: Connect,
-    mut sleep: Sleep,
+    _permit: OwnedSemaphorePermit,
+    connect: Connect,
 ) -> Result<T, Box<NodeVisitFailure>>
 where
-    Connect: FnMut() -> ConnectFuture,
+    Connect: FnOnce() -> ConnectFuture,
     ConnectFuture: Future<Output = io::Result<T>>,
-    Sleep: FnMut(Duration) -> SleepFuture,
-    SleepFuture: Future<Output = ()>,
 {
     let connect_target = connect_target.to_string();
-    let max_attempts = config.connect_max_attempts.max(1);
-    let mut last_error = None;
-
-    for attempt in 1..=max_attempts {
-        match connect().await {
-            Ok(stream) => return Ok(stream),
-            Err(error) => {
-                last_error = Some(error);
-
-                if attempt == max_attempts {
-                    break;
-                }
-
-                let backoff = connect_retry_delay(config.connect_retry_backoff, attempt);
-                if config.verbose {
-                    info!(
-                        node = %endpoint.canonical,
-                        attempt,
-                        max_attempts,
-                        backoff_ms = backoff.as_millis(),
-                        "[crawler] connect attempt failed; retrying"
-                    );
-                }
-                if !backoff.is_zero() {
-                    sleep(backoff).await;
-                }
-            }
-        }
+    match connect().await {
+        Ok(stream) => Ok(stream),
+        Err(error) => Err(Box::new(NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: total_started.elapsed(),
+            classification: FailureClassification::Connect,
+            message: format!("connect {connect_target}: {error}"),
+            connect_error_kind: Some(error.kind()),
+        })),
     }
-
-    let error = last_error.expect("connect retry loop should capture the last error");
-    let message = if max_attempts == 1 {
-        format!("connect {connect_target}: {error}")
-    } else {
-        format!("connect {connect_target} failed after {max_attempts} attempts: {error}")
-    };
-
-    Err(Box::new(NodeVisitFailure {
-        node: endpoint.clone(),
-        latency: total_started.elapsed(),
-        classification: FailureClassification::Connect,
-        message,
-    }))
 }
 
-fn connect_retry_delay(base: Duration, retry_number: usize) -> Duration {
+async fn acquire_connect_permit(
+    connect_limiter: Arc<Semaphore>,
+    endpoint: CrawlEndpoint,
+    total_started: Instant,
+) -> Result<OwnedSemaphorePermit, Box<NodeVisitFailure>> {
+    connect_limiter
+        .acquire_owned()
+        .await
+        .map_err(|_| {
+            Box::new(NodeVisitFailure {
+                node: endpoint,
+                latency: total_started.elapsed(),
+                classification: FailureClassification::Connect,
+                message: "connect limiter closed".to_string(),
+                connect_error_kind: None,
+            })
+        })
+}
+
+pub(crate) fn connect_retry_delay(base: Duration, retry_number: usize) -> Duration {
     if base.is_zero() {
         return Duration::ZERO;
     }
@@ -223,6 +223,7 @@ pub(crate) async fn process_node_with_client<C: NodeClient>(
             latency: started.elapsed(),
             classification: FailureClassification::Handshake,
             message,
+            connect_error_kind: None,
         })?;
     let discovered = client
         .get_addresses()
@@ -232,6 +233,7 @@ pub(crate) async fn process_node_with_client<C: NodeClient>(
             latency: started.elapsed(),
             classification: FailureClassification::PeerDiscovery,
             message,
+            connect_error_kind: None,
         })?;
 
     Ok(NodeVisit {
@@ -361,9 +363,8 @@ mod tests {
     use super::*;
     use crate::wire::message::{NetAddr, Services};
     use std::net::{Ipv4Addr, SocketAddrV4};
-    use std::sync::Mutex as StdMutex;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
 
     struct MockClient {
         calls: Vec<&'static str>,
@@ -448,88 +449,100 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn connect_with_retries_retries_before_succeeding() {
+    async fn connect_once_returns_connected_stream() {
         let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(1, 1, 1, 7),
             8333,
         )));
-        let config = CrawlerConfig {
-            connect_max_attempts: 3,
-            connect_retry_backoff: Duration::from_millis(10),
-            ..CrawlerConfig::default()
-        };
+        let limiter = Arc::new(Semaphore::new(1));
         let attempts = AtomicUsize::new(0);
-        let backoffs = StdMutex::new(Vec::new());
 
-        let result = connect_with_retries_using(
+        let result = connect_once_using(
             &node,
             "1.1.1.7:8333",
-            config,
+            CrawlerConfig::default(),
             Instant::now(),
+            limiter.acquire_owned().await.expect("permit"),
             || {
                 let attempt = attempts.fetch_add(1, Ordering::Relaxed) + 1;
                 async move {
-                    if attempt < 3 {
-                        Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))
-                    } else {
+                    if attempt == 1 {
                         Ok("connected")
+                    } else {
+                        Err(io::Error::new(io::ErrorKind::ConnectionRefused, "refused"))
                     }
                 }
             },
-            |delay| {
-                backoffs.lock().expect("backoffs lock").push(delay);
-                std::future::ready(())
-            },
         )
         .await
-        .expect("third attempt should succeed");
+        .expect("connect should succeed");
 
         assert_eq!(result, "connected");
-        assert_eq!(attempts.load(Ordering::Relaxed), 3);
-        assert_eq!(
-            *backoffs.lock().expect("backoffs lock"),
-            vec![Duration::from_millis(10), Duration::from_millis(20)]
-        );
+        assert_eq!(attempts.load(Ordering::Relaxed), 1);
     }
 
     #[tokio::test]
-    async fn connect_with_retries_returns_connect_failure_after_max_attempts() {
+    async fn connect_once_returns_connect_failure() {
         let node = CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(1, 1, 1, 8),
             8333,
         )));
-        let config = CrawlerConfig {
-            connect_max_attempts: 2,
-            connect_retry_backoff: Duration::from_millis(5),
-            ..CrawlerConfig::default()
-        };
+        let limiter = Arc::new(Semaphore::new(1));
         let attempts = AtomicUsize::new(0);
-        let backoffs = StdMutex::new(Vec::new());
 
-        let err = connect_with_retries_using(
+        let err = connect_once_using(
             &node,
             "1.1.1.8:8333",
-            config,
+            CrawlerConfig::default(),
             Instant::now(),
+            limiter.acquire_owned().await.expect("permit"),
             || {
                 attempts.fetch_add(1, Ordering::Relaxed);
                 async { Err::<(), _>(io::Error::new(io::ErrorKind::ConnectionRefused, "refused")) }
             },
-            |delay| {
-                backoffs.lock().expect("backoffs lock").push(delay);
-                std::future::ready(())
-            },
         )
         .await
-        .expect_err("connect should fail after max attempts");
+        .expect_err("connect should fail");
 
-        assert_eq!(attempts.load(Ordering::Relaxed), 2);
-        assert_eq!(
-            *backoffs.lock().expect("backoffs lock"),
-            vec![Duration::from_millis(5)]
-        );
+        assert_eq!(attempts.load(Ordering::Relaxed), 1);
         assert_eq!(err.classification, FailureClassification::Connect);
-        assert!(err.message.contains("failed after 2 attempts"));
+        assert_eq!(err.connect_error_kind, Some(io::ErrorKind::ConnectionRefused));
+        assert!(err.message.contains("connect 1.1.1.8:8333"));
+    }
+
+    #[tokio::test]
+    async fn acquire_connect_permit_waits_until_slot_is_released() {
+        let limiter = Arc::new(Semaphore::new(1));
+        let first = acquire_connect_permit(
+            Arc::clone(&limiter),
+            CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(1, 1, 1, 9),
+                8333,
+            ))),
+            Instant::now(),
+        )
+        .await
+        .expect("first permit");
+
+        let second_task = tokio::spawn(acquire_connect_permit(
+            Arc::clone(&limiter),
+            CrawlEndpoint::from_socket_addr(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(1, 1, 1, 10),
+                8333,
+            ))),
+            Instant::now(),
+        ));
+
+        tokio::task::yield_now().await;
+        assert!(
+            !second_task.is_finished(),
+            "second connect permit should wait while the first slot is held"
+        );
+
+        drop(first);
+
+        let second = second_task.await.expect("second permit join");
+        assert!(second.is_ok(), "second permit should acquire after release");
     }
 
     #[test]

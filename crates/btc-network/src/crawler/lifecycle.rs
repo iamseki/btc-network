@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use tokio::sync::Mutex;
+use tokio::sync::Semaphore;
 use tracing::{info, warn};
 
 use super::domain::{
@@ -25,6 +26,8 @@ pub(crate) struct CheckpointEmitterContext {
     pub(crate) stop: Arc<AtomicBool>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) checkpoint_interval: Duration,
+    pub(crate) connect_limiter: Option<Arc<Semaphore>>,
+    pub(crate) connect_limit: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -99,6 +102,8 @@ pub(crate) async fn run_checkpoint_emitter(
         stop,
         started_at,
         checkpoint_interval,
+        connect_limiter,
+        connect_limit,
     } = context;
     let mut ticker = tokio::time::interval(checkpoint_interval);
     let mut last_progress_log_at = None;
@@ -114,7 +119,13 @@ pub(crate) async fn run_checkpoint_emitter(
         let capture = capture_snapshot(&state, &stats, &checkpoint_sequence).await?;
         let checkpoint = checkpoint_from_capture(run_id.clone(), phase, started_at, &capture);
         if should_log_progress(last_progress_log_at, PROGRESS_LOG_INTERVAL) {
-            log_progress_summary(&checkpoint, repository.as_ref());
+            log_progress_summary(
+                &checkpoint,
+                repository.as_ref(),
+                connect_limiter.as_ref(),
+                connect_limit,
+                stats.as_ref(),
+            );
             last_progress_log_at = Some(Instant::now());
         }
         let recovery_point =
@@ -236,7 +247,13 @@ fn should_log_progress(last_logged_at: Option<Instant>, interval: Duration) -> b
     }
 }
 
-fn log_progress_summary(checkpoint: &CrawlRunCheckpoint, repository: &dyn CrawlerRepository) {
+fn log_progress_summary(
+    checkpoint: &CrawlRunCheckpoint,
+    repository: &dyn CrawlerRepository,
+    connect_limiter: Option<&Arc<Semaphore>>,
+    connect_limit: Option<usize>,
+    stats: &CrawlerStats,
+) {
     let metrics = &checkpoint.metrics;
     let success_pct = if metrics.scheduled_tasks == 0 {
         0.0
@@ -245,6 +262,8 @@ fn log_progress_summary(checkpoint: &CrawlRunCheckpoint, repository: &dyn Crawle
     };
     let process_metrics = ProcessRuntimeMetrics::collect();
     let repository_metrics = repository.runtime_metrics();
+    let connect_slots_in_use =
+        connect_limiter.map(|limiter| compute_connect_slots_in_use(connect_limit, limiter.available_permits()));
 
     info!(
         run_id = %checkpoint.run_id,
@@ -261,6 +280,14 @@ fn log_progress_summary(checkpoint: &CrawlRunCheckpoint, repository: &dyn Crawle
         tcp_established = process_metrics.tcp_established,
         tcp_syn_sent = process_metrics.tcp_syn_sent,
         tcp_time_wait = process_metrics.tcp_time_wait,
+        connect_slots_in_use = connect_slots_in_use,
+        connectable_tasks_started = stats.connectable_tasks_started.load(Ordering::Relaxed),
+        connect_retries_started = stats.connect_retries_started.load(Ordering::Relaxed),
+        delayed_retry_backlog = stats.delayed_retry_backlog.load(Ordering::Relaxed),
+        connect_timeout_failures = stats.connect_timeout_failures.load(Ordering::Relaxed),
+        connect_refused_failures = stats.connect_refused_failures.load(Ordering::Relaxed),
+        connect_unreachable_failures = stats.connect_unreachable_failures.load(Ordering::Relaxed),
+        connect_other_failures = stats.connect_other_failures.load(Ordering::Relaxed),
         postgres_pool_max_connections = repository_metrics.pool_max_connections,
         postgres_pool_size = repository_metrics.pool_size,
         postgres_pool_idle = repository_metrics.pool_idle,
@@ -268,6 +295,12 @@ fn log_progress_summary(checkpoint: &CrawlRunCheckpoint, repository: &dyn Crawle
         success_pct = success_pct,
         "[crawler] progress summary"
     );
+}
+
+fn compute_connect_slots_in_use(connect_limit: Option<usize>, available_permits: usize) -> usize {
+    connect_limit
+        .unwrap_or_default()
+        .saturating_sub(available_permits)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -648,6 +681,8 @@ mod tests {
             stop: Arc::clone(&stop),
             started_at: Utc::now(),
             checkpoint_interval: Duration::from_millis(5),
+            connect_limiter: None,
+            connect_limit: None,
         }));
 
         tokio::time::sleep(Duration::from_millis(15)).await;
@@ -799,6 +834,8 @@ mod tests {
             stop: Arc::clone(&stop),
             started_at: Utc::now(),
             checkpoint_interval: Duration::from_millis(5),
+            connect_limiter: None,
+            connect_limit: None,
         })
         .await
         .expect_err("checkpoint emitter should return repository errors");
@@ -829,5 +866,13 @@ mod tests {
             count_tcp_socket_state_in_contents(sample, TcpSocketState::TimeWait),
             1
         );
+    }
+
+    #[test]
+    fn compute_connect_slots_in_use_saturates_at_zero() {
+        assert_eq!(compute_connect_slots_in_use(Some(8), 3), 5);
+        assert_eq!(compute_connect_slots_in_use(Some(8), 8), 0);
+        assert_eq!(compute_connect_slots_in_use(Some(8), 12), 0);
+        assert_eq!(compute_connect_slots_in_use(None, 3), 0);
     }
 }

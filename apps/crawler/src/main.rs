@@ -33,6 +33,15 @@ struct CrawlArgs {
     )]
     max_concurrency: usize,
 
+    /// Maximum number of endpoints allowed to be in the TCP connect phase at once.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_MAX_IN_FLIGHT_CONNECTS",
+        default_value_t = 256,
+        value_parser = parse_positive_usize
+    )]
+    max_in_flight_connects: usize,
+
     /// Hard cap on unique endpoints tracked in-memory during a run.
     ///
     /// Once this limit is reached, newly discovered endpoints are ignored.
@@ -83,7 +92,7 @@ struct CrawlArgs {
     /// Maximum number of TCP connect attempts per node, including the first try.
     ///
     /// Retries are only applied to connect failures, not later handshake or
-    /// peer-discovery failures.
+    /// peer-discovery failures. This is the total per-endpoint attempt budget.
     #[arg(
         long,
         env = "BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS",
@@ -227,6 +236,7 @@ async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
 fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
     CrawlerConfig {
         max_concurrency: args.max_concurrency,
+        max_in_flight_connects: args.max_in_flight_connects,
         max_tracked_nodes: args.max_tracked_nodes,
         max_runtime: Duration::from_secs(args.max_runtime_minutes * 60),
         idle_timeout: Duration::from_secs(args.idle_timeout_minutes * 60),
@@ -272,6 +282,7 @@ mod tests {
     fn build_crawler_config_applies_max_tracked_nodes_override() {
         let args = CrawlArgs {
             max_concurrency: 1000,
+            max_in_flight_connects: 256,
             max_tracked_nodes: 250_000,
             max_runtime_minutes: 60,
             idle_timeout_minutes: 5,
@@ -296,6 +307,7 @@ mod tests {
 
         let config = build_crawler_config(&args);
 
+        assert_eq!(config.max_in_flight_connects, 256);
         assert_eq!(config.max_tracked_nodes, 250_000);
         assert_eq!(config.connect_max_attempts, 4);
         assert_eq!(config.connect_retry_backoff, Duration::from_millis(500));
@@ -364,6 +376,14 @@ mod tests {
             .expect_err("zero worker count should fail");
 
         assert!(error.to_string().contains("--max-concurrency"));
+    }
+
+    #[test]
+    fn crawl_args_reject_zero_max_in_flight_connects() {
+        let error = Cli::try_parse_from(["crawler", "--max-in-flight-connects", "0"])
+            .expect_err("zero connect budget should fail");
+
+        assert!(error.to_string().contains("--max-in-flight-connects"));
     }
 
     #[test]

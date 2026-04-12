@@ -13,7 +13,8 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use tokio::sync::{Mutex, mpsc};
-use tokio::task::{JoinError, JoinHandle};
+use tokio::sync::Semaphore;
+use tokio::task::{JoinError, JoinHandle, JoinSet};
 use tracing::{info, warn};
 
 pub use analytics::{
@@ -38,6 +39,7 @@ pub use ports::{
 };
 use types::{CrawlState, CrawlerStats};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};
+use types::QueuedNode;
 use worker::{run_worker, seed_initial_nodes};
 
 /// High-level crawler facade that wires runtime orchestration to storage and
@@ -94,30 +96,40 @@ impl Crawler {
             config: self.config,
             seed_nodes,
         };
-        let processor: Arc<dyn NodeProcessor> = Arc::new(DefaultNodeProcessor);
+        let connect_limiter =
+            Arc::new(Semaphore::new(request.config.max_in_flight_connects.max(1)));
+        let processor: Arc<dyn NodeProcessor> =
+            Arc::new(DefaultNodeProcessor::new(Arc::clone(&connect_limiter)));
 
-        self.run_with_request_or_recover(request, processor).await
+        self.run_with_request_or_recover(request, processor, Some(connect_limiter))
+            .await
     }
 
     async fn run_with_request_or_recover(
         &self,
         request: StartCrawlRequest,
         processor: Arc<dyn NodeProcessor>,
+        connect_limiter: Option<Arc<Semaphore>>,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         if let Some(summary) = self
-            .try_recover_latest_run(request.config, Arc::clone(&processor))
+            .try_recover_latest_run(
+                request.config,
+                Arc::clone(&processor),
+                connect_limiter.clone(),
+            )
             .await?
         {
             return Ok(summary);
         }
 
-        self.run_with_request(request, processor).await
+        self.run_with_request(request, processor, connect_limiter).await
     }
 
     async fn run_with_request(
         &self,
         request: StartCrawlRequest,
         processor: Arc<dyn NodeProcessor>,
+        connect_limiter: Option<Arc<Semaphore>>,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         if request.seed_nodes.is_empty() {
             return Err("no seed addresses resolved".into());
@@ -127,7 +139,14 @@ impl Crawler {
         let started_at_utc = Utc::now();
         let run_id = CrawlRunId::now_v7();
 
-        self.run_active_request(run_id, request, processor, started_at, started_at_utc)
+        self.run_active_request(
+            run_id,
+            request,
+            processor,
+            connect_limiter,
+            started_at,
+            started_at_utc,
+        )
             .await
     }
 
@@ -135,6 +154,7 @@ impl Crawler {
         &self,
         config: CrawlerConfig,
         processor: Arc<dyn NodeProcessor>,
+        connect_limiter: Option<Arc<Semaphore>>,
     ) -> Result<Option<CrawlSummary>, Box<dyn Error>> {
         let Some(recovery_point) = self
             .repository
@@ -166,7 +186,14 @@ impl Crawler {
             "[crawler] recovering active run from durable recovery point"
         );
 
-        self.run_recovered_request(recovery_point, state, processor, started_at, config)
+        self.run_recovered_request(
+            recovery_point,
+            state,
+            processor,
+            connect_limiter,
+            started_at,
+            config,
+        )
             .await
             .map(Some)
     }
@@ -206,6 +233,7 @@ impl Crawler {
         run_id: CrawlRunId,
         request: StartCrawlRequest,
         processor: Arc<dyn NodeProcessor>,
+        connect_limiter: Option<Arc<Semaphore>>,
         started_at: Instant,
         started_at_utc: DateTime<Utc>,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
@@ -223,7 +251,7 @@ impl Crawler {
             started_at: started_at_utc,
         };
 
-        let (queue_tx, _queue_rx) = mpsc::unbounded_channel::<CrawlEndpoint>();
+        let (queue_tx, _queue_rx) = mpsc::unbounded_channel::<QueuedNode>();
 
         seed_initial_nodes(
             &state,
@@ -254,6 +282,7 @@ impl Crawler {
             run_id,
             request.config,
             processor,
+            connect_limiter,
             started_at,
             started_at_utc,
             state,
@@ -270,6 +299,7 @@ impl Crawler {
         recovery_point: CrawlRunRecoveryPoint,
         restored_state: CrawlState,
         processor: Arc<dyn NodeProcessor>,
+        connect_limiter: Option<Arc<Semaphore>>,
         started_at: Instant,
         config: CrawlerConfig,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
@@ -311,6 +341,7 @@ impl Crawler {
             run_id,
             config,
             processor,
+            connect_limiter,
             started_at,
             started_at_utc,
             state,
@@ -328,6 +359,7 @@ impl Crawler {
         run_id: CrawlRunId,
         config: CrawlerConfig,
         processor: Arc<dyn NodeProcessor>,
+        connect_limiter: Option<Arc<Semaphore>>,
         started_at: Instant,
         started_at_utc: DateTime<Utc>,
         state: Arc<Mutex<CrawlState>>,
@@ -347,11 +379,12 @@ impl Crawler {
             started_at: started_at_utc,
         };
 
-        let (queue_tx, queue_rx) = mpsc::unbounded_channel::<CrawlEndpoint>();
+        let (queue_tx, queue_rx) = mpsc::unbounded_channel::<QueuedNode>();
         for endpoint in initial_frontier {
-            let _ = queue_tx.send(endpoint);
+            let _ = queue_tx.send(QueuedNode::initial(endpoint));
         }
         let queue_rx = Arc::new(Mutex::new(queue_rx));
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (observation_tx, observation_rx) =
             mpsc::channel::<PersistedNodeObservation>(writer_channel_capacity(config));
 
@@ -386,6 +419,8 @@ impl Crawler {
                 stop: Arc::clone(&stop),
                 started_at: started_at_utc,
                 checkpoint_interval: config.checkpoint_interval,
+                connect_limiter: connect_limiter.clone(),
+                connect_limit: Some(config.max_in_flight_connects.max(1)),
             },
         )));
         let signal_handle =
@@ -403,6 +438,7 @@ impl Crawler {
                     stop: Arc::clone(&stop),
                     queue_rx: Arc::clone(&queue_rx),
                     queue_tx: queue_tx.clone(),
+                    retry_tasks: Arc::clone(&retry_tasks),
                     observation_tx: observation_tx.clone(),
                     processor: Arc::clone(&processor),
                     enrichment_provider: Arc::clone(&self.enrichment_provider),
@@ -436,6 +472,7 @@ impl Crawler {
                 config.shutdown_grace_period
             );
         }
+        abort_and_drain_retry_tasks(&retry_tasks).await;
 
         {
             let mut guard = phase.lock().await;
@@ -654,6 +691,12 @@ fn abort_remaining_workers(worker_handles: &mut Vec<AbortOnDropHandle<()>>) {
         handle.abort();
     }
     worker_handles.clear();
+}
+
+async fn abort_and_drain_retry_tasks(retry_tasks: &Arc<Mutex<JoinSet<()>>>) {
+    let mut retry_tasks = retry_tasks.lock().await;
+    retry_tasks.abort_all();
+    while retry_tasks.join_next().await.is_some() {}
 }
 
 struct AbortOnDropHandle<T> {
@@ -1453,6 +1496,7 @@ mod tests {
         let crawler = Crawler::with_adapters(
             CrawlerConfig {
                 max_concurrency: 1,
+                max_in_flight_connects: 1,
                 max_tracked_nodes: 16,
                 max_runtime: Duration::from_secs(1),
                 idle_timeout: Duration::from_secs(1),
@@ -1480,6 +1524,7 @@ mod tests {
                     seed_nodes: vec![seed],
                 },
                 processor,
+                None,
             )
             .await
             .expect_err("checkpoint emitter failures should fail the crawl");
@@ -1493,6 +1538,7 @@ mod tests {
         let crawler = Arc::new(Crawler::with_adapters(
             CrawlerConfig {
                 max_concurrency: 1,
+                max_in_flight_connects: 1,
                 max_tracked_nodes: 16,
                 max_runtime: Duration::from_secs(1),
                 idle_timeout: Duration::from_secs(1),
@@ -1521,7 +1567,7 @@ mod tests {
         let crawler_task = {
             let crawler = Arc::clone(&crawler);
             tokio::spawn(async move {
-                let _ = crawler.run_with_request(request, processor).await;
+                let _ = crawler.run_with_request(request, processor, None).await;
             })
         };
 
@@ -1605,6 +1651,7 @@ mod tests {
         let crawler = Crawler::with_adapters(
             CrawlerConfig {
                 max_concurrency: 1,
+                max_in_flight_connects: 1,
                 max_tracked_nodes: 16,
                 max_runtime: Duration::from_millis(40),
                 idle_timeout: Duration::from_millis(20),
@@ -1631,6 +1678,7 @@ mod tests {
                     seed_nodes: vec![public_endpoint(99)],
                 },
                 processor,
+                None,
             )
             .await
             .expect("recovery should succeed");
@@ -1696,6 +1744,7 @@ mod tests {
         let crawler = Crawler::with_adapters(
             CrawlerConfig {
                 max_concurrency: 1,
+                max_in_flight_connects: 1,
                 max_tracked_nodes: 16,
                 max_runtime: Duration::from_millis(40),
                 idle_timeout: Duration::from_millis(20),
@@ -1723,6 +1772,7 @@ mod tests {
                     seed_nodes: vec![seed],
                 },
                 processor,
+                None,
             )
             .await
             .expect("crawler should fall back to a new run");

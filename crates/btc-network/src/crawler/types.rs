@@ -11,6 +11,8 @@ use super::domain::{CrawlEndpoint, FailureClassification};
 pub struct CrawlerConfig {
     /// Maximum number of worker tasks polling and processing nodes concurrently.
     pub max_concurrency: usize,
+    /// Maximum number of endpoints allowed to be in the TCP connect phase at once.
+    pub max_in_flight_connects: usize,
     /// Maximum number of unique endpoints tracked in-memory during a crawl.
     pub max_tracked_nodes: usize,
     /// Hard wall-clock runtime limit for the full crawl.
@@ -39,6 +41,7 @@ impl Default for CrawlerConfig {
     fn default() -> Self {
         Self {
             max_concurrency: 1000,
+            max_in_flight_connects: 256,
             max_tracked_nodes: 100_000,
             max_runtime: Duration::from_secs(60 * 60),
             idle_timeout: Duration::from_secs(5 * 60),
@@ -92,6 +95,13 @@ pub(crate) struct CrawlerStats {
     pub(crate) discovered_node_states: AtomicUsize,
     pub(crate) persisted_rows: AtomicUsize,
     pub(crate) writer_backlog: AtomicUsize,
+    pub(crate) delayed_retry_backlog: AtomicUsize,
+    pub(crate) connectable_tasks_started: AtomicUsize,
+    pub(crate) connect_retries_started: AtomicUsize,
+    pub(crate) connect_timeout_failures: AtomicUsize,
+    pub(crate) connect_refused_failures: AtomicUsize,
+    pub(crate) connect_unreachable_failures: AtomicUsize,
+    pub(crate) connect_other_failures: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -158,7 +168,41 @@ pub(crate) struct NodeVisitFailure {
     pub(crate) latency: Duration,
     pub(crate) classification: FailureClassification,
     pub(crate) message: String,
+    pub(crate) connect_error_kind: Option<std::io::ErrorKind>,
 }
 
 pub(crate) type NodeVisitError = Box<NodeVisitFailure>;
 pub(crate) type NodeVisitResult = Result<NodeVisit, NodeVisitError>;
+
+#[derive(Debug, Clone)]
+pub(crate) struct QueuedNode {
+    pub(crate) endpoint: CrawlEndpoint,
+    /// Completed connect attempts for this endpoint so far.
+    pub(crate) attempt_count: usize,
+    pub(crate) last_attempt_at: Option<Instant>,
+    pub(crate) last_failure_classification: Option<FailureClassification>,
+}
+
+impl QueuedNode {
+    pub(crate) fn initial(endpoint: CrawlEndpoint) -> Self {
+        Self {
+            endpoint,
+            attempt_count: 0,
+            last_attempt_at: None,
+            last_failure_classification: None,
+        }
+    }
+
+    pub(crate) fn completed_attempts_after_current_failure(&self) -> usize {
+        self.attempt_count + 1
+    }
+
+    pub(crate) fn retry_after_failure(&self, classification: FailureClassification) -> Self {
+        Self {
+            endpoint: self.endpoint.clone(),
+            attempt_count: self.completed_attempts_after_current_failure(),
+            last_attempt_at: Some(Instant::now()),
+            last_failure_classification: Some(classification),
+        }
+    }
+}
