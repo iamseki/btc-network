@@ -162,20 +162,20 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
 
     assert_eq!(
         first_report.applied_versions,
-        vec!["20260404000100", "20260404000200", "20260405000100",]
+        vec!["20260404000100", "20260404000200",]
     );
     assert!(first_report.skipped_versions.is_empty());
     assert!(second_report.applied_versions.is_empty());
     assert_eq!(
         second_report.skipped_versions,
-        vec!["20260404000100", "20260404000200", "20260405000100",]
+        vec!["20260404000100", "20260404000200",]
     );
     assert_eq!(
         applied
             .iter()
             .map(|row| row.version.as_str())
             .collect::<Vec<_>>(),
-        vec!["20260404000100", "20260404000200", "20260405000100",]
+        vec!["20260404000100", "20260404000200",]
     );
 
     let client = db.connect().await?;
@@ -195,7 +195,6 @@ ORDER BY tablename
         .collect::<Vec<_>>();
 
     assert!(table_names.contains(&"crawler_run_checkpoints".to_string()));
-    assert!(table_names.contains(&"crawler_run_recovery_points".to_string()));
     assert!(table_names.contains(&"node_observations".to_string()));
     assert!(table_names.contains(&"schema_migrations".to_string()));
 

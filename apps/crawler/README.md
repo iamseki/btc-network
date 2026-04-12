@@ -325,6 +325,4 @@ LIMIT 20;
 ```
 
 `crawler_run_checkpoints` is crawler runtime history and operator progress history.
-The crawler now always starts fresh after a crash or manual restart. Older
-databases may still contain a legacy `crawler_run_recovery_points` table from
-earlier experiments, but current crawler code no longer writes or reads it.
+The crawler now always starts fresh after a crash or manual restart.

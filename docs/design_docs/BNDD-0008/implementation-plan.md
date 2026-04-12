@@ -23,7 +23,7 @@ Status values:
 | Phase 1: Shared crawler recovery-state refactor | `merged` | `2026-04-05` | `historical` | `Original recovery-frontier implementation landed.` |
 | Phase 2: PostgreSQL schema and repository rollout | `merged` | `2026-04-05` | `historical` | `Historical recovery-point table and repository support landed.` |
 | Phase 3: Operator and design-doc alignment | `merged` | `2026-04-05` | `historical` | `Docs and CLI knobs were aligned with recovery design.` |
-| Phase 4: Recovery-path removal | `merged` | `2026-04-12` | `PR #21` | `Crawler startup recovery, recovery-point writes, and repository recovery APIs were removed. Historical migrations remain for compatibility.` |
+| Phase 4: Recovery-path removal | `merged` | `2026-04-12` | `PR #22` | `Crawler startup recovery, recovery-point writes, repository recovery APIs, and the development-only recovery-point migration were removed.` |
 
 ## Current State
 
