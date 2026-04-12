@@ -32,7 +32,6 @@ MAKEFLAGS += --no-print-directory
 	infra-compose-down \
 	crawler-mmdb-update \
 	api \
-	listener \
 	crawler-debug \
 	cli \
 	build \
@@ -116,9 +115,6 @@ crawler-mmdb-update: ## Download or refresh local MMDB files for crawler develop
 
 api: ## Run the crawler analytics API with local PostgreSQL defaults
 	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-api -- $(ARGS)
-
-listener: ## Run the listener binary; pass extra flags via ARGS="..."
-	@cargo run -p btc-network-listener -- $(ARGS)
 
 crawler-debug: ## Capture crawler timing artifacts; set OUT=... and optional TIMEOUT_MINUTES/MAX_CONCURRENCY/IDLE_TIMEOUT_MINUTES
 	@scripts/crawler_timing.sh $(OUT) --timeout-minutes $(TIMEOUT_MINUTES) -- --max-concurrency $(MAX_CONCURRENCY) --idle-timeout-minutes $(IDLE_TIMEOUT_MINUTES)

@@ -16,7 +16,6 @@ The project is organized around clear boundaries between transport, wire decodin
 - `crates/btc-network` — shared Rust protocol, session, client, and crawler code
 - `apps/cli` — single-peer CLI flows
 - `apps/crawler` — network crawler binary
-- `apps/listener` — long-running listener binary
 - `apps/web` — web-first React frontend
 - `apps/desktop` — Tauri desktop shell reusing the web UI
 

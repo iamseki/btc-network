@@ -10,7 +10,6 @@
 - **`src/session.rs`** — `Session` abstraction, handshake flow, send/recv methods over `TcpStream`.
 - **`src/bin/cli.rs`** — user-facing orchestration commands (`ping`, `get-addr`, `get-headers`, `last-block-header`, `get-block`).
 - **`src/bin/crawler.rs`** — seed crawl flow for address discovery.
-- **`src/bin/listener.rs`** — long-lived listener loop with ping->pong keepalive behavior.
 
 ### Two-layer message pipeline
 
@@ -43,5 +42,5 @@ TcpStream
 
 - Keep protocol serialization/parsing inside `wire/*`.
 - Keep connection/session state transitions in `session.rs`.
-- Keep CLI/crawler/listener focused on orchestration and output.
+- Keep CLI/crawler focused on orchestration and output.
 - Avoid duplicating low-level decode logic in `src/bin/*`.

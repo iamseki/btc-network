@@ -57,7 +57,6 @@ Practical rule:
 crates/btc-network/     Rust protocol/session core
 apps/cli/               CLI orchestration
 apps/crawler/           Crawler orchestration
-apps/listener/          Listener orchestration
 
 apps/web/               Primary React frontend
   src/app/              App shell and page registry

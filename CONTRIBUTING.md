@@ -16,7 +16,6 @@ Start here if you want to understand where a change belongs and what to run befo
 - `crates/btc-network/` — shared Rust protocol, session, and client workflow library
 - `apps/cli/` — interactive Rust CLI
 - `apps/crawler/` — crawler binary
-- `apps/listener/` — listener binary
 - `apps/web/` — primary web frontend
 - `apps/desktop/` — Tauri desktop shell
 
