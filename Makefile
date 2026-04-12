@@ -220,6 +220,13 @@ security-web: ## Run frontend dependency security checks when the npm registry i
 security: ## Run all dependency security checks with concise output; set SECURITY_VERBOSE=1 for full tool output
 	@bash scripts/security_summary.sh
 
+loc-summary: ## Show line count summary for apps, compose, and crates
+	@for dir in apps compose crates; do \
+		git ls-files "$$dir/*" | xargs wc -l | tail -n 1 | sed "s/total$$/$$dir/"; \
+	done
+	@echo "----------"
+	@git ls-files 'apps/*' 'compose/*' 'crates/*' | xargs wc -l | tail -n 1
+
 ##@ Help
 
 help: ## Show available commands
