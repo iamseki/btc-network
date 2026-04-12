@@ -30,6 +30,7 @@ MAKEFLAGS += --no-print-directory
 	infra-api-up \
 	infra-crawler-api-up \
 	infra-compose-down \
+	infra-compose-reset \
 	crawler-mmdb-update \
 	api \
 	crawler-debug \
@@ -108,7 +109,12 @@ infra-crawler-api-up: ## Start postgres, migrations, crawler, and API via both C
 	@$(DOCKER_COMPOSE) --profile crawler --profile api up
 
 infra-compose-down: ## Stop and remove all local Compose services in this repository stack
-	@$(DOCKER_COMPOSE) down
+	@$(DOCKER_COMPOSE) down --remove-orphans
+
+infra-compose-reset: ## Force-remove local Compose containers and network metadata when Docker state is stale
+	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
+	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-crawler btc-network-api >/dev/null 2>&1 || true
+	@docker network rm btc-network_default >/dev/null 2>&1 || true
 
 crawler-mmdb-update: ## Download or refresh local MMDB files for crawler development
 	@bash scripts/update-crawler-mmdb.sh

@@ -38,6 +38,11 @@ pub(crate) async fn process_node(
     endpoint: CrawlEndpoint,
     config: CrawlerConfig,
 ) -> NodeVisitResult {
+    info!(
+        node = %endpoint.canonical,
+        "[crawler] start processing node"
+    );
+
     let total_started = Instant::now();
     let connect_addr = endpoint.socket_addr().ok_or_else(|| {
         Box::new(NodeVisitFailure {
