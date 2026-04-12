@@ -1,8 +1,6 @@
 # btc-network [![CI](https://github.com/iamseki/btc-network/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/iamseki/btc-network/actions/workflows/ci.yml) [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/chseki)
 
-Research-focused Bitcoin P2P implementation in Rust.
-
-The project is organized around clear boundaries between transport, wire decoding, session behavior, and app-facing workflows. It includes Rust binaries, a web-first frontend, and a Tauri desktop shell for exploring protocol behavior.
+btc-network is a Rust-based Bitcoin P2P research and observability project focused on peer discovery, protocol behavior, and network analytics. It combines low-level wire protocol and session handling with crawler infrastructure, PostgreSQL-backed analytics, and web and desktop interfaces for exploring network state and behavior.
 
 ## Start Here
 
