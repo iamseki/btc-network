@@ -8,6 +8,7 @@ mod worker;
 
 use std::error::Error;
 use std::sync::Arc;
+use std::sync::Mutex as StdSyncMutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -28,8 +29,8 @@ pub use domain::{
     StopCrawlRequest,
 };
 use lifecycle::{
-    CheckpointEmitterContext, capture_snapshot, checkpoint_from_capture, run_checkpoint_emitter,
-    run_lifecycle,
+    CheckpointEmitterContext, SharedStopReason, capture_snapshot, checkpoint_from_capture,
+    load_stop_reason, record_stop_reason, run_checkpoint_emitter, run_lifecycle,
 };
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 pub use ports::{
@@ -171,6 +172,7 @@ impl Crawler {
         queue_rx: mpsc::UnboundedReceiver<QueuedNode>,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         let stop = Arc::new(AtomicBool::new(false));
+        let stop_reason: SharedStopReason = Arc::new(StdSyncMutex::new(None));
 
         let checkpoint_context = CheckpointWriteContext {
             repository: Arc::clone(&self.repository),
@@ -202,6 +204,7 @@ impl Crawler {
         let lifecycle_handle = AbortOnDropHandle::new(tokio::spawn(run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Arc::clone(&stop_reason),
             started_at,
             config.max_runtime,
             config.idle_timeout,
@@ -222,8 +225,10 @@ impl Crawler {
                 connect_limit: Some(config.max_in_flight_connects.max(1)),
             },
         )));
-        let signal_handle =
-            AbortOnDropHandle::new(tokio::spawn(run_signal_shutdown(Arc::clone(&stop))));
+        let signal_handle = AbortOnDropHandle::new(tokio::spawn(run_signal_shutdown(
+            Arc::clone(&stop),
+            Arc::clone(&stop_reason),
+        )));
 
         let mut workers = Vec::with_capacity(worker_count);
         for _ in 0..worker_count {
@@ -286,14 +291,7 @@ impl Crawler {
         write_progress_snapshot(
             &checkpoint_context,
             CrawlPhase::Draining,
-            Some(if drained_workers {
-                "workers drained".to_string()
-            } else {
-                format!(
-                    "worker shutdown grace period elapsed after {:?}; forced abort",
-                    config.shutdown_grace_period
-                )
-            }),
+            load_stop_reason(&stop_reason),
             failure_reason.clone(),
         )
         .await?;
@@ -338,7 +336,7 @@ impl Crawler {
                 ..checkpoint_context
             },
             final_phase,
-            Some("crawl finished".to_string()),
+            load_stop_reason(&stop_reason),
             failure_reason.clone(),
         )
         .await?;
@@ -566,7 +564,7 @@ async fn run_observation_writer(
 /// This keeps OS signal handling out of the lifecycle policy loop. Runtime
 /// limits, persistence failures, and operator interrupts all converge on the
 /// same `stop` flag so workers and background tasks follow one shutdown path.
-async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
+async fn run_signal_shutdown(stop: Arc<AtomicBool>, stop_reason: SharedStopReason) {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind, signal};
@@ -584,10 +582,14 @@ async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
         // checkpoints.
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
-                info!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");
+                let reason = "received Ctrl+C/SIGINT".to_string();
+                info!("[crawler] {reason}, shutting down gracefully");
+                record_stop_reason(&stop_reason, reason);
             }
             _ = term.recv() => {
-                info!("[crawler] received SIGTERM, shutting down gracefully");
+                let reason = "received SIGTERM".to_string();
+                info!("[crawler] {reason}, shutting down gracefully");
+                record_stop_reason(&stop_reason, reason);
             }
         }
     }
@@ -595,7 +597,9 @@ async fn run_signal_shutdown(stop: Arc<AtomicBool>) {
     #[cfg(not(unix))]
     {
         if tokio::signal::ctrl_c().await.is_ok() {
-            info!("[crawler] received Ctrl+C/SIGINT, shutting down gracefully");
+            let reason = "received Ctrl+C/SIGINT".to_string();
+            info!("[crawler] {reason}, shutting down gracefully");
+            record_stop_reason(&stop_reason, reason);
         }
     }
 
@@ -663,7 +667,6 @@ mod tests {
     use std::collections::VecDeque;
     use std::future::pending;
     use std::net::{IpAddr, Ipv4Addr};
-    use std::sync::Mutex as StdSyncMutex;
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
     use std::time::Duration;
 
@@ -1039,5 +1042,62 @@ mod tests {
                 .as_deref()
                 .is_some_and(|reason| reason.contains("worker shutdown grace period elapsed"))
         );
+    }
+
+    #[tokio::test]
+    async fn max_runtime_reason_is_persisted_as_stop_reason() {
+        let repository = Arc::new(FlakyCheckpointRepository::default());
+        let crawler = Crawler::with_adapters(
+            CrawlerConfig {
+                max_concurrency: 1,
+                max_in_flight_connects: 1,
+                max_tracked_nodes: 16,
+                max_runtime: Duration::from_millis(20),
+                idle_timeout: Duration::from_secs(30),
+                lifecycle_tick: Duration::from_millis(5),
+                checkpoint_interval: Duration::from_millis(5),
+                connect_timeout: Duration::from_millis(50),
+                connect_max_attempts: 1,
+                connect_retry_backoff: Duration::ZERO,
+                io_timeout: Duration::from_millis(50),
+                shutdown_grace_period: Duration::from_secs(1),
+                verbose: false,
+            },
+            repository.clone(),
+            Arc::new(StaticEnrichmentProvider),
+        );
+        let seed = public_endpoint(10);
+        let processor: Arc<dyn NodeProcessor> = Arc::new(SlowNodeProcessor {
+            visit: static_visit(seed.clone()),
+            delay: Duration::from_millis(100),
+        });
+
+        let summary = crawler
+            .run_with_request(
+                StartCrawlRequest {
+                    config: crawler.config,
+                    seed_nodes: vec![seed],
+                },
+                processor,
+                None,
+            )
+            .await
+            .expect("max-runtime stop should still complete cleanly");
+
+        assert_eq!(summary.failed_tasks, 0);
+
+        let checkpoints = repository.list_runs().await.expect("list checkpoints");
+        let final_checkpoint = checkpoints.last().expect("final checkpoint");
+
+        assert_eq!(final_checkpoint.phase, CrawlPhase::Completed);
+        assert!(
+            final_checkpoint
+                .stop_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("max runtime reached")),
+            "expected final stop reason to reflect lifecycle trigger, got {:?}",
+            final_checkpoint.stop_reason
+        );
+        assert_eq!(final_checkpoint.failure_reason, None);
     }
 }

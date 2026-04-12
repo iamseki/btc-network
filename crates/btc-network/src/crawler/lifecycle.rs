@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -27,6 +28,8 @@ pub(crate) struct CheckpointEmitterContext {
     pub(crate) connect_limit: Option<usize>,
 }
 
+pub(crate) type SharedStopReason = Arc<StdMutex<Option<String>>>;
+
 #[derive(Debug, Clone)]
 pub(crate) struct SnapshotCapture {
     pub(crate) checkpointed_at: DateTime<Utc>,
@@ -44,6 +47,7 @@ pub(crate) struct SnapshotCapture {
 pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
     stop: Arc<AtomicBool>,
+    stop_reason: SharedStopReason,
     started_at: Instant,
     max_runtime: Duration,
     idle_timeout: Duration,
@@ -59,7 +63,9 @@ pub(crate) async fn run_lifecycle(
         }
 
         if started_at.elapsed() >= max_runtime {
-            info!("[lifecycle] max runtime reached ({max_runtime:?}), stopping");
+            let reason = format!("max runtime reached ({max_runtime:?})");
+            info!("[lifecycle] {reason}, stopping");
+            record_stop_reason(&stop_reason, reason);
             stop.store(true, Ordering::Relaxed);
             return;
         }
@@ -70,7 +76,9 @@ pub(crate) async fn run_lifecycle(
         };
 
         if idle_for >= idle_timeout {
-            info!("[lifecycle] idle timeout reached ({idle_for:?}), stopping");
+            let reason = format!("idle timeout reached ({idle_for:?})");
+            info!("[lifecycle] {reason}, stopping");
+            record_stop_reason(&stop_reason, reason);
             stop.store(true, Ordering::Relaxed);
             return;
         }
@@ -171,6 +179,17 @@ pub(crate) fn checkpoint_from_capture(
         failure_reason: None,
         metrics: capture.metrics.clone(),
     }
+}
+
+pub(crate) fn record_stop_reason(stop_reason: &SharedStopReason, reason: String) {
+    let mut guard = stop_reason.lock().expect("stop reason lock");
+    if guard.is_none() {
+        *guard = Some(reason);
+    }
+}
+
+pub(crate) fn load_stop_reason(stop_reason: &SharedStopReason) -> Option<String> {
+    stop_reason.lock().expect("stop reason lock").clone()
 }
 
 fn next_checkpoint_sequence(checkpoint_sequence: &AtomicU64) -> u64 {
@@ -339,10 +358,12 @@ mod tests {
     async fn lifecycle_stops_on_max_runtime() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stop = Arc::new(AtomicBool::new(false));
+        let stop_reason = Arc::new(StdMutex::new(None));
 
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Arc::clone(&stop_reason),
             Instant::now(),
             Duration::from_millis(20),
             Duration::from_secs(10),
@@ -351,6 +372,10 @@ mod tests {
         .await;
 
         assert!(stop.load(Ordering::Relaxed));
+        assert!(
+            load_stop_reason(&stop_reason)
+                .is_some_and(|reason| reason.contains("max runtime reached"))
+        );
     }
 
     #[tokio::test]
@@ -362,9 +387,11 @@ mod tests {
         }
 
         let stop = Arc::new(AtomicBool::new(false));
+        let stop_reason = Arc::new(StdMutex::new(None));
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Arc::clone(&stop_reason),
             Instant::now(),
             Duration::from_secs(10),
             Duration::from_millis(20),
@@ -373,17 +400,23 @@ mod tests {
         .await;
 
         assert!(stop.load(Ordering::Relaxed));
+        assert!(
+            load_stop_reason(&stop_reason)
+                .is_some_and(|reason| reason.contains("idle timeout reached"))
+        );
     }
 
     #[tokio::test]
     async fn lifecycle_exits_immediately_when_already_stopped() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stop = Arc::new(AtomicBool::new(true));
+        let stop_reason = Arc::new(StdMutex::new(None));
         let before = Instant::now();
 
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Arc::clone(&stop_reason),
             Instant::now(),
             Duration::from_secs(10),
             Duration::from_secs(10),
@@ -393,16 +426,19 @@ mod tests {
 
         assert!(before.elapsed() < Duration::from_millis(100));
         assert!(stop.load(Ordering::Relaxed));
+        assert_eq!(load_stop_reason(&stop_reason), None);
     }
 
     #[tokio::test]
     async fn lifecycle_uses_original_started_at_for_max_runtime() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stop = Arc::new(AtomicBool::new(false));
+        let stop_reason = Arc::new(StdMutex::new(None));
 
         run_lifecycle(
             Arc::clone(&state),
             Arc::clone(&stop),
+            Arc::clone(&stop_reason),
             Instant::now() - Duration::from_millis(50),
             Duration::from_millis(20),
             Duration::from_secs(10),
@@ -411,6 +447,10 @@ mod tests {
         .await;
 
         assert!(stop.load(Ordering::Relaxed));
+        assert!(
+            load_stop_reason(&stop_reason)
+                .is_some_and(|reason| reason.contains("max runtime reached"))
+        );
     }
 
     #[tokio::test]
