@@ -1,7 +1,7 @@
 use btc_network::crawler::{
     AsnNodeCountItem, CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunDetail,
     CrawlRunId, CrawlRunListItem, CrawlRunRecoveryPoint, CrawlerAnalyticsReader, CrawlerRepository,
-    CrawlerRepositoryError, PersistedNodeObservation, RepositoryFuture,
+    CrawlerRepositoryError, PersistedNodeObservation, RepositoryFuture, RepositoryRuntimeMetrics,
 };
 use sqlx_postgres::PgPool;
 
@@ -14,17 +14,22 @@ mod writes;
 /// PostgreSQL-backed implementation of the crawler write and analytics ports.
 pub struct PostgresCrawlerRepository {
     pool: PgPool,
+    max_connections: usize,
 }
 
 impl PostgresCrawlerRepository {
     pub fn new(config: &PostgresConnectionConfig) -> Result<Self, PostgresConfigError> {
         Ok(Self {
             pool: config.pool()?,
+            max_connections: config.max_connections(),
         })
     }
 
     pub fn with_pool(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            max_connections: 0,
+        }
     }
 }
 
@@ -93,6 +98,18 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         run_id: &'a CrawlRunId,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> {
         Box::pin(async move { runs::list_observed_endpoints_for_run(&self.pool, run_id).await })
+    }
+
+    fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {
+        let pool_size = self.pool.size() as usize;
+        let pool_idle = self.pool.num_idle() as usize;
+
+        RepositoryRuntimeMetrics {
+            pool_max_connections: (self.max_connections > 0).then_some(self.max_connections),
+            pool_size: Some(pool_size),
+            pool_idle: Some(pool_idle),
+            pool_acquired: Some(pool_size.saturating_sub(pool_idle)),
+        }
     }
 }
 

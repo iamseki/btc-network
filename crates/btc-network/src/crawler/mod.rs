@@ -34,7 +34,7 @@ use lifecycle::{
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 pub use ports::{
     CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError, IpEnrichmentProvider,
-    RepositoryFuture,
+    RepositoryFuture, RepositoryRuntimeMetrics,
 };
 use types::{CrawlState, CrawlerStats};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};

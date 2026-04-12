@@ -114,7 +114,7 @@ pub(crate) async fn run_checkpoint_emitter(
         let capture = capture_snapshot(&state, &stats, &checkpoint_sequence).await?;
         let checkpoint = checkpoint_from_capture(run_id.clone(), phase, started_at, &capture);
         if should_log_progress(last_progress_log_at, PROGRESS_LOG_INTERVAL) {
-            log_progress_summary(&checkpoint);
+            log_progress_summary(&checkpoint, repository.as_ref());
             last_progress_log_at = Some(Instant::now());
         }
         let recovery_point =
@@ -236,13 +236,15 @@ fn should_log_progress(last_logged_at: Option<Instant>, interval: Duration) -> b
     }
 }
 
-fn log_progress_summary(checkpoint: &CrawlRunCheckpoint) {
+fn log_progress_summary(checkpoint: &CrawlRunCheckpoint, repository: &dyn CrawlerRepository) {
     let metrics = &checkpoint.metrics;
     let success_pct = if metrics.scheduled_tasks == 0 {
         0.0
     } else {
         (metrics.successful_handshakes as f64 / metrics.scheduled_tasks as f64) * 100.0
     };
+    let process_metrics = ProcessRuntimeMetrics::collect();
+    let repository_metrics = repository.runtime_metrics();
 
     info!(
         run_id = %checkpoint.run_id,
@@ -255,15 +257,107 @@ fn log_progress_summary(checkpoint: &CrawlRunCheckpoint) {
         unique_nodes = metrics.unique_nodes,
         persisted_observation_rows = metrics.persisted_observation_rows,
         writer_backlog = metrics.writer_backlog,
+        open_fd_count = process_metrics.open_fd_count,
+        tcp_established = process_metrics.tcp_established,
+        tcp_syn_sent = process_metrics.tcp_syn_sent,
+        tcp_time_wait = process_metrics.tcp_time_wait,
+        postgres_pool_max_connections = repository_metrics.pool_max_connections,
+        postgres_pool_size = repository_metrics.pool_size,
+        postgres_pool_idle = repository_metrics.pool_idle,
+        postgres_pool_acquired = repository_metrics.pool_acquired,
         success_pct = success_pct,
         "[crawler] progress summary"
     );
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct ProcessRuntimeMetrics {
+    open_fd_count: Option<usize>,
+    tcp_established: Option<usize>,
+    tcp_syn_sent: Option<usize>,
+    tcp_time_wait: Option<usize>,
+}
+
+impl ProcessRuntimeMetrics {
+    fn collect() -> Self {
+        Self {
+            open_fd_count: read_open_fd_count(),
+            tcp_established: read_tcp_socket_state_count(TcpSocketState::Established),
+            tcp_syn_sent: read_tcp_socket_state_count(TcpSocketState::SynSent),
+            tcp_time_wait: read_tcp_socket_state_count(TcpSocketState::TimeWait),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TcpSocketState {
+    Established,
+    SynSent,
+    TimeWait,
+}
+
+impl TcpSocketState {
+    fn linux_code(self) -> &'static str {
+        match self {
+            Self::Established => "01",
+            Self::SynSent => "02",
+            Self::TimeWait => "06",
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_open_fd_count() -> Option<usize> {
+    std::fs::read_dir("/proc/self/fd").ok().map(|entries| entries.count())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn read_open_fd_count() -> Option<usize> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn read_tcp_socket_state_count(state: TcpSocketState) -> Option<usize> {
+    let mut total = 0usize;
+    for path in ["/proc/self/net/tcp", "/proc/self/net/tcp6"] {
+        total += count_tcp_socket_state_in_file(path, state).ok()?;
+    }
+    Some(total)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn read_tcp_socket_state_count(_state: TcpSocketState) -> Option<usize> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn count_tcp_socket_state_in_file(
+    path: &str,
+    state: TcpSocketState,
+) -> Result<usize, std::io::Error> {
+    let contents = std::fs::read_to_string(path)?;
+    Ok(count_tcp_socket_state_in_contents(&contents, state))
+}
+
+fn count_tcp_socket_state_in_contents(contents: &str, state: TcpSocketState) -> usize {
+    contents
+        .lines()
+        .skip(1)
+        .filter(|line| parse_tcp_state_code(line).is_some_and(|code| code == state.linux_code()))
+        .count()
+}
+
+fn parse_tcp_state_code(line: &str) -> Option<&str> {
+    line.split_whitespace().nth(3)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crawler::{CrawlEndpoint, CrawlNetwork, CrawlerRepository, CrawlerRepositoryError};
+    use crate::crawler::{
+        CrawlEndpoint, CrawlNetwork, CrawlerRepository, CrawlerRepositoryError,
+        RepositoryRuntimeMetrics,
+    };
     use std::future::Future;
     use std::net::{IpAddr, Ipv4Addr};
     use std::pin::Pin;
@@ -524,6 +618,15 @@ mod tests {
         > {
             Box::pin(async { Ok(Vec::new()) })
         }
+
+        fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {
+            RepositoryRuntimeMetrics {
+                pool_max_connections: Some(16),
+                pool_size: Some(2),
+                pool_idle: Some(1),
+                pool_acquired: Some(1),
+            }
+        }
     }
 
     #[tokio::test]
@@ -702,5 +805,29 @@ mod tests {
 
         assert_eq!(err.to_string(), "checkpoint write failed");
         assert!(stop.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn count_tcp_socket_state_in_contents_counts_target_state() {
+        let sample = "\
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+   0: 0100007F:208D 0100007F:CF3A 01 00000000:00000000 00:00000000 00000000  1000        0 1
+   1: 0100007F:208D 0100007F:CF3B 02 00000000:00000000 00:00000000 00000000  1000        0 2
+   2: 0100007F:208D 0100007F:CF3C 06 00000000:00000000 00:00000000 00000000  1000        0 3
+   3: 0100007F:208D 0100007F:CF3D 01 00000000:00000000 00:00000000 00000000  1000        0 4
+";
+
+        assert_eq!(
+            count_tcp_socket_state_in_contents(sample, TcpSocketState::Established),
+            2
+        );
+        assert_eq!(
+            count_tcp_socket_state_in_contents(sample, TcpSocketState::SynSent),
+            1
+        );
+        assert_eq!(
+            count_tcp_socket_state_in_contents(sample, TcpSocketState::TimeWait),
+            1
+        );
     }
 }

@@ -12,6 +12,15 @@ use super::{AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem};
 /// Boxed async result type used by crawler storage and analytics ports.
 pub type RepositoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// Best-effort adapter runtime stats for periodic progress logging.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RepositoryRuntimeMetrics {
+    pub pool_max_connections: Option<usize>,
+    pub pool_size: Option<usize>,
+    pub pool_idle: Option<usize>,
+    pub pool_acquired: Option<usize>,
+}
+
 /// Adapter-level error returned by crawler storage and analytics ports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrawlerRepositoryError {
@@ -107,6 +116,10 @@ pub trait CrawlerRepository: Send + Sync {
         &'a self,
         run_id: &'a CrawlRunId,
     ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>>;
+
+    fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {
+        RepositoryRuntimeMetrics::default()
+    }
 }
 
 /// Read-only analytics contract for browser-safe crawler UI surfaces.
