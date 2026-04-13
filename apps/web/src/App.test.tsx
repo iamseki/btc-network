@@ -256,6 +256,18 @@ describe("App sidebar shell", () => {
     expect(screen.getByText(/latest public snapshot/i)).toBeTruthy();
   });
 
+  it("renders the mocked commercial API page from the analytics navigation", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Network Risk API" })).toBeTruthy();
+    });
+    expect(screen.getByText("Why teams buy this")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Crawler Runs Views" })).toBeNull();
+  });
+
   it("opens and closes the header crawl preview from the pulse in the header rail", async () => {
     mockCrawlerPreviewRun();
 

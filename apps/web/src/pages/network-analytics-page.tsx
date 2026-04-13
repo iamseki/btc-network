@@ -121,6 +121,12 @@ export function NetworkAnalyticsPage({
     latestRun && latestRun.scheduledTasks > 0
       ? Math.min(100, (latestRun.persistedObservationRows / latestRun.scheduledTasks) * 100)
       : null;
+  const snapshotWindowMs = latestRun
+    ? Math.max(
+        0,
+        Date.parse(latestRun.lastCheckpointedAt) - Date.parse(latestRun.startedAt),
+      )
+    : null;
   const decentralizationScore = clampPercent(
     100 -
       ((asnConcentrationPct ?? 100) * 0.5 +
@@ -138,11 +144,58 @@ export function NetworkAnalyticsPage({
       (latestRun?.scheduledPct ?? 0) * 0.3 +
       (persistenceCoveragePct ?? 0) * 0.2,
   );
+  const signalBusItems = [
+    {
+      label: "Snapshot Window",
+      value: snapshotWindowMs ? formatDuration(snapshotWindowMs) : "n/a",
+      detail: latestRun
+        ? `${latestRun.uniqueNodes.toLocaleString()} tracked endpoints in the latest sweep`
+        : "Waiting for the latest crawler window",
+    },
+    {
+      label: "Lead Concentration",
+      value: asnConcentrationPct !== null ? `${asnConcentrationPct.toFixed(1)}%` : "n/a",
+      detail: leadAsn
+        ? `${leadAsn.asnOrganization ?? "Unknown ASN"} leads visible verified nodes`
+        : "Waiting for ASN concentration data",
+    },
+    {
+      label: "Frontier Pressure",
+      value: frontierGapPct !== null ? `${frontierGapPct.toFixed(1)}%` : "n/a",
+      detail: latestRun
+        ? `${latestRun.unscheduledGap.toLocaleString()} endpoints remain unscheduled`
+        : "Waiting for coverage data",
+    },
+    {
+      label: "Tip Probe",
+      value: lastBlockHeight ? `${lastBlockHeight.elapsedMs}ms` : "n/a",
+      detail: lastBlockHeight?.bestBlockHash
+        ? `Peer tip ${truncateHash(lastBlockHeight.bestBlockHash)}`
+        : "Read-only tip lookup remains available",
+    },
+  ];
+  const operatorDeckItems = [
+    {
+      label: "Exchange view",
+      detail:
+        "Concentration and verification weakness show where market-stress connectivity can become operational risk instead of just crawler trivia.",
+    },
+    {
+      label: "Custody view",
+      detail:
+        "The snapshot keeps transport balance, frontier pressure, and verification confidence together so teams can reason about resilience before incidents force it.",
+    },
+    {
+      label: "Research view",
+      detail:
+        "Every score stays tied to source evidence from ASN counts, network outcomes, and the public crawler window rather than decorative KPI filler.",
+    },
+  ];
   const panelDescription =
     activePanel === "overview"
       ? demoMode
-        ? "Public risk view from the hosted demo snapshot."
-        : "Public risk view from the latest read-only crawler snapshot."
+        ? "Public home dashboard from the hosted demo snapshot."
+        : "Public home dashboard from the latest read-only crawler snapshot."
       : activePanel === "asn"
         ? demoMode
           ? "Inspect the embedded demo ASN concentration set without depending on the public API."
@@ -302,15 +355,50 @@ export function NetworkAnalyticsPage({
 
             {activePanel === "overview" ? (
               <div className="space-y-6">
+                <section className="fx-ambient-panel rounded-[14px] border border-border/75 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                        Snapshot Signals
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Live public dashboard with the shortest useful read on the latest crawler window.
+                      </p>
+                    </div>
+                    <Badge variant="muted">{latestRun?.phase ?? "awaiting run"}</Badge>
+                  </div>
+
+                  <div className="fx-signal-track mt-4 h-[2px] rounded-full" />
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {signalBusItems.map((item) => (
+                      <TelemetryCard
+                        key={item.label}
+                        label={item.label}
+                        value={item.value}
+                        detail={item.detail}
+                      />
+                    ))}
+                  </div>
+                </section>
+
                 <section className="grid gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-start">
+                  <div className="order-1 xl:order-1">
+                    {latestDetail ? (
+                      <CrawlerLiveSignal detail={latestDetail} playback={playback} variant="hero" />
+                    ) : (
+                      <StatusPanel message="No latest snapshot is available for replay." />
+                    )}
+                  </div>
+
                   <div className="order-2 w-full self-start rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-3 shadow-[0_14px_24px_rgba(0,0,0,0.14)] xl:order-2">
                     <div className="flex items-center justify-between gap-3 rounded-[10px] border border-border/60 bg-background/38 px-3 py-2.5">
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                          Risk Brief
+                          Control Deck
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          First insight from the current snapshot
+                          First read from the current network snapshot
                         </p>
                       </div>
                       <Badge variant="muted">{latestRun?.phase ?? "awaiting run"}</Badge>
@@ -392,14 +480,6 @@ export function NetworkAnalyticsPage({
                       </div>
                     </div>
                   </div>
-
-                  <div className="order-1 xl:order-1">
-                    {latestDetail ? (
-                      <CrawlerLiveSignal detail={latestDetail} playback={playback} variant="hero" />
-                    ) : (
-                      <StatusPanel message="No latest snapshot is available for replay." />
-                    )}
-                  </div>
                 </section>
 
                 {latestDetail ? (
@@ -441,10 +521,33 @@ export function NetworkAnalyticsPage({
                   />
                 ) : null}
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                  <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
-                  <VerificationMixChart title="Verification Distribution" rows={networkOutcomes} />
-                </div>
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                  <div className="rounded-[14px] border border-border/80 bg-background/72 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                          What This Means
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          What this dashboard means in product and risk terms.
+                        </p>
+                      </div>
+                      <Badge variant="muted">Mocked web-first home</Badge>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      {operatorDeckItems.map((item) => (
+                        <OperatorBriefCard key={item.label} label={item.label} detail={item.detail} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
+                    <VerificationMixChart title="Verification Distribution" rows={networkOutcomes} />
+                  </div>
+                </section>
+
               </div>
             ) : null}
 
@@ -725,6 +828,39 @@ function RiskTooltip({ label, tooltip }: { label: string; tooltip: string }) {
         {tooltip}
       </span>
     </span>
+  );
+}
+
+function TelemetryCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-[10px] border border-border/75 bg-background/56 px-3 py-3">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1.5 font-serif text-[1.5rem] uppercase tracking-[0.05em] text-foreground">
+        {value}
+      </p>
+      <p className="mt-1 text-[12px] text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function OperatorBriefCard({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div className="rounded-[10px] border border-border/75 bg-background/60 px-3 py-3">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+        {label}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
+    </div>
   );
 }
 

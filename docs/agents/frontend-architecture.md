@@ -45,6 +45,7 @@ Practical rule:
 - Avoid repeating the same run context in large boxes below the heading if the header row already carries it
 - Treat `Latest Snapshot` as the primary crawler-facing entry point for hosted demo builds
 - Treat `Network Analytics` overview as the public product home page and keep `Crawler Runs` as the inspection page
+- Treat `Network Risk API` as a mocked commercial preview page in web builds until a real browser-safe API product exists
 - Keep the public home globe-first: snapshot hero first, compact `Risk Brief` second, and full-width `Risk Drivers` beneath the hero row
 - On narrow screens keep the snapshot hero first and the `Risk Brief` second; do not flip that order just to preserve desktop composition
 - Keep `Risk Drivers` product-facing and evidence-oriented; do not reuse crawler-internal checkpoint rails on the public home
@@ -137,6 +138,7 @@ Already in place:
 - shared HTTP analytics helper used by both runtime adapters for crawler run and ASN reads
 - browser-safe Rust API app under `apps/api/` for public crawler analytics reads
 - analytics-first pages for `Crawler Runs` and `Network Analytics`
+- mocked `Network Risk API` landing page for commercial positioning in web builds only
 - global header `Latest Snapshot` entry point with a centered preview overlay for the latest crawler replay
 - hosted snapshot replay state persisted in local storage so short reloads stay stable while longer absences can restart a fresh live cycle
 - score-first `Network Analytics` landing page with derived network-risk signals built from the current read-only contract

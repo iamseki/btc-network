@@ -94,4 +94,146 @@
     scrollbar-color: rgba(245, 179, 1, 0.45) rgba(255, 255, 255, 0.04);
     scrollbar-width: thin;
   }
+
+  .fx-ambient-panel {
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(245, 179, 1, 0.14), transparent 24%),
+      radial-gradient(circle at 88% 16%, rgba(255, 208, 79, 0.08), transparent 20%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+    background-size: 150% 150%, 160% 160%, 100% 100%;
+    animation: fx-ambient-pan 16s ease-in-out infinite;
+  }
+
+  .fx-signal-track {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .fx-signal-track::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, transparent, rgba(245, 179, 1, 0.08), transparent),
+      linear-gradient(90deg, rgba(245, 179, 1, 0.14), rgba(245, 179, 1, 0.04));
+    opacity: 0.9;
+  }
+
+  .fx-signal-track::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 28%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 208, 79, 0.05),
+      rgba(255, 208, 79, 0.65),
+      rgba(255, 208, 79, 0.05),
+      transparent
+    );
+    filter: blur(8px);
+    animation: fx-signal-sweep 5.8s linear infinite;
+  }
+
+  .fx-fade-up {
+    animation: fx-fade-up 420ms ease-out both;
+  }
+
+  .fx-float-soft {
+    animation: fx-float-soft 6s ease-in-out infinite;
+  }
+
+  .fx-arc-flow {
+    stroke-dasharray: 6 10;
+    animation: fx-arc-flow 2.8s linear infinite;
+  }
+
+  .fx-node-pulse {
+    animation: fx-node-pulse 2.2s ease-out infinite;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
+}
+
+@keyframes fx-ambient-pan {
+  0%,
+  100% {
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 50%;
+  }
+  50% {
+    background-position:
+      100% 100%,
+      0% 100%,
+      50% 50%;
+  }
+}
+
+@keyframes fx-signal-sweep {
+  from {
+    transform: translateX(-140%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+@keyframes fx-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fx-float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes fx-arc-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+@keyframes fx-node-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.9);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-ambient-panel,
+  .fx-arc-flow,
+  .fx-node-pulse,
+  .fx-signal-track::after,
+  .fx-fade-up,
+  .fx-float-soft {
+    animation: none !important;
+  }
 }

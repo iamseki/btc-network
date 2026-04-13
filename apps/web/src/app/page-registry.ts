@@ -1,4 +1,5 @@
 export type AppPageId =
+  | "risk-api"
   | "crawler-runs"
   | "network-analytics"
   | "connection"
@@ -21,6 +22,12 @@ export const appPages: AppPage[] = [
     group: "network-analytics",
     title: "Network Analytics",
     description: "Summarize ASN concentration and recent verification outcomes from crawler data.",
+  },
+  {
+    id: "risk-api",
+    group: "network-analytics",
+    title: "Network Risk API",
+    description: "Preview the mocked commercial API surface for Bitcoin network risk and resilience analytics.",
   },
   {
     id: "crawler-runs",

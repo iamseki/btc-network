@@ -113,8 +113,8 @@ export function CrawlerPulseButton({
       type="button"
       className={
         disabled
-          ? "inline-flex min-w-[12rem] items-center gap-3 rounded-[8px] border border-border/70 bg-background/45 px-3 py-2 text-left text-muted-foreground"
-          : "inline-flex min-w-[12rem] cursor-pointer items-center gap-3 rounded-[8px] border border-border/80 bg-background/70 px-3 py-2 text-left transition-colors outline-none hover:border-primary/35 hover:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring"
+          ? "inline-flex min-w-[13rem] items-center gap-3 rounded-[10px] border border-border/70 bg-background/45 px-3 py-2.5 text-left text-muted-foreground"
+          : "inline-flex min-w-[13rem] cursor-pointer items-center gap-3 rounded-[10px] border border-border/80 bg-background/72 px-3 py-2.5 text-left transition-colors outline-none hover:border-primary/35 hover:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring"
       }
       aria-expanded={disabled ? false : expanded}
       aria-label={ariaLabel}
@@ -147,6 +147,11 @@ export function CrawlerPulseButton({
               : "Last snapshot ready"
             : "Waiting for latest snapshot"}
         </span>
+        {summary ? (
+          <span className="mt-1 block font-mono text-[11px] text-muted-foreground">
+            {summary.successfulHandshakes.toLocaleString()} / {summary.scheduledTasks.toLocaleString()} verified
+          </span>
+        ) : null}
       </span>
     </button>
   );
@@ -298,16 +303,13 @@ export function CrawlerLiveSignal({
       ),
     ),
   );
-  const sweepRotation = -180 + visualLoopRatio * 360;
+  const scanX = 26 + visualLoopRatio * 332;
   const visibleNodes = GLOBE_NODE_SEEDS.map((seed, index) => {
     if (index >= discoveredNodeCount) {
       return null;
     }
 
-    const projected = projectNode(seed.lat, seed.lon, sweepRotation);
-    if (!projected.visible) {
-      return null;
-    }
+    const projected = projectWorldNode(seed.lat, seed.lon);
 
     const isVerified = index < verifiedNodeCount;
     const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
@@ -319,17 +321,18 @@ export function CrawlerLiveSignal({
       isRecent,
     };
   }).filter((node) => node !== null);
+  const activeFlowNodes = visibleNodes.filter((node) => node.isRecent).slice(0, 4);
   const markers = signalPlayback.markers;
   const isHero = variant === "hero";
   const shellClass = isHero
     ? "space-y-4"
-    : "rounded-[8px] border border-border/80 bg-background/80 p-4";
+    : "rounded-[12px] border border-border/80 bg-background/88 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.24)]";
   const visualPanelClass = isHero
     ? "rounded-[14px] border border-primary/16 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.18),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:p-5"
-    : "rounded-[8px] border border-border/70 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.13),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))] p-4";
+    : "fx-ambient-panel rounded-[12px] border border-border/70 p-4";
   const canvasClass = isHero
     ? "mt-5 rounded-[10px] border border-primary/16 bg-background/45 p-3 sm:p-4 xl:p-5"
-    : "mt-4 rounded-[8px] border border-border/70 bg-background/55 p-3";
+    : "mt-4 rounded-[10px] border border-border/70 bg-background/52 p-3";
   const svgClass = isHero ? "h-[320px] w-full sm:h-[360px] xl:h-[420px]" : "h-[240px] w-full";
 
   return (
@@ -341,30 +344,24 @@ export function CrawlerLiveSignal({
               Crawler Snapshot
             </p>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              A lightweight snapshot replay of frontier growth, worker fan-out, and verified nodes
-              using the checkpoint shape the API already exposes.
+              A compact replay of the latest sweep with just the movement and numbers that matter.
             </p>
           </div>
-          <div className="rounded-[6px] border border-border/70 bg-muted/35 px-3 py-2 text-right">
+          <div className="rounded-[8px] border border-border/70 bg-muted/35 px-3 py-2.5 text-right">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Sweep Window
+              Sweep State
             </p>
             <p className="mt-1 font-mono text-sm text-foreground">
-              {formatTimestamp(signalPlayback.startedAt)}
+              {signalPlayback.isLive ? "Live" : "Archived"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {formatDuration(signalPlayback.loopDurationMs)} active scan window
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {signalPlayback.isLive
-                ? "Live sweep is currently stepping through the frontier."
-                : `Last sweep closed at ${formatTime(signalPlayback.completedAt)}.`}
+              {formatDuration(signalPlayback.loopDurationMs)} scan window
             </p>
           </div>
         </div>
       )}
 
-      <div className={isHero ? "space-y-4" : "mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)]"}>
+      <div className={isHero ? "space-y-4" : "mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]"}>
         <div className={visualPanelClass}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -385,9 +382,8 @@ export function CrawlerLiveSignal({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 text-right sm:grid-cols-4">
+              <div className="grid grid-cols-3 gap-2 text-right">
                 <SignalPill label="Tracked" value={playbackSnapshot.uniqueNodes} />
-                <SignalPill label="Attempted" value={playbackSnapshot.scheduledTasks} />
                 <SignalPill label="Verified" value={playbackSnapshot.successfulHandshakes} />
                 <SignalPill label="Frontier" value={playbackSnapshot.frontierSize} />
               </div>
@@ -398,114 +394,96 @@ export function CrawlerLiveSignal({
             <svg
               viewBox="0 0 420 260"
               role="img"
-              aria-label="Crawler execution playback around a projected globe"
+              aria-label="Crawler execution playback across a world route map"
               className={svgClass}
             >
               <defs>
-                <radialGradient id="globe-core" cx="50%" cy="45%" r="60%">
-                  <stop offset="0%" stopColor="rgba(245,179,1,0.22)" />
-                  <stop offset="50%" stopColor="rgba(245,179,1,0.10)" />
-                  <stop offset="100%" stopColor="rgba(15,23,42,0.06)" />
-                </radialGradient>
-                <linearGradient id="globe-sweep" x1="0%" y1="0%" x2="100%" y2="100%">
+                <linearGradient id="map-scan" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="rgba(245,179,1,0)" />
-                  <stop offset="45%" stopColor="rgba(245,179,1,0.04)" />
-                  <stop offset="55%" stopColor="rgba(245,179,1,0.18)" />
+                  <stop offset="45%" stopColor="rgba(245,179,1,0.03)" />
+                  <stop offset="50%" stopColor="rgba(245,179,1,0.18)" />
+                  <stop offset="55%" stopColor="rgba(245,179,1,0.03)" />
                   <stop offset="100%" stopColor="rgba(245,179,1,0)" />
                 </linearGradient>
               </defs>
 
               <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
 
-              <g transform="translate(16 8)">
-                <ellipse cx="170" cy="122" rx="120" ry="96" fill="url(#globe-core)" />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="120"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.18)"
-                  strokeWidth="1.2"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="92"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.08)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="52"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.07)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="24"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.06)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="103"
-                  ry="20"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.08)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="92"
-                  rx="88"
-                  ry="16"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.07)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="152"
-                  rx="88"
-                  ry="16"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.07)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="136"
-                  ry="110"
-                  fill="none"
-                  stroke="rgba(245,179,1,0.16)"
-                  strokeDasharray="3 8"
-                  strokeWidth="1"
+              <g transform="translate(18 16)">
+                <rect
+                  x="0"
+                  y="0"
+                  width="384"
+                  height="228"
+                  rx="16"
+                  fill="rgba(8,8,8,0.34)"
+                  stroke="rgba(245,239,226,0.1)"
                 />
 
-                <g
-                  transform={`rotate(${sweepRotation} 170 122)`}
-                  style={{ transformOrigin: "170px 122px" }}
-                >
-                  <ellipse
-                    cx="170"
-                    cy="122"
-                    rx="120"
-                    ry="96"
-                    fill="url(#globe-sweep)"
-                    opacity="0.8"
+                {[42, 76, 110, 144, 178].map((y) => (
+                  <line
+                    key={`lat-${y}`}
+                    x1="16"
+                    y1={y}
+                    x2="368"
+                    y2={y}
+                    stroke="rgba(245,239,226,0.06)"
+                    strokeWidth="1"
                   />
+                ))}
+
+                {[56, 104, 152, 200, 248, 296, 344].map((x) => (
+                  <line
+                    key={`lon-${x}`}
+                    x1={x}
+                    y1="18"
+                    x2={x}
+                    y2="210"
+                    stroke="rgba(245,239,226,0.05)"
+                    strokeWidth="1"
+                  />
+                ))}
+
+                <path
+                  d="M34 70 L78 42 L122 52 L138 86 L112 108 L76 102 L48 90 Z"
+                  fill="rgba(245,239,226,0.06)"
+                />
+                <path
+                  d="M118 118 L138 134 L134 174 L120 204 L104 178 L108 142 Z"
+                  fill="rgba(245,239,226,0.055)"
+                />
+                <path
+                  d="M184 60 L222 52 L248 66 L252 94 L238 106 L232 128 L244 176 L228 196 L204 174 L194 136 L176 104 L180 82 Z"
+                  fill="rgba(245,239,226,0.06)"
+                />
+                <path
+                  d="M238 64 L294 56 L344 76 L350 110 L332 120 L308 114 L278 118 L262 102 L248 90 Z"
+                  fill="rgba(245,239,226,0.05)"
+                />
+                <path
+                  d="M314 166 L340 174 L350 194 L336 206 L308 198 L300 178 Z"
+                  fill="rgba(245,239,226,0.055)"
+                />
+
+                <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
+
+                <g>
+                  <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.92)" />
+                  <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
                 </g>
+
+                {activeFlowNodes.map((node) => (
+                  <g key={`flow-${node.key}`}>
+                    <path
+                      d={buildFlowArcPath(18, 114, node.x, node.y)}
+                      fill="none"
+                      stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
+                      strokeWidth={node.isVerified ? 1.8 : 1.2}
+                      strokeLinecap="round"
+                      className="fx-arc-flow"
+                    />
+                  </g>
+                ))}
 
                 {visibleNodes.map((node) => (
                   <g key={node.key}>
@@ -514,6 +492,7 @@ export function CrawlerLiveSignal({
                         cx={node.x}
                         cy={node.y}
                         r="9"
+                        className="fx-node-pulse"
                         fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
                       />
                     ) : null}
@@ -529,10 +508,8 @@ export function CrawlerLiveSignal({
                 ))}
 
                 {[0, 1, 2, 3, 4, 5].map((index) => {
-                  const orbitAngle = visualLoopRatio * Math.PI * 2 + index * ((Math.PI * 2) / 6);
-                  const x = 170 + Math.cos(orbitAngle) * 146;
-                  const y = 122 + Math.sin(orbitAngle) * 116;
-
+                  const x = 32 + ((visualLoopRatio * 332 + index * 48) % 332);
+                  const y = 24 + index * 30;
                   return (
                     <circle
                       key={`orbit-${index}`}
@@ -540,7 +517,7 @@ export function CrawlerLiveSignal({
                       cy={y}
                       r={index % 2 === 0 ? 2.5 : 1.7}
                       fill="rgba(245,179,1,0.72)"
-                      opacity={0.36 + index * 0.08}
+                      opacity={0.24 + index * 0.08}
                     />
                   );
                 })}
@@ -548,119 +525,76 @@ export function CrawlerLiveSignal({
             </svg>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {isHero ? null : <div className="fx-signal-track mt-4 h-[2px] rounded-full" />}
+        </div>
+
+        {isHero ? null : (
+          <div className="space-y-4">
+            <SignalMetric
+              label="Verification Yield"
+              value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
+              detail={`${playbackSnapshot.successfulHandshakes.toLocaleString()} verified out of ${playbackSnapshot.scheduledTasks.toLocaleString()} attempts`}
+            />
+            <SignalMetric
+              label="Sweep Completion"
+              value={`${formatPercent(loopRatio)}%`}
+              detail={`${formatDuration(signalPlayback.elapsedMs)} into the current replay window`}
+            />
             <SignalMetric
               label="Checkpoint Pulse"
               value={`#${playbackSnapshot.checkpointSequence}`}
               detail={formatTimestamp(playbackSnapshot.checkpointedAt)}
             />
-            <SignalMetric
-              label="In Flight"
-              value={playbackSnapshot.inFlightWork}
-              detail={`${playbackSnapshot.frontierSize} endpoints still waiting in frontier`}
-            />
-            <SignalMetric
-              label="Writer Backlog"
-              value={playbackSnapshot.writerBacklog}
-              detail={`${playbackSnapshot.persistedObservationRows} rows persisted so far`}
-            />
-          </div>
-        </div>
 
-        {isHero ? null : (
-          <div className="space-y-4">
-            <div className="rounded-[8px] border border-border/70 bg-background/70 p-4">
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Signal Focus
-              </p>
-              <p className="mt-3 font-serif text-3xl uppercase tracking-[0.12em] text-foreground">
-                {playbackSnapshot.uniqueNodes}
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                endpoints tracked while the sweep rotates through the current crawl window
-              </p>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/45">
+            <div className="rounded-[10px] border border-border/70 bg-background/68 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Checkpoint Rail
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Playback follows the same checkpoint progression returned by the API.
+                  </p>
+                </div>
+                <p className="font-mono text-xs text-foreground">{detail.run.runId}</p>
+              </div>
+
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/40">
                 <div
-                  className="h-full rounded-full bg-primary transition-[width]"
-                  style={{
-                    width: `${Math.max(6, progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * 100)}%`,
-                  }}
+                  className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.95))] transition-[width]"
+                  style={{ width: `${Math.max(6, loopRatio * 100)}%` }}
                 />
               </div>
-            </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <SignalMetric
-                label="Verification Pressure"
-                value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
-                detail={`${playbackSnapshot.successfulHandshakes} successful handshakes out of ${playbackSnapshot.scheduledTasks} attempts`}
-              />
-              <SignalMetric
-                label="Frontier Conversion"
-                value={`${formatPercent(progressRatio(playbackSnapshot.scheduledTasks, playbackSnapshot.uniqueNodes))}%`}
-                detail={`${Math.max(0, playbackSnapshot.uniqueNodes - playbackSnapshot.scheduledTasks)} tracked endpoints still unscheduled`}
-              />
-              <SignalMetric
-                label="Failure Weight"
-                value={playbackSnapshot.failedTasks}
-                detail="failed connect, handshake, timeout, or peer-discovery attempts"
-              />
-              <SignalMetric
-                label="Sweep Completion"
-                value={`${formatPercent(loopRatio)}%`}
-                detail={`${markers.length} checkpoint anchors across the current playback rail`}
-              />
+              <div className="mt-4 grid gap-2">
+                {markers.map((marker) => {
+                  const isActive = loopRatio >= marker.progressRatio;
+
+                  return (
+                    <div
+                      key={`${marker.sequence}-${marker.phase}`}
+                      className={
+                        isActive
+                          ? "rounded-[8px] border border-primary/25 bg-primary/10 px-3 py-2"
+                          : "rounded-[8px] border border-border/70 bg-muted/25 px-3 py-2"
+                      }
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Checkpoint {marker.sequence}
+                        </p>
+                        <p className="font-mono text-xs text-foreground">{formatPhase(marker.phase)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {isHero ? (
-        heroFooter ?? null
-      ) : (
-        <div className="mt-5 rounded-[8px] border border-border/70 bg-background/55 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Checkpoint Rail
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                The visual loops across the same checkpoint progression the current API already returns.
-              </p>
-            </div>
-            <p className="font-mono text-xs text-foreground">{detail.run.runId}</p>
-          </div>
-
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted/40">
-            <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.95))] transition-[width]"
-              style={{ width: `${Math.max(6, loopRatio * 100)}%` }}
-            />
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {markers.map((marker) => {
-              const isActive = loopRatio >= marker.progressRatio;
-
-              return (
-                <div
-                  key={`${marker.sequence}-${marker.phase}`}
-                  className={
-                    isActive
-                      ? "rounded-[6px] border border-primary/25 bg-primary/10 px-3 py-2"
-                      : "rounded-[6px] border border-border/70 bg-muted/25 px-3 py-2"
-                  }
-                >
-                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Checkpoint {marker.sequence}
-                  </p>
-                  <p className="mt-1 font-mono text-sm text-foreground">{formatPhase(marker.phase)}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {isHero ? heroFooter ?? null : null}
     </section>
   );
 }
@@ -921,16 +855,23 @@ function clampCount(value: number): number {
   return Math.max(1, Math.min(GLOBE_NODE_SEEDS.length, value));
 }
 
-function projectNode(lat: number, lon: number, rotationDeg: number) {
-  const latRad = (lat * Math.PI) / 180;
-  const lonRad = ((lon - rotationDeg) * Math.PI) / 180;
-  const horizon = Math.cos(latRad) * Math.cos(lonRad);
-
+function projectWorldNode(lat: number, lon: number) {
   return {
-    x: 186 + Math.cos(latRad) * Math.sin(lonRad) * 120,
-    y: 130 - Math.sin(latRad) * 96,
-    visible: horizon >= -0.14,
+    x: 26 + ((lon + 180) / 360) * 332,
+    y: 34 + ((90 - lat) / 180) * 152,
   };
+}
+
+function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
+  const midX = (fromX + toX) / 2;
+  const midY = (fromY + toY) / 2;
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const lift = Math.max(16, Math.min(42, distance * 0.22));
+  const controlY = midY - lift;
+
+  return `M ${fromX} ${fromY} Q ${midX} ${controlY} ${toX} ${toY}`;
 }
 
 function formatClock(valueMs: number): string {
@@ -970,14 +911,4 @@ function formatTimestamp(value: string): string {
   }
 
   return parsed.toLocaleString();
-}
-
-function formatTime(value: string): string {
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleTimeString();
 }

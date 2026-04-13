@@ -39,8 +39,16 @@ Current state:
 
 - `npm install --prefix apps/web`
 - `npm run dev --prefix apps/web`
+- `VITE_DEMO_MODE=true npm run dev --prefix apps/web`
 - `npm run test --prefix apps/web`
 - `npm run build --prefix apps/web`
+- `VITE_DEMO_MODE=true npm run build --prefix apps/web`
+
+Makefile shortcuts:
+
+- `make web-dev` runs the local web app against the default analytics mode
+- `make web-dev-demo` runs the local web app with mocked analytics pages enabled
+- `make web-build-demo` builds the static site with mocked analytics pages enabled
 
 Optional environment:
 
@@ -52,6 +60,7 @@ Important:
 
 - Vite reads `VITE_*` values at build time, not after the page has already loaded
 - local development: set `VITE_SUPPORT_URL` in your shell or a local Vite env file before `npm run dev`
+- local mocked analytics: `make web-dev-demo` is the quickest path when you want `Crawler Runs`, `Network Analytics`, and `Network Risk API` to stay browser-only
 - demo deploys: set `VITE_DEMO_MODE=true` in the build environment when you want the public site to stay fully browser-only
 - production deploys: set `VITE_SUPPORT_URL` as a GitHub repository variable so the GitHub Actions build injects it into the static site
 

@@ -137,14 +137,17 @@ describe("NetworkAnalyticsPage", () => {
     expect(screen.getByRole("button", { name: "Decentralization Score score explanation" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Eclipse Exposure (Proxy) score explanation" })).toBeTruthy();
     expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
+    expect(screen.getByText("Snapshot Signals")).toBeTruthy();
+    expect(screen.getByText("What This Means")).toBeTruthy();
     expect(await screen.findByText("Risk Drivers")).toBeTruthy();
     expect(screen.queryByText("Checkpoint Rail")).toBeNull();
-    expect(screen.getByText(/Public risk view from the latest read-only crawler snapshot\./i)).toBeTruthy();
+    expect(screen.getByText(/Public home dashboard from the latest read-only crawler snapshot\./i)).toBeTruthy();
     expect(screen.getByText("Block Height")).toBeTruthy();
     expect(screen.getAllByText("892,345").length).toBeGreaterThan(0);
     expect(screen.getByText("Verification Distribution")).toBeTruthy();
     expect(screen.getByText("Example ASN")).toBeTruthy();
     expect(screen.getAllByText("ipv4").length).toBeGreaterThan(0);
+    expect(screen.getByText("Exchange view")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
     expect(await screen.findByText("Organization")).toBeTruthy();
