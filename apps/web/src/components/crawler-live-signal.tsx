@@ -3,6 +3,14 @@ import { Activity } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+import {
+  getCountryVisualAnchor,
+  projectCountryNode,
+  worldMap,
+  WORLD_MAP_FRAME,
+  WORLD_MAP_LAYER_INDEX,
+  WORLD_MAP_VIEWBOX,
+} from "@/lib/maps/world-map";
 
 const PLAYBACK_IDLE_MS = 15 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
@@ -19,50 +27,52 @@ type WorldNodeSeed = {
   countryCode: string;
   countryName: string;
   asnLabel: string;
+  nodeCount: number;
 };
 
 const GLOBE_NODE_SEEDS: readonly WorldNodeSeed[] = [
-  { lat: 56, lon: -122, city: "Seattle", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit" },
-  { lat: 48, lon: -78, city: "Toronto", countryCode: "CA", countryName: "Canada", asnLabel: "Northern Relay" },
-  { lat: 42, lon: -12, city: "Lisbon", countryCode: "PT", countryName: "Portugal", asnLabel: "Atlantic Fiber" },
-  { lat: 34, lon: 18, city: "Tunis", countryCode: "TN", countryName: "Tunisia", asnLabel: "Mediterranean Core" },
-  { lat: 28, lon: 77, city: "Delhi", countryCode: "IN", countryName: "India", asnLabel: "Monsoon Carrier" },
-  { lat: 21, lon: 114, city: "Hong Kong", countryCode: "HK", countryName: "Hong Kong", asnLabel: "Harbour Exchange" },
-  { lat: 12, lon: 103, city: "Bangkok", countryCode: "TH", countryName: "Thailand", asnLabel: "Mekong Transit" },
-  { lat: 5, lon: -74, city: "Bogota", countryCode: "CO", countryName: "Colombia", asnLabel: "Andean Link" },
-  { lat: -7, lon: -53, city: "Brasilia", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit" },
-  { lat: -16, lon: 28, city: "Lusaka", countryCode: "ZM", countryName: "Zambia", asnLabel: "Copper Route" },
-  { lat: -22, lon: 133, city: "Adelaide", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange" },
-  { lat: -33, lon: 18, city: "Cape Town", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone" },
-  { lat: -35, lon: -58, city: "Buenos Aires", countryCode: "AR", countryName: "Argentina", asnLabel: "SouthMesh Transit" },
-  { lat: 61, lon: 37, city: "Moscow", countryCode: "RU", countryName: "Russia", asnLabel: "Volga Networks" },
-  { lat: 52, lon: 14, city: "Berlin", countryCode: "DE", countryName: "Germany", asnLabel: "Atlas Backbone" },
-  { lat: 40, lon: 139, city: "Tokyo", countryCode: "JP", countryName: "Japan", asnLabel: "Kanto Transit" },
-  { lat: 31, lon: -97, city: "Dallas", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit" },
-  { lat: 19, lon: -99, city: "Mexico City", countryCode: "MX", countryName: "Mexico", asnLabel: "Aztec Route" },
-  { lat: 14, lon: 121, city: "Manila", countryCode: "PH", countryName: "Philippines", asnLabel: "Pacific Relay" },
-  { lat: 2, lon: 32, city: "Kampala", countryCode: "UG", countryName: "Uganda", asnLabel: "Equator Net" },
-  { lat: -1, lon: 36, city: "Nairobi", countryCode: "KE", countryName: "Kenya", asnLabel: "Rift Fiber" },
-  { lat: -12, lon: -77, city: "Lima", countryCode: "PE", countryName: "Peru", asnLabel: "Pacific Andes" },
-  { lat: -23, lon: -46, city: "Sao Paulo", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit" },
-  { lat: 64, lon: -19, city: "Reykjavik", countryCode: "IS", countryName: "Iceland", asnLabel: "North Atlantic" },
-  { lat: 59, lon: 18, city: "Stockholm", countryCode: "SE", countryName: "Sweden", asnLabel: "Atlas Backbone" },
-  { lat: 50, lon: -1, city: "London", countryCode: "GB", countryName: "United Kingdom", asnLabel: "Atlas Backbone" },
-  { lat: 37, lon: -122, city: "San Francisco", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit" },
-  { lat: 35, lon: 51, city: "Tehran", countryCode: "IR", countryName: "Iran", asnLabel: "Silk Route" },
-  { lat: 25, lon: 55, city: "Dubai", countryCode: "AE", countryName: "United Arab Emirates", asnLabel: "Gulf Exchange" },
-  { lat: -34, lon: 151, city: "Sydney", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange" },
-  { lat: -26, lon: 28, city: "Johannesburg", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone" },
-  { lat: 1, lon: 104, city: "Singapore", countryCode: "SG", countryName: "Singapore", asnLabel: "Southern Cross Exchange" },
+  { lat: 56, lon: -122, city: "Seattle", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit", nodeCount: 420 },
+  { lat: 48, lon: -78, city: "Toronto", countryCode: "CA", countryName: "Canada", asnLabel: "Northern Relay", nodeCount: 280 },
+  { lat: 42, lon: -12, city: "Lisbon", countryCode: "PT", countryName: "Portugal", asnLabel: "Atlantic Fiber", nodeCount: 170 },
+  { lat: 34, lon: 18, city: "Tunis", countryCode: "TN", countryName: "Tunisia", asnLabel: "Mediterranean Core", nodeCount: 120 },
+  { lat: 28, lon: 77, city: "Delhi", countryCode: "IN", countryName: "India", asnLabel: "Monsoon Carrier", nodeCount: 480 },
+  { lat: 21, lon: 114, city: "Hong Kong", countryCode: "HK", countryName: "Hong Kong", asnLabel: "Harbour Exchange", nodeCount: 320 },
+  { lat: 12, lon: 103, city: "Bangkok", countryCode: "TH", countryName: "Thailand", asnLabel: "Mekong Transit", nodeCount: 190 },
+  { lat: 5, lon: -74, city: "Bogota", countryCode: "CO", countryName: "Colombia", asnLabel: "Andean Link", nodeCount: 150 },
+  { lat: -7, lon: -53, city: "Brasilia", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit", nodeCount: 220 },
+  { lat: -16, lon: 28, city: "Lusaka", countryCode: "ZM", countryName: "Zambia", asnLabel: "Copper Route", nodeCount: 90 },
+  { lat: -22, lon: 133, city: "Adelaide", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange", nodeCount: 140 },
+  { lat: -33, lon: 18, city: "Cape Town", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone", nodeCount: 180 },
+  { lat: -35, lon: -58, city: "Buenos Aires", countryCode: "AR", countryName: "Argentina", asnLabel: "SouthMesh Transit", nodeCount: 160 },
+  { lat: 61, lon: 37, city: "Moscow", countryCode: "RU", countryName: "Russia", asnLabel: "Volga Networks", nodeCount: 260 },
+  { lat: 52, lon: 14, city: "Berlin", countryCode: "DE", countryName: "Germany", asnLabel: "Atlas Backbone", nodeCount: 340 },
+  { lat: 40, lon: 139, city: "Tokyo", countryCode: "JP", countryName: "Japan", asnLabel: "Kanto Transit", nodeCount: 520 },
+  { lat: 31, lon: -97, city: "Dallas", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit", nodeCount: 380 },
+  { lat: 19, lon: -99, city: "Mexico City", countryCode: "MX", countryName: "Mexico", asnLabel: "Aztec Route", nodeCount: 230 },
+  { lat: 14, lon: 121, city: "Manila", countryCode: "PH", countryName: "Philippines", asnLabel: "Pacific Relay", nodeCount: 140 },
+  { lat: 2, lon: 32, city: "Kampala", countryCode: "UG", countryName: "Uganda", asnLabel: "Equator Net", nodeCount: 80 },
+  { lat: -1, lon: 36, city: "Nairobi", countryCode: "KE", countryName: "Kenya", asnLabel: "Rift Fiber", nodeCount: 110 },
+  { lat: -12, lon: -77, city: "Lima", countryCode: "PE", countryName: "Peru", asnLabel: "Pacific Andes", nodeCount: 130 },
+  { lat: -23, lon: -46, city: "Sao Paulo", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit", nodeCount: 280 },
+  { lat: 64, lon: -19, city: "Reykjavik", countryCode: "IS", countryName: "Iceland", asnLabel: "North Atlantic", nodeCount: 70 },
+  { lat: 59, lon: 18, city: "Stockholm", countryCode: "SE", countryName: "Sweden", asnLabel: "Atlas Backbone", nodeCount: 160 },
+  { lat: 50, lon: -1, city: "London", countryCode: "GB", countryName: "United Kingdom", asnLabel: "Atlas Backbone", nodeCount: 260 },
+  { lat: 37, lon: -122, city: "San Francisco", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit", nodeCount: 300 },
+  { lat: 35, lon: 51, city: "Tehran", countryCode: "IR", countryName: "Iran", asnLabel: "Silk Route", nodeCount: 210 },
+  { lat: 25, lon: 55, city: "Dubai", countryCode: "AE", countryName: "United Arab Emirates", asnLabel: "Gulf Exchange", nodeCount: 240 },
+  { lat: -34, lon: 151, city: "Sydney", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange", nodeCount: 110 },
+  { lat: -26, lon: 28, city: "Johannesburg", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone", nodeCount: 140 },
+  { lat: 1, lon: 104, city: "Singapore", countryCode: "SG", countryName: "Singapore", asnLabel: "Southern Cross Exchange", nodeCount: 210 },
 ] as const;
 
-type VisibleMapNode = ReturnType<typeof projectWorldNode> & {
+type VisibleMapNode = ReturnType<typeof projectCountryNode> & {
   key: string;
   city: string;
   countryCode: string;
   countryName: string;
   locationKey: string;
   asnLabel: string;
+  nodeCount: number;
   isVerified: boolean;
   isRecent: boolean;
 };
@@ -87,104 +97,6 @@ type AsnInsight = {
   countryCount: number;
   leadCountryName: string;
 };
-
-const WORLD_LANDMASSES = [
-  [
-    { lat: 72, lon: -167 },
-    { lat: 63, lon: -150 },
-    { lat: 58, lon: -130 },
-    { lat: 50, lon: -124 },
-    { lat: 44, lon: -124 },
-    { lat: 31, lon: -116 },
-    { lat: 24, lon: -108 },
-    { lat: 20, lon: -98 },
-    { lat: 24, lon: -85 },
-    { lat: 32, lon: -82 },
-    { lat: 41, lon: -70 },
-    { lat: 49, lon: -58 },
-    { lat: 56, lon: -66 },
-    { lat: 63, lon: -82 },
-    { lat: 69, lon: -110 },
-    { lat: 72, lon: -145 },
-  ],
-  [
-    { lat: 82, lon: -70 },
-    { lat: 78, lon: -34 },
-    { lat: 72, lon: -18 },
-    { lat: 64, lon: -30 },
-    { lat: 60, lon: -48 },
-    { lat: 67, lon: -62 },
-  ],
-  [
-    { lat: 12, lon: -81 },
-    { lat: 8, lon: -78 },
-    { lat: 2, lon: -74 },
-    { lat: -10, lon: -76 },
-    { lat: -20, lon: -70 },
-    { lat: -31, lon: -66 },
-    { lat: -41, lon: -64 },
-    { lat: -52, lon: -69 },
-    { lat: -55, lon: -62 },
-    { lat: -48, lon: -54 },
-    { lat: -37, lon: -51 },
-    { lat: -22, lon: -43 },
-    { lat: -10, lon: -37 },
-    { lat: 1, lon: -50 },
-    { lat: 8, lon: -60 },
-  ],
-  [
-    { lat: 71, lon: -10 },
-    { lat: 58, lon: -5 },
-    { lat: 51, lon: 3 },
-    { lat: 44, lon: 12 },
-    { lat: 47, lon: 21 },
-    { lat: 55, lon: 33 },
-    { lat: 63, lon: 40 },
-    { lat: 71, lon: 30 },
-    { lat: 72, lon: 10 },
-  ],
-  [
-    { lat: 35, lon: -17 },
-    { lat: 32, lon: 4 },
-    { lat: 24, lon: 20 },
-    { lat: 12, lon: 33 },
-    { lat: 3, lon: 42 },
-    { lat: -10, lon: 42 },
-    { lat: -22, lon: 32 },
-    { lat: -34, lon: 20 },
-    { lat: -31, lon: 10 },
-    { lat: -16, lon: -1 },
-    { lat: 2, lon: -8 },
-    { lat: 17, lon: -12 },
-    { lat: 28, lon: -16 },
-  ],
-  [
-    { lat: 36, lon: 26 },
-    { lat: 44, lon: 44 },
-    { lat: 52, lon: 62 },
-    { lat: 60, lon: 90 },
-    { lat: 64, lon: 120 },
-    { lat: 58, lon: 148 },
-    { lat: 50, lon: 158 },
-    { lat: 38, lon: 146 },
-    { lat: 27, lon: 124 },
-    { lat: 18, lon: 108 },
-    { lat: 11, lon: 100 },
-    { lat: 7, lon: 85 },
-    { lat: 18, lon: 75 },
-    { lat: 24, lon: 70 },
-    { lat: 30, lon: 56 },
-    { lat: 34, lon: 44 },
-  ],
-  [
-    { lat: -11, lon: 113 },
-    { lat: -19, lon: 145 },
-    { lat: -28, lon: 153 },
-    { lat: -38, lon: 146 },
-    { lat: -36, lon: 126 },
-    { lat: -23, lon: 114 },
-  ],
-] as const;
 
 type PlaybackSnapshot = {
   phase: string;
@@ -452,7 +364,7 @@ export function CrawlerLiveSignal({
           return null;
         }
 
-        const projected = projectWorldNode(seed.lat, seed.lon);
+        const projected = projectCountryNode(seed);
 
         const isVerified = index < verifiedNodeCount;
         const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
@@ -465,6 +377,7 @@ export function CrawlerLiveSignal({
           countryName: seed.countryName,
           locationKey: seed.countryCode,
           asnLabel: seed.asnLabel,
+          nodeCount: seed.nodeCount,
           isVerified,
           isRecent,
         };
@@ -603,16 +516,44 @@ export function CrawlerLiveSignal({
                   stroke="rgba(245,239,226,0.1)"
                 />
 
-                {WORLD_LANDMASSES.map((polygon, index) => (
-                  <path
-                    key={`compact-landmass-${index}`}
-                    d={buildProjectedPolygonPath(polygon)}
-                    fill={index % 2 === 0 ? "rgba(245,239,226,0.06)" : "rgba(245,239,226,0.048)"}
-                    stroke="rgba(245,239,226,0.08)"
-                    strokeWidth="1"
-                    strokeLinejoin="round"
-                  />
-                ))}
+                <svg
+                  x={WORLD_MAP_FRAME.x}
+                  y={WORLD_MAP_FRAME.y}
+                  width={WORLD_MAP_FRAME.width}
+                  height={WORLD_MAP_FRAME.height}
+                  viewBox={WORLD_MAP_VIEWBOX}
+                  preserveAspectRatio="xMidYMid meet"
+                  aria-hidden="true"
+                >
+                  {worldMap.layers.map((layer) => (
+                    <path
+                      key={`compact-landmass-${layer.id}`}
+                      d={layer.d}
+                      fill="rgba(245,239,226,0.05)"
+                      stroke="rgba(245,239,226,0.075)"
+                      strokeWidth="0.7"
+                      strokeLinejoin="round"
+                    />
+                  ))}
+                  {mapLocations.map((location) => {
+                    const layer = WORLD_MAP_LAYER_INDEX.get(location.countryCode);
+
+                    if (!layer) {
+                      return null;
+                    }
+
+                    return (
+                      <path
+                        key={`compact-tracked-${location.key}`}
+                        d={layer.d}
+                        fill="rgba(245,179,1,0.055)"
+                        stroke="rgba(245,179,1,0.14)"
+                        strokeWidth="0.9"
+                        strokeLinejoin="round"
+                      />
+                    );
+                  })}
+                </svg>
 
                 <rect x={scanX} y="18" width="22" height="192" fill="url(#map-scan-compact)" opacity="0.9" />
 
@@ -836,16 +777,46 @@ export function CrawlerLiveSignal({
                     />
                   ))}
 
-                  {WORLD_LANDMASSES.map((polygon, index) => (
-                    <path
-                      key={`landmass-${index}`}
-                      d={buildProjectedPolygonPath(polygon)}
-                      fill={index % 2 === 0 ? "rgba(245,239,226,0.065)" : "rgba(245,239,226,0.052)"}
-                      stroke="rgba(245,239,226,0.08)"
-                      strokeWidth="1"
-                      strokeLinejoin="round"
-                    />
-                  ))}
+                  <svg
+                    x={WORLD_MAP_FRAME.x}
+                    y={WORLD_MAP_FRAME.y}
+                    width={WORLD_MAP_FRAME.width}
+                    height={WORLD_MAP_FRAME.height}
+                    viewBox={WORLD_MAP_VIEWBOX}
+                    preserveAspectRatio="xMidYMid meet"
+                    aria-hidden="true"
+                  >
+                    {worldMap.layers.map((layer) => (
+                      <path
+                        key={`landmass-${layer.id}`}
+                        d={layer.d}
+                        fill="rgba(245,239,226,0.055)"
+                        stroke="rgba(245,239,226,0.075)"
+                        strokeWidth="0.8"
+                        strokeLinejoin="round"
+                      />
+                    ))}
+                    {locationInsights.map((location) => {
+                      const layer = WORLD_MAP_LAYER_INDEX.get(location.countryCode);
+
+                      if (!layer) {
+                        return null;
+                      }
+
+                      const isActive = activeLocation?.key === location.key;
+
+                      return (
+                        <path
+                          key={`tracked-${location.key}`}
+                          d={layer.d}
+                          fill={isActive ? "rgba(245,179,1,0.1)" : "rgba(245,179,1,0.045)"}
+                          stroke={isActive ? "rgba(245,179,1,0.28)" : "rgba(245,179,1,0.12)"}
+                          strokeWidth={isActive ? "1" : "0.9"}
+                          strokeLinejoin="round"
+                        />
+                      );
+                    })}
+                  </svg>
 
                   <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
 
@@ -1413,11 +1384,11 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
         asnCounts: new Map<string, number>(),
       };
 
-    nextLocation.count += 1;
-    nextLocation.verifiedCount += node.isVerified ? 1 : 0;
-    nextLocation.xTotal += node.x;
-    nextLocation.yTotal += node.y;
-    nextLocation.asnCounts.set(node.asnLabel, (nextLocation.asnCounts.get(node.asnLabel) ?? 0) + 1);
+    nextLocation.count += node.nodeCount;
+    nextLocation.verifiedCount += node.isVerified ? node.nodeCount : 0;
+    nextLocation.xTotal += node.x * node.nodeCount;
+    nextLocation.yTotal += node.y * node.nodeCount;
+    nextLocation.asnCounts.set(node.asnLabel, (nextLocation.asnCounts.get(node.asnLabel) ?? 0) + node.nodeCount);
     locationMap.set(node.locationKey, nextLocation);
 
     const nextAsn =
@@ -1430,9 +1401,9 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
         countries: new Map<string, number>(),
       };
 
-    nextAsn.count += 1;
-    nextAsn.verifiedCount += node.isVerified ? 1 : 0;
-    nextAsn.countries.set(node.countryName, (nextAsn.countries.get(node.countryName) ?? 0) + 1);
+    nextAsn.count += node.nodeCount;
+    nextAsn.verifiedCount += node.isVerified ? node.nodeCount : 0;
+    nextAsn.countries.set(node.countryName, (nextAsn.countries.get(node.countryName) ?? 0) + node.nodeCount);
     asnMap.set(node.asnLabel, nextAsn);
   }
 
@@ -1449,8 +1420,8 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
         countryCode: location.countryCode,
         count: location.count,
         verifiedCount: location.verifiedCount,
-        x: location.xTotal / location.count,
-        y: location.yTotal / location.count,
+        x: getCountryVisualAnchor(location.key)?.x ?? location.xTotal / location.count,
+        y: getCountryVisualAnchor(location.key)?.y ?? location.yTotal / location.count,
         topAsnLabel,
         topAsnCount,
       };
@@ -1486,23 +1457,6 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
     );
 
   return { locations, asns };
-}
-
-function projectWorldNode(lat: number, lon: number) {
-  return {
-    x: 26 + ((lon + 180) / 360) * 332,
-    y: 34 + ((90 - lat) / 180) * 152,
-  };
-}
-
-function buildProjectedPolygonPath(points: readonly { lat: number; lon: number }[]): string {
-  return points
-    .map((point, index) => {
-      const projected = projectWorldNode(point.lat, point.lon);
-      return `${index === 0 ? "M" : "L"} ${projected.x.toFixed(1)} ${projected.y.toFixed(1)}`;
-    })
-    .concat("Z")
-    .join(" ");
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
