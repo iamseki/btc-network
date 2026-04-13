@@ -562,7 +562,7 @@ export function CrawlerLiveSignal({
                   <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.12)" />
                 </g>
 
-                {activeFlowNodes.map((node) => (
+                {activeFlowNodes.map((node, index) => (
                   <g key={`compact-flow-${node.key}`}>
                     <path
                       d={buildFlowArcPath(18, 114, node.x, node.y)}
@@ -572,6 +572,19 @@ export function CrawlerLiveSignal({
                       strokeLinecap="round"
                       className="fx-arc-flow"
                     />
+                    {(() => {
+                      const traveler = projectArcTraveler(18, 114, node.x, node.y, wrapLoopRatio(visualLoopRatio + index * 0.16));
+
+                      return (
+                        <circle
+                          cx={traveler.x}
+                          cy={traveler.y}
+                          r={node.isVerified ? 2.2 : 1.8}
+                          fill={node.isVerified ? "rgba(245,179,1,0.92)" : "rgba(245,239,226,0.82)"}
+                          opacity={0.9}
+                        />
+                      );
+                    })()}
                   </g>
                 ))}
 
@@ -825,7 +838,7 @@ export function CrawlerLiveSignal({
                     <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
                   </g>
 
-                  {activeFlowNodes.map((node) => (
+                  {activeFlowNodes.map((node, index) => (
                     <g key={`flow-${node.key}`}>
                       <path
                         d={buildFlowArcPath(18, 114, node.x, node.y)}
@@ -835,6 +848,26 @@ export function CrawlerLiveSignal({
                         strokeLinecap="round"
                         className="fx-arc-flow"
                       />
+                      {(() => {
+                        const traveler = projectArcTraveler(18, 114, node.x, node.y, wrapLoopRatio(visualLoopRatio + index * 0.16));
+
+                        return (
+                          <g>
+                            <circle
+                              cx={traveler.x}
+                              cy={traveler.y}
+                              r={node.isVerified ? 4 : 3}
+                              fill={node.isVerified ? "rgba(245,179,1,0.2)" : "rgba(245,239,226,0.12)"}
+                            />
+                            <circle
+                              cx={traveler.x}
+                              cy={traveler.y}
+                              r={node.isVerified ? 2.6 : 2.2}
+                              fill={node.isVerified ? "rgba(245,179,1,0.95)" : "rgba(245,239,226,0.86)"}
+                            />
+                          </g>
+                        );
+                      })()}
                     </g>
                   ))}
 
@@ -886,21 +919,6 @@ export function CrawlerLiveSignal({
                           {formatMapBubbleCount(location.count)}
                         </text>
                       </g>
-                    );
-                  })}
-
-                  {[0, 1, 2, 3, 4, 5].map((index) => {
-                    const x = 32 + ((visualLoopRatio * 332 + index * 48) % 332);
-                    const y = 24 + index * 30;
-                    return (
-                      <circle
-                        key={`orbit-${index}`}
-                        cx={x}
-                        cy={y}
-                        r={index % 2 === 0 ? 2.5 : 1.7}
-                        fill="rgba(245,179,1,0.72)"
-                        opacity={0.24 + index * 0.08}
-                      />
                     );
                   })}
                 </g>
@@ -1469,6 +1487,27 @@ function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number
   const controlY = midY - lift;
 
   return `M ${fromX} ${fromY} Q ${midX} ${controlY} ${toX} ${toY}`;
+}
+
+function projectArcTraveler(fromX: number, fromY: number, toX: number, toY: number, progress: number) {
+  const midX = (fromX + toX) / 2;
+  const midY = (fromY + toY) / 2;
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const lift = Math.max(16, Math.min(42, distance * 0.22));
+  const controlY = midY - lift;
+  const t = Math.max(0, Math.min(1, progress));
+  const oneMinusT = 1 - t;
+
+  return {
+    x: oneMinusT * oneMinusT * fromX + 2 * oneMinusT * t * midX + t * t * toX,
+    y: oneMinusT * oneMinusT * fromY + 2 * oneMinusT * t * controlY + t * t * toY,
+  };
+}
+
+function wrapLoopRatio(value: number) {
+  return ((value % 1) + 1) % 1;
 }
 
 function formatClock(valueMs: number): string {
