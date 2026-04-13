@@ -247,7 +247,7 @@ export function RiskApiPage({ client }: RiskApiPageProps) {
         ) : null}
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-          <div className="space-y-5 rounded-[18px] border border-primary/18 bg-[linear-gradient(135deg,rgba(245,179,1,0.14),rgba(13,13,13,0.98)_34%,rgba(7,7,7,0.98)_100%)] p-5 shadow-[0_18px_36px_rgba(0,0,0,0.24)]">
+          <div className="fx-ambient-panel fx-fade-up space-y-5 rounded-[18px] border border-primary/18 p-5 shadow-[0_18px_36px_rgba(0,0,0,0.24)]">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="muted">Preview only</Badge>
               <Badge variant="muted">Web mock</Badge>
@@ -255,18 +255,25 @@ export function RiskApiPage({ client }: RiskApiPageProps) {
             </div>
             <div className="space-y-3">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-primary">
-                2000s control room, modern risk product
+                Quiet product surface, evidence-first story
               </p>
               <div className="space-y-2">
-                <h2 className="max-w-3xl font-serif text-3xl uppercase tracking-[0.04em] text-foreground sm:text-[2.6rem]">
-                  Sell Bitcoin network visibility as a risk API, not a novelty dashboard.
+                <h2 className="max-w-3xl font-serif text-3xl uppercase tracking-[0.04em] text-foreground sm:text-[2.5rem]">
+                  Bitcoin network risk intelligence, packaged as a clean API product.
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                  The landing surface is positioned for exchanges, custody teams, and research desks
-                  that need operational proof: snapshot cadence, concentration pressure, verification
-                  yield, and reproducible evidence for why the network looked risky.
+                  This stays web-only and mocked for now, but the commercial story is clearer:
+                  repeatable snapshots, defensible risk signals, and evidence teams can actually use.
                 </p>
               </div>
+            </div>
+
+            <div className="rounded-[12px] border border-border/75 bg-background/50 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="font-mono uppercase tracking-[0.18em] text-primary">Signal Loop</span>
+                <span>Snapshot cadence over dashboard noise</span>
+              </div>
+              <div className="fx-signal-track mt-3 h-[3px] rounded-full" />
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
@@ -288,40 +295,85 @@ export function RiskApiPage({ client }: RiskApiPageProps) {
           </div>
 
           <div className="space-y-4">
-            {latestDetail ? (
-              <CrawlerLiveSignal detail={latestDetail} playback={playback} variant="hero" />
-            ) : (
-              <PreviewBanner
-                tone="neutral"
-                title="Snapshot replay stays mocked for now"
-                detail="The product page still shows the crawler shape and playback style even when live analytics are not available."
-              />
-            )}
+            <div className="rounded-[16px] border border-border/80 bg-background/74 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    Product posture
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Minimal promises, strong evidence, realistic rollout.
+                  </p>
+                </div>
+                <Badge variant="muted">No fake launch claims</Badge>
+              </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {postureItems.map((item) => (
-                <PostureCard
-                  key={item.title}
-                  icon={item.icon}
-                  title={item.title}
-                  value={item.value}
-                  detail={item.detail}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {postureItems.map((item) => (
+                  <PostureCard
+                    key={item.title}
+                    icon={item.icon}
+                    title={item.title}
+                    value={item.value}
+                    detail={item.detail}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Commercial primitives
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <CommercialMetric
+                  label="Alerting posture"
+                  value="Webhook roadmap"
+                  detail="Start with pull APIs plus incident digests before offering heavier streaming contracts."
                 />
-              ))}
+                <CommercialMetric
+                  label="Latency target"
+                  value="< 90s snapshot publish"
+                  detail="Fast enough for operations and risk review without pretending this is market-data infrastructure."
+                />
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <CodeWindow
-            title="Example Snapshot Contract"
-            eyebrow="Mock response"
-            caption="Use a small, opinionated contract first: snapshot identity, concentration evidence, transport mix, and business-facing scores."
-            code={previewResponse}
-          />
-
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
           <div className="space-y-4">
-            <div className="rounded-[14px] border border-border/80 bg-background/74 p-4">
+            <div className="rounded-[16px] border border-border/80 bg-background/74 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    Evidence snapshot
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Keep the crawler visible, but let it support the product story instead of dominating it.
+                  </p>
+                </div>
+                <Badge variant="muted">{latestRun?.phase ?? "awaiting run"}</Badge>
+              </div>
+
+              <div className="fx-signal-track mt-4 h-[2px] rounded-full" />
+
+              <div className="mt-4">
+                {latestDetail ? (
+                  <div className="fx-float-soft">
+                    <CrawlerLiveSignal detail={latestDetail} playback={playback} variant="hero" />
+                  </div>
+                ) : (
+                  <PreviewBanner
+                    tone="neutral"
+                    title="Snapshot replay stays mocked for now"
+                    detail="The product page still keeps a crawler-shaped evidence panel even when live analytics are unavailable."
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
                 Why teams buy this
               </p>
@@ -331,28 +383,32 @@ export function RiskApiPage({ client }: RiskApiPageProps) {
                 ))}
               </div>
             </div>
+          </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <CommercialMetric
-                label="Alerting posture"
-                value="Webhook roadmap"
-                detail="Plan the first paid surface around pull APIs plus incident-grade webhook digests, not bespoke streaming."
-              />
-              <CommercialMetric
-                label="Latency target"
-                value="< 90s snapshot publish"
-                detail="Good enough for network risk, fast enough for operations, simpler than pretending this is ultra-low-latency market data."
-              />
-              <CommercialMetric
-                label="Historical access"
-                value="Run replay + deltas"
-                detail="Monetize change over time. Historical comparisons are more valuable than one-off pretty charts."
-              />
-              <CommercialMetric
-                label="Proof surface"
-                value="ASN + transport evidence"
-                detail="Scores alone are not defensible. Keep the supporting tables and distributions close to the product contract."
-              />
+          <div className="space-y-4">
+            <CodeWindow
+              title="Example Snapshot Contract"
+              eyebrow="Payload preview"
+              caption="Start small: snapshot identity, concentration evidence, transport mix, and business-facing scores."
+              code={previewResponse}
+            />
+
+            <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Launch shape
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <CommercialMetric
+                  label="Historical access"
+                  value="Run replay + deltas"
+                  detail="Monetize change over time. Historical comparisons carry more value than one-off dashboard screenshots."
+                />
+                <CommercialMetric
+                  label="Proof surface"
+                  value="ASN + transport evidence"
+                  detail="Scores stay close to the tables and distributions that make them credible."
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -391,14 +447,14 @@ function HeroSignalCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-[12px] border border-border/80 bg-background/62 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="rounded-[12px] border border-border/70 bg-background/58 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1.5 font-serif text-[1.85rem] uppercase tracking-[0.05em] text-foreground">
+      <p className="mt-2 font-serif text-[1.8rem] uppercase tracking-[0.04em] text-foreground">
         {value}
       </p>
-      <p className="mt-1 text-[12px] text-muted-foreground">{detail}</p>
+      <p className="mt-1.5 text-[12px] leading-5 text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -415,19 +471,19 @@ function PostureCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-[12px] border border-border/80 bg-background/72 p-3">
-      <div className="flex items-center gap-2">
+    <div className="rounded-[12px] border border-border/75 bg-background/68 p-3">
+      <div className="flex items-center gap-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-primary/18 bg-primary/10 text-primary">
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {title}
           </p>
-          <p className="mt-0.5 font-mono text-sm text-foreground">{value}</p>
+          <p className="mt-1 font-mono text-sm text-foreground">{value}</p>
         </div>
       </div>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{detail}</p>
+      <p className="mt-2.5 text-[12px] leading-5 text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -468,7 +524,7 @@ function CodeWindow({
   code: string;
 }) {
   return (
-    <div className="rounded-[14px] border border-border/80 bg-background/74 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
+    <div className="rounded-[16px] border border-border/80 bg-background/74 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -479,7 +535,7 @@ function CodeWindow({
         <Badge variant="muted">JSON</Badge>
       </div>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">{caption}</p>
-      <div className="mt-4 overflow-x-auto rounded-[10px] border border-border/70 bg-[#050505] p-3">
+      <div className="mt-4 overflow-x-auto rounded-[12px] border border-border/70 bg-[#050505] p-3">
         <pre className="font-mono text-[12px] leading-6 text-primary-strong">{code}</pre>
       </div>
     </div>
@@ -488,11 +544,11 @@ function CodeWindow({
 
 function UseCaseCard({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="rounded-[12px] border border-border/80 bg-background/68 p-3">
+    <div className="rounded-[12px] border border-border/75 bg-background/68 p-3">
       <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
         {title}
       </p>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{detail}</p>
+      <p className="mt-2.5 text-sm leading-6 text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -507,8 +563,8 @@ function CommercialMetric({
   detail: string;
 }) {
   return (
-    <div className="rounded-[12px] border border-border/80 bg-background/70 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+    <div className="rounded-[12px] border border-border/75 bg-background/68 p-3">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
       <p className="mt-1.5 font-mono text-sm text-foreground">{value}</p>

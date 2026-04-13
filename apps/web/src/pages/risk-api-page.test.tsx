@@ -102,9 +102,10 @@ describe("RiskApiPage", () => {
     render(<RiskApiPage client={makeClient()} />);
 
     expect(await screen.findByText("Network Risk API")).toBeTruthy();
-    expect(screen.getByText("Sell Bitcoin network visibility as a risk API, not a novelty dashboard.")).toBeTruthy();
+    expect(screen.getByText("Bitcoin network risk intelligence, packaged as a clean API product.")).toBeTruthy();
     expect(screen.getByText("Preview only")).toBeTruthy();
-    expect(screen.getByText("SLA-Ready Read Path")).toBeTruthy();
+    expect(screen.getByText("Product posture")).toBeTruthy();
+    expect(screen.getByText("Signal Loop")).toBeTruthy();
     expect(screen.getByText("Why teams buy this")).toBeTruthy();
     expect(screen.getByText("Treasury and Custody Risk")).toBeTruthy();
     expect(screen.getByText("Example Snapshot Contract")).toBeTruthy();
@@ -121,7 +122,7 @@ describe("RiskApiPage", () => {
     render(<RiskApiPage client={client} />);
 
     expect(await screen.findByText("Preview is showing mocked commercial framing only")).toBeTruthy();
-    expect(screen.getByText("Sell Bitcoin network visibility as a risk API, not a novelty dashboard.")).toBeTruthy();
+    expect(screen.getByText("Bitcoin network risk intelligence, packaged as a clean API product.")).toBeTruthy();
     expect(screen.getByText("Mocked browser-only commercial surface")).toBeTruthy();
   });
 });

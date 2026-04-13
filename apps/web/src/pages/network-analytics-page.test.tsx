@@ -137,8 +137,8 @@ describe("NetworkAnalyticsPage", () => {
     expect(screen.getByRole("button", { name: "Decentralization Score score explanation" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Eclipse Exposure (Proxy) score explanation" })).toBeTruthy();
     expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
-    expect(screen.getByText("Mission Control")).toBeTruthy();
-    expect(screen.getByText("Product Readout")).toBeTruthy();
+    expect(screen.getByText("Snapshot Signals")).toBeTruthy();
+    expect(screen.getByText("What This Means")).toBeTruthy();
     expect(await screen.findByText("Risk Drivers")).toBeTruthy();
     expect(screen.queryByText("Checkpoint Rail")).toBeNull();
     expect(screen.getByText(/Public home dashboard from the latest read-only crawler snapshot\./i)).toBeTruthy();

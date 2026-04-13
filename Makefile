@@ -41,9 +41,11 @@ MAKEFLAGS += --no-print-directory
 	web-install \
 	desktop-install \
 	web-dev \
+	web-dev-demo \
 	desktop-dev \
 	web-test \
 	web-build \
+	web-build-demo \
 	rust-test \
 	desktop-test \
 	api-test \
@@ -149,6 +151,9 @@ desktop-install: ## Install desktop dependencies with npm ci
 web-dev: ## Run the web frontend in dev mode
 	@npm run dev --prefix apps/web
 
+web-dev-demo: ## Run the web frontend in mock/demo mode with VITE_DEMO_MODE=true
+	@VITE_DEMO_MODE=true npm run dev --prefix apps/web
+
 desktop-dev: ## Run the Tauri desktop app in dev mode
 	@test -x apps/desktop/node_modules/.bin/tauri || (echo "desktop dependencies are missing. Run: make desktop-install" && exit 1)
 	@npm run dev --prefix apps/desktop
@@ -166,6 +171,9 @@ web-test: ## Run frontend tests
 
 web-build: ## Build the web frontend
 	@npm run build --prefix apps/web
+
+web-build-demo: ## Build the web frontend in mock/demo mode with VITE_DEMO_MODE=true
+	@VITE_DEMO_MODE=true npm run build --prefix apps/web
 
 rust-test: ## Run Rust workspace tests
 	@cargo test --workspace --locked
@@ -235,6 +243,7 @@ help: ## Show available commands
 		printf "\nUsage:\n  make <target>\n"; \
 		printf "\nNotes:\n"; \
 		printf "  ARGS=... passes extra CLI flags to wrapper targets such as crawler, cli, api, and postgres-migrate.\n"; \
+		printf "  Demo web mode: use make web-dev-demo for local mocked analytics or make web-build-demo for a demo build.\n"; \
 		printf "  Targets are grouped by section below.\n"; \
 	} \
 	/^##@/ { \

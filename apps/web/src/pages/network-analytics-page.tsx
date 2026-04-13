@@ -355,18 +355,20 @@ export function NetworkAnalyticsPage({
 
             {activePanel === "overview" ? (
               <div className="space-y-6">
-                <section className="rounded-[14px] border border-border/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
+                <section className="fx-ambient-panel rounded-[14px] border border-border/75 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.18)]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                        Mission Control
+                        Snapshot Signals
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Live public dashboard with a retro control-room frame and modern risk evidence.
+                        Live public dashboard with the shortest useful read on the latest crawler window.
                       </p>
                     </div>
                     <Badge variant="muted">{latestRun?.phase ?? "awaiting run"}</Badge>
                   </div>
+
+                  <div className="fx-signal-track mt-4 h-[2px] rounded-full" />
 
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     {signalBusItems.map((item) => (
@@ -524,10 +526,10 @@ export function NetworkAnalyticsPage({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                          Product Readout
+                          What This Means
                         </p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          What this dashboard says in business terms, not just crawler terms.
+                          What this dashboard means in product and risk terms.
                         </p>
                       </div>
                       <Badge variant="muted">Mocked web-first home</Badge>
