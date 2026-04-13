@@ -90,164 +90,20 @@ type AsnInsight = {
   leadCountryName: string;
 };
 
-const WORLD_LANDMASSES = [
-  [
-    { lat: 72, lon: -168 },
-    { lat: 68, lon: -158 },
-    { lat: 63, lon: -150 },
-    { lat: 59, lon: -140 },
-    { lat: 56, lon: -132 },
-    { lat: 52, lon: -128 },
-    { lat: 48, lon: -125 },
-    { lat: 43, lon: -124 },
-    { lat: 36, lon: -121 },
-    { lat: 31, lon: -117 },
-    { lat: 26, lon: -112 },
-    { lat: 22, lon: -106 },
-    { lat: 20, lon: -98 },
-    { lat: 22, lon: -90 },
-    { lat: 27, lon: -83 },
-    { lat: 30, lon: -81 },
-    { lat: 35, lon: -77 },
-    { lat: 40, lon: -73 },
-    { lat: 46, lon: -66 },
-    { lat: 52, lon: -60 },
-    { lat: 58, lon: -64 },
-    { lat: 63, lon: -78 },
-    { lat: 69, lon: -102 },
-    { lat: 73, lon: -132 },
-  ],
-  [
-    { lat: 82, lon: -70 },
-    { lat: 78, lon: -34 },
-    { lat: 72, lon: -18 },
-    { lat: 64, lon: -30 },
-    { lat: 60, lon: -48 },
-    { lat: 67, lon: -62 },
-  ],
-  [
-    { lat: 13, lon: -81 },
-    { lat: 8, lon: -78 },
-    { lat: 4, lon: -75 },
-    { lat: -6, lon: -78 },
-    { lat: -15, lon: -75 },
-    { lat: -23, lon: -71 },
-    { lat: -33, lon: -71 },
-    { lat: -41, lon: -66 },
-    { lat: -52, lon: -69 },
-    { lat: -55, lon: -64 },
-    { lat: -50, lon: -58 },
-    { lat: -38, lon: -55 },
-    { lat: -24, lon: -46 },
-    { lat: -12, lon: -38 },
-    { lat: -1, lon: -47 },
-    { lat: 7, lon: -60 },
-  ],
-  [
-    { lat: 71, lon: -11 },
-    { lat: 65, lon: -7 },
-    { lat: 58, lon: -5 },
-    { lat: 54, lon: -2 },
-    { lat: 50, lon: 2 },
-    { lat: 45, lon: 8 },
-    { lat: 43, lon: 16 },
-    { lat: 46, lon: 24 },
-    { lat: 52, lon: 31 },
-    { lat: 58, lon: 35 },
-    { lat: 64, lon: 33 },
-    { lat: 71, lon: 26 },
-    { lat: 72, lon: 12 },
-  ],
-  [
-    { lat: 58, lon: -8 },
-    { lat: 55, lon: -6 },
-    { lat: 51, lon: -4 },
-    { lat: 50, lon: -6 },
-    { lat: 53, lon: -8 },
-  ],
-  [
-    { lat: 35, lon: -17 },
-    { lat: 33, lon: -5 },
-    { lat: 31, lon: 7 },
-    { lat: 26, lon: 17 },
-    { lat: 18, lon: 27 },
-    { lat: 11, lon: 35 },
-    { lat: 4, lon: 42 },
-    { lat: -6, lon: 44 },
-    { lat: -17, lon: 40 },
-    { lat: -29, lon: 31 },
-    { lat: -35, lon: 21 },
-    { lat: -31, lon: 12 },
-    { lat: -18, lon: 4 },
-    { lat: -4, lon: -4 },
-    { lat: 9, lon: -10 },
-    { lat: 21, lon: -15 },
-    { lat: 29, lon: -14 },
-  ],
-  [
-    { lat: 39, lon: 26 },
-    { lat: 43, lon: 37 },
-    { lat: 50, lon: 50 },
-    { lat: 56, lon: 68 },
-    { lat: 62, lon: 92 },
-    { lat: 66, lon: 118 },
-    { lat: 62, lon: 140 },
-    { lat: 56, lon: 156 },
-    { lat: 48, lon: 162 },
-    { lat: 38, lon: 148 },
-    { lat: 28, lon: 132 },
-    { lat: 22, lon: 120 },
-    { lat: 14, lon: 108 },
-    { lat: 9, lon: 98 },
-    { lat: 8, lon: 86 },
-    { lat: 15, lon: 76 },
-    { lat: 22, lon: 70 },
-    { lat: 28, lon: 63 },
-    { lat: 33, lon: 52 },
-  ],
-  [
-    { lat: -11, lon: 113 },
-    { lat: -16, lon: 127 },
-    { lat: -20, lon: 138 },
-    { lat: -28, lon: 153 },
-    { lat: -36, lon: 148 },
-    { lat: -39, lon: 136 },
-    { lat: -34, lon: 123 },
-    { lat: -24, lon: 114 },
-  ],
-  [
-    { lat: 18, lon: -91 },
-    { lat: 16, lon: -88 },
-    { lat: 14, lon: -86 },
-    { lat: 11, lon: -84 },
-    { lat: 9, lon: -81 },
-    { lat: 8, lon: -78 },
-    { lat: 11, lon: -80 },
-    { lat: 15, lon: -84 },
-  ],
-  [
-    { lat: 37, lon: 138 },
-    { lat: 41, lon: 142 },
-    { lat: 35, lon: 141 },
-    { lat: 31, lon: 135 },
-    { lat: 34, lon: 131 },
-  ],
-  [
-    { lat: -13, lon: 48 },
-    { lat: -16, lon: 50 },
-    { lat: -22, lon: 49 },
-    { lat: -25, lon: 46 },
-    { lat: -18, lon: 45 },
-  ],
-  [
-    { lat: 5, lon: 95 },
-    { lat: 2, lon: 104 },
-    { lat: -3, lon: 112 },
-    { lat: -6, lon: 121 },
-    { lat: -4, lon: 131 },
-    { lat: 1, lon: 124 },
-    { lat: 4, lon: 113 },
-  ],
+const WORLD_MAP_PATHS = [
+  "M 37 50 C 47 42,64 40,79 47 C 90 52,97 60,97 69 C 95 76,88 82,88 89 C 88 94,93 99,103 99 C 113 100,122 96,130 89 C 136 84,138 76,132 70 C 124 62,122 54,128 47 C 120 41,105 41,91 45 C 82 47,77 44,67 40 C 56 37,44 40,37 50 Z",
+  "M 94 96 C 98 98,105 101,110 101 C 116 101,120 98,123 99 C 120 103,116 105,115 110 C 112 112,108 111,104 108 C 102 105,98 101,94 96 Z",
+  "M 128 41 C 136 37,146 39,151 46 C 151 53,147 59,141 61 C 134 62,128 57,126 50 C 125 46,126 43,128 41 Z",
+  "M 118 99 C 126 101,134 104,141 110 C 149 118,153 128,151 137 C 149 145,144 151,138 156 C 134 158,129 156,127 150 C 126 143,129 136,132 130 C 134 124,132 118,128 112 C 124 107,120 104,118 99 Z",
+  "M 185 61 C 191 59,200 60,207 63 C 214 63,220 61,224 63 C 227 67,225 72,220 74 C 215 76,210 76,206 79 C 201 81,196 79,193 75 C 189 73,186 68,185 61 Z",
+  "M 188 60 C 191 58,194 59,195 63 C 193 66,190 67,188 65 C 187 63,187 61,188 60 Z",
+  "M 176 80 C 183 77,192 78,200 81 C 208 85,218 90,224 99 C 230 107,232 117,229 126 C 225 133,218 139,211 140 C 204 140,199 136,196 129 C 192 122,188 116,184 110 C 179 103,176 94,176 80 Z",
+  "M 235 124 C 238 123,241 125,242 129 C 240 132,237 134,235 131 C 234 128,234 126,235 124 Z",
+  "M 216 77 C 225 72,237 72,249 76 C 260 79,273 84,284 90 C 296 96,308 93,317 86 C 326 79,330 70,324 61 C 314 56,301 56,288 61 C 278 66,269 69,262 74 C 255 78,250 84,250 91 C 251 97,258 101,267 101 C 278 101,286 101,291 106 C 290 111,284 113,276 113 C 266 114,258 112,252 108 C 245 103,239 101,233 98 C 226 95,220 89,216 77 Z",
+  "M 317 78 C 320 76,323 77,324 81 C 322 84,319 86,317 84 C 316 82,316 80,317 78 Z",
+  "M 285 110 C 291 108,298 109,304 112 C 301 115,294 116,288 115 C 286 114,285 112,285 110 Z",
+  "M 296 119 C 305 117,317 120,327 126 C 335 132,336 140,329 145 C 321 149,308 149,299 144 C 292 139,291 128,296 119 Z",
+  "M 351 143 C 354 142,356 144,356 147 C 354 149,352 149,351 147 Z",
 ] as const;
 
 type PlaybackSnapshot = {
@@ -668,10 +524,10 @@ export function CrawlerLiveSignal({
                   stroke="rgba(245,239,226,0.1)"
                 />
 
-                {WORLD_LANDMASSES.map((polygon, index) => (
+                {WORLD_MAP_PATHS.map((path, index) => (
                   <path
                     key={`compact-landmass-${index}`}
-                    d={buildProjectedPolygonPath(polygon)}
+                    d={path}
                     fill={index % 2 === 0 ? "rgba(245,239,226,0.06)" : "rgba(245,239,226,0.048)"}
                     stroke="rgba(245,239,226,0.08)"
                     strokeWidth="1"
@@ -901,10 +757,10 @@ export function CrawlerLiveSignal({
                     />
                   ))}
 
-                  {WORLD_LANDMASSES.map((polygon, index) => (
+                  {WORLD_MAP_PATHS.map((path, index) => (
                     <path
                       key={`landmass-${index}`}
-                      d={buildProjectedPolygonPath(polygon)}
+                      d={path}
                       fill={index % 2 === 0 ? "rgba(245,239,226,0.065)" : "rgba(245,239,226,0.052)"}
                       stroke="rgba(245,239,226,0.08)"
                       strokeWidth="1"
@@ -1558,35 +1414,6 @@ function projectWorldNode(lat: number, lon: number) {
     x: 26 + ((lon + 180) / 360) * 332,
     y: 34 + ((90 - lat) / 180) * 152,
   };
-}
-
-function buildProjectedPolygonPath(points: readonly { lat: number; lon: number }[]): string {
-  const projected = points.map((point) => projectWorldNode(point.lat, point.lon));
-
-  if (projected.length < 3) {
-    return projected
-      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
-      .concat("Z")
-      .join(" ");
-  }
-
-  const midpoints = projected.map((point, index) => {
-    const nextPoint = projected[(index + 1) % projected.length]!;
-
-    return {
-      x: (point.x + nextPoint.x) / 2,
-      y: (point.y + nextPoint.y) / 2,
-    };
-  });
-
-  return [
-    `M ${midpoints.at(-1)!.x.toFixed(1)} ${midpoints.at(-1)!.y.toFixed(1)}`,
-    ...projected.map((point, index) => {
-      const midpoint = midpoints[index]!;
-      return `Q ${point.x.toFixed(1)} ${point.y.toFixed(1)} ${midpoint.x.toFixed(1)} ${midpoint.y.toFixed(1)}`;
-    }),
-    "Z",
-  ].join(" ");
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
