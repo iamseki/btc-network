@@ -1,4 +1,13 @@
-import { Activity, Blocks, ChartColumn, Coffee, Network, Radio, Waypoints } from "lucide-react";
+import {
+  Activity,
+  Blocks,
+  ChartColumn,
+  Coffee,
+  Network,
+  Radio,
+  ShieldCheck,
+  Waypoints,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { appPages, type AppPageId } from "./app/page-registry";
@@ -26,6 +35,7 @@ import {
   type NetworkAnalyticsPanel,
 } from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
+import { RiskApiPage } from "./pages/risk-api-page";
 import { getAppClient } from "./lib/api";
 import type {
   AddrResult,
@@ -55,6 +65,7 @@ export function App() {
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
+    "risk-api": ShieldCheck,
     "crawler-runs": Activity,
     "network-analytics": ChartColumn,
     connection: Radio,
@@ -602,6 +613,8 @@ export function App() {
                   showPanelNav={false}
                 />
               ) : null}
+
+              {selectedPage === "risk-api" ? <RiskApiPage client={client} /> : null}
 
               {selectedPage === "connection" ? (
                 <ConnectionPage

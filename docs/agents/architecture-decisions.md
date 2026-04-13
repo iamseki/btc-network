@@ -51,6 +51,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - Do not add crawler analytics Tauri commands in the current slice
 - The plain web runtime remains placeholder-backed only for the single-peer flows that still lack a browser-safe backend
 - The public product home now lives on `Network Analytics` overview; header snapshot preview should route there, not to a duplicate crawler-only surface
+- `Network Risk API` is a web-only mocked commercial preview page for now; do not treat it as a live SLA-backed surface yet
 - The public product home should stay globe-first, keep `Risk Brief` as the secondary companion panel, and use a full-width `Risk Drivers` strip instead of crawler-internal checkpoint rails
 
 ## Frontend Composition Rule
