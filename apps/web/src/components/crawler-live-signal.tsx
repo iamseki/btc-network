@@ -18,6 +18,25 @@ const WORLD_MAP_VIEWBOX_HEIGHT = 651.45282;
 const WORLD_MAP_SCAN_WIDTH = 54;
 const WORLD_MAP_ORIGIN_X = 48;
 const WORLD_MAP_ORIGIN_Y = WORLD_MAP_VIEWBOX_HEIGHT * 0.47;
+const WORLD_COUNTRY_CENTROIDS = new Map(
+  worldMap.layers
+    .map((layer) => {
+      const bounds = computeSvgPathBounds(layer.d);
+
+      if (!bounds) {
+        return null;
+      }
+
+      return [
+        layer.id,
+        {
+          x: (bounds.minX + bounds.maxX) / 2,
+          y: (bounds.minY + bounds.maxY) / 2,
+        },
+      ] as const;
+    })
+    .filter((entry) => entry !== null),
+);
 
 type WorldNodeSeed = {
   lat: number;
@@ -1337,8 +1356,8 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
         countryCode: location.countryCode,
         count: location.count,
         verifiedCount: location.verifiedCount,
-        x: location.xTotal / location.count,
-        y: location.yTotal / location.count,
+        x: WORLD_COUNTRY_CENTROIDS.get(location.key)?.x ?? location.xTotal / location.count,
+        y: WORLD_COUNTRY_CENTROIDS.get(location.key)?.y ?? location.yTotal / location.count,
         topAsnLabel,
         topAsnCount,
       };
@@ -1381,6 +1400,99 @@ function projectWorldNode(lat: number, lon: number) {
     x: ((lon + 180) / 360) * WORLD_MAP_VIEWBOX_WIDTH,
     y: ((90 - lat) / 180) * WORLD_MAP_VIEWBOX_HEIGHT,
   };
+}
+
+function computeSvgPathBounds(pathData: string) {
+  const tokens = pathData.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
+
+  if (!tokens || tokens.length === 0) {
+    return null;
+  }
+
+  let cursor = 0;
+  let command = "";
+  let currentX = 0;
+  let currentY = 0;
+  let startX = 0;
+  let startY = 0;
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  const pushPoint = (x: number, y: number) => {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  };
+
+  while (cursor < tokens.length) {
+    const token = tokens[cursor]!;
+
+    if (/^[a-zA-Z]$/.test(token)) {
+      command = token;
+      cursor += 1;
+
+      if (command === "z" || command === "Z") {
+        currentX = startX;
+        currentY = startY;
+      }
+
+      continue;
+    }
+
+    if (!command) {
+      cursor += 1;
+      continue;
+    }
+
+    switch (command) {
+      case "M":
+      case "L": {
+        const x = Number(tokens[cursor]!);
+        const y = Number(tokens[cursor + 1]!);
+        currentX = x;
+        currentY = y;
+        pushPoint(currentX, currentY);
+
+        if (command === "M") {
+          startX = currentX;
+          startY = currentY;
+          command = "L";
+        }
+
+        cursor += 2;
+        break;
+      }
+      case "m":
+      case "l": {
+        const dx = Number(tokens[cursor]!);
+        const dy = Number(tokens[cursor + 1]!);
+        currentX += dx;
+        currentY += dy;
+        pushPoint(currentX, currentY);
+
+        if (command === "m") {
+          startX = currentX;
+          startY = currentY;
+          command = "l";
+        }
+
+        cursor += 2;
+        break;
+      }
+      default:
+        cursor += 1;
+        break;
+    }
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return null;
+  }
+
+  return { minX, maxX, minY, maxY };
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
