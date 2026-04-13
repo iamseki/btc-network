@@ -407,23 +407,23 @@ export function App() {
               onClick={() => setIsCrawlerPreviewOpen(false)}
             />
             <div
-              role="button"
-              tabIndex={0}
-              aria-label="Open network analytics from snapshot"
-              className={`relative z-10 w-full max-w-5xl cursor-pointer rounded-[12px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] outline-none transform-gpu transition-[opacity,transform,filter] duration-300 ease-out focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`relative z-10 w-full max-w-5xl rounded-[12px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] transform-gpu transition-[opacity,transform,filter] duration-300 ease-out ${
                 isCrawlerPreviewVisible
                   ? "translate-y-0 scale-100 opacity-100 blur-0"
                   : "translate-y-6 scale-[0.96] opacity-0 blur-[6px]"
               }`}
-              onClick={openNetworkAnalyticsFromPreview}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  openNetworkAnalyticsFromPreview();
-                }
-              }}
             >
               <CrawlerLiveSignal detail={latestCrawlerPreview} playback={crawlerPreviewPlayback} />
+              <div className="flex justify-end px-2 pb-2">
+                <button
+                  type="button"
+                  aria-label="Open network analytics from snapshot"
+                  className="inline-flex h-10 items-center rounded-lg border border-primary/25 bg-primary/10 px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary shadow-[0_0_0_1px_rgba(245,158,11,0.10)] transition-colors hover:bg-primary/14"
+                  onClick={openNetworkAnalyticsFromPreview}
+                >
+                  Open Network Analytics
+                </button>
+              </div>
             </div>
           </div>
         ) : null}

@@ -12,39 +12,178 @@ const REPLAY_RESUME_RESET_GAP_MS = PLAYBACK_IDLE_MS;
 const MAX_FUTURE_ANCHOR_DRIFT_MS = 60 * 1000;
 const MAX_PAST_ANCHOR_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-const GLOBE_NODE_SEEDS = [
-  { lat: 56, lon: -122 },
-  { lat: 48, lon: -78 },
-  { lat: 42, lon: -12 },
-  { lat: 34, lon: 18 },
-  { lat: 28, lon: 77 },
-  { lat: 21, lon: 114 },
-  { lat: 12, lon: 103 },
-  { lat: 5, lon: -74 },
-  { lat: -7, lon: -53 },
-  { lat: -16, lon: 28 },
-  { lat: -22, lon: 133 },
-  { lat: -33, lon: 18 },
-  { lat: -35, lon: -58 },
-  { lat: 61, lon: 37 },
-  { lat: 52, lon: 14 },
-  { lat: 40, lon: 139 },
-  { lat: 31, lon: -97 },
-  { lat: 19, lon: -99 },
-  { lat: 14, lon: 121 },
-  { lat: 2, lon: 32 },
-  { lat: -1, lon: 36 },
-  { lat: -12, lon: -77 },
-  { lat: -23, lon: -46 },
-  { lat: 64, lon: -19 },
-  { lat: 59, lon: 18 },
-  { lat: 50, lon: -1 },
-  { lat: 37, lon: -122 },
-  { lat: 35, lon: 51 },
-  { lat: 25, lon: 55 },
-  { lat: -34, lon: 151 },
-  { lat: -26, lon: 28 },
-  { lat: 1, lon: 104 },
+type WorldNodeSeed = {
+  lat: number;
+  lon: number;
+  city: string;
+  countryCode: string;
+  countryName: string;
+  asnLabel: string;
+};
+
+const GLOBE_NODE_SEEDS: readonly WorldNodeSeed[] = [
+  { lat: 56, lon: -122, city: "Seattle", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit" },
+  { lat: 48, lon: -78, city: "Toronto", countryCode: "CA", countryName: "Canada", asnLabel: "Northern Relay" },
+  { lat: 42, lon: -12, city: "Lisbon", countryCode: "PT", countryName: "Portugal", asnLabel: "Atlantic Fiber" },
+  { lat: 34, lon: 18, city: "Tunis", countryCode: "TN", countryName: "Tunisia", asnLabel: "Mediterranean Core" },
+  { lat: 28, lon: 77, city: "Delhi", countryCode: "IN", countryName: "India", asnLabel: "Monsoon Carrier" },
+  { lat: 21, lon: 114, city: "Hong Kong", countryCode: "HK", countryName: "Hong Kong", asnLabel: "Harbour Exchange" },
+  { lat: 12, lon: 103, city: "Bangkok", countryCode: "TH", countryName: "Thailand", asnLabel: "Mekong Transit" },
+  { lat: 5, lon: -74, city: "Bogota", countryCode: "CO", countryName: "Colombia", asnLabel: "Andean Link" },
+  { lat: -7, lon: -53, city: "Brasilia", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit" },
+  { lat: -16, lon: 28, city: "Lusaka", countryCode: "ZM", countryName: "Zambia", asnLabel: "Copper Route" },
+  { lat: -22, lon: 133, city: "Adelaide", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange" },
+  { lat: -33, lon: 18, city: "Cape Town", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone" },
+  { lat: -35, lon: -58, city: "Buenos Aires", countryCode: "AR", countryName: "Argentina", asnLabel: "SouthMesh Transit" },
+  { lat: 61, lon: 37, city: "Moscow", countryCode: "RU", countryName: "Russia", asnLabel: "Volga Networks" },
+  { lat: 52, lon: 14, city: "Berlin", countryCode: "DE", countryName: "Germany", asnLabel: "Atlas Backbone" },
+  { lat: 40, lon: 139, city: "Tokyo", countryCode: "JP", countryName: "Japan", asnLabel: "Kanto Transit" },
+  { lat: 31, lon: -97, city: "Dallas", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit" },
+  { lat: 19, lon: -99, city: "Mexico City", countryCode: "MX", countryName: "Mexico", asnLabel: "Aztec Route" },
+  { lat: 14, lon: 121, city: "Manila", countryCode: "PH", countryName: "Philippines", asnLabel: "Pacific Relay" },
+  { lat: 2, lon: 32, city: "Kampala", countryCode: "UG", countryName: "Uganda", asnLabel: "Equator Net" },
+  { lat: -1, lon: 36, city: "Nairobi", countryCode: "KE", countryName: "Kenya", asnLabel: "Rift Fiber" },
+  { lat: -12, lon: -77, city: "Lima", countryCode: "PE", countryName: "Peru", asnLabel: "Pacific Andes" },
+  { lat: -23, lon: -46, city: "Sao Paulo", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit" },
+  { lat: 64, lon: -19, city: "Reykjavik", countryCode: "IS", countryName: "Iceland", asnLabel: "North Atlantic" },
+  { lat: 59, lon: 18, city: "Stockholm", countryCode: "SE", countryName: "Sweden", asnLabel: "Atlas Backbone" },
+  { lat: 50, lon: -1, city: "London", countryCode: "GB", countryName: "United Kingdom", asnLabel: "Atlas Backbone" },
+  { lat: 37, lon: -122, city: "San Francisco", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit" },
+  { lat: 35, lon: 51, city: "Tehran", countryCode: "IR", countryName: "Iran", asnLabel: "Silk Route" },
+  { lat: 25, lon: 55, city: "Dubai", countryCode: "AE", countryName: "United Arab Emirates", asnLabel: "Gulf Exchange" },
+  { lat: -34, lon: 151, city: "Sydney", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange" },
+  { lat: -26, lon: 28, city: "Johannesburg", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone" },
+  { lat: 1, lon: 104, city: "Singapore", countryCode: "SG", countryName: "Singapore", asnLabel: "Southern Cross Exchange" },
+] as const;
+
+type VisibleMapNode = ReturnType<typeof projectWorldNode> & {
+  key: string;
+  city: string;
+  countryCode: string;
+  countryName: string;
+  locationKey: string;
+  asnLabel: string;
+  isVerified: boolean;
+  isRecent: boolean;
+};
+
+type LocationInsight = {
+  key: string;
+  countryName: string;
+  countryCode: string;
+  count: number;
+  verifiedCount: number;
+  x: number;
+  y: number;
+  topAsnLabel: string;
+  topAsnCount: number;
+};
+
+type AsnInsight = {
+  key: string;
+  label: string;
+  count: number;
+  verifiedCount: number;
+  countryCount: number;
+  leadCountryName: string;
+};
+
+const WORLD_LANDMASSES = [
+  [
+    { lat: 72, lon: -167 },
+    { lat: 63, lon: -150 },
+    { lat: 58, lon: -130 },
+    { lat: 50, lon: -124 },
+    { lat: 44, lon: -124 },
+    { lat: 31, lon: -116 },
+    { lat: 24, lon: -108 },
+    { lat: 20, lon: -98 },
+    { lat: 24, lon: -85 },
+    { lat: 32, lon: -82 },
+    { lat: 41, lon: -70 },
+    { lat: 49, lon: -58 },
+    { lat: 56, lon: -66 },
+    { lat: 63, lon: -82 },
+    { lat: 69, lon: -110 },
+    { lat: 72, lon: -145 },
+  ],
+  [
+    { lat: 82, lon: -70 },
+    { lat: 78, lon: -34 },
+    { lat: 72, lon: -18 },
+    { lat: 64, lon: -30 },
+    { lat: 60, lon: -48 },
+    { lat: 67, lon: -62 },
+  ],
+  [
+    { lat: 12, lon: -81 },
+    { lat: 8, lon: -78 },
+    { lat: 2, lon: -74 },
+    { lat: -10, lon: -76 },
+    { lat: -20, lon: -70 },
+    { lat: -31, lon: -66 },
+    { lat: -41, lon: -64 },
+    { lat: -52, lon: -69 },
+    { lat: -55, lon: -62 },
+    { lat: -48, lon: -54 },
+    { lat: -37, lon: -51 },
+    { lat: -22, lon: -43 },
+    { lat: -10, lon: -37 },
+    { lat: 1, lon: -50 },
+    { lat: 8, lon: -60 },
+  ],
+  [
+    { lat: 71, lon: -10 },
+    { lat: 58, lon: -5 },
+    { lat: 51, lon: 3 },
+    { lat: 44, lon: 12 },
+    { lat: 47, lon: 21 },
+    { lat: 55, lon: 33 },
+    { lat: 63, lon: 40 },
+    { lat: 71, lon: 30 },
+    { lat: 72, lon: 10 },
+  ],
+  [
+    { lat: 35, lon: -17 },
+    { lat: 32, lon: 4 },
+    { lat: 24, lon: 20 },
+    { lat: 12, lon: 33 },
+    { lat: 3, lon: 42 },
+    { lat: -10, lon: 42 },
+    { lat: -22, lon: 32 },
+    { lat: -34, lon: 20 },
+    { lat: -31, lon: 10 },
+    { lat: -16, lon: -1 },
+    { lat: 2, lon: -8 },
+    { lat: 17, lon: -12 },
+    { lat: 28, lon: -16 },
+  ],
+  [
+    { lat: 36, lon: 26 },
+    { lat: 44, lon: 44 },
+    { lat: 52, lon: 62 },
+    { lat: 60, lon: 90 },
+    { lat: 64, lon: 120 },
+    { lat: 58, lon: 148 },
+    { lat: 50, lon: 158 },
+    { lat: 38, lon: 146 },
+    { lat: 27, lon: 124 },
+    { lat: 18, lon: 108 },
+    { lat: 11, lon: 100 },
+    { lat: 7, lon: 85 },
+    { lat: 18, lon: 75 },
+    { lat: 24, lon: 70 },
+    { lat: 30, lon: 56 },
+    { lat: 34, lon: 44 },
+  ],
+  [
+    { lat: -11, lon: 113 },
+    { lat: -19, lon: 145 },
+    { lat: -28, lon: 153 },
+    { lat: -38, lon: 146 },
+    { lat: -36, lon: 126 },
+    { lat: -23, lon: 114 },
+  ],
 ] as const;
 
 type PlaybackSnapshot = {
@@ -280,50 +419,76 @@ export function CrawlerLiveSignal({
 }) {
   const localPlayback = useCrawlerSignalPlayback(detail);
   const signalPlayback = playback ?? localPlayback;
-
-  if (!signalPlayback) {
-    return null;
-  }
-
-  const playbackSnapshot = signalPlayback.playbackSnapshot;
-  const finalSnapshot = signalPlayback.finalSnapshot;
-  const loopRatio = signalPlayback.loopRatio;
-  const visualLoopRatio = signalPlayback.visualLoopRatio;
-  const discoveredNodeCount = clampCount(
-    Math.round(
-      progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * GLOBE_NODE_SEEDS.length,
-    ),
-  );
-  const verifiedNodeCount = Math.min(
-    discoveredNodeCount,
-    clampCount(
-      Math.round(
-        progressRatio(playbackSnapshot.successfulHandshakes, finalSnapshot.successfulHandshakes) *
-          GLOBE_NODE_SEEDS.length,
-      ),
-    ),
-  );
+  const [hoveredLocationKey, setHoveredLocationKey] = useState<string | null>(null);
+  const [pinnedLocationKey, setPinnedLocationKey] = useState<string | null>(null);
+  const playbackSnapshot = signalPlayback?.playbackSnapshot ?? null;
+  const finalSnapshot = signalPlayback?.finalSnapshot ?? null;
+  const loopRatio = signalPlayback?.loopRatio ?? 0;
+  const visualLoopRatio = signalPlayback?.visualLoopRatio ?? 0;
+  const discoveredNodeCount =
+    playbackSnapshot && finalSnapshot
+      ? clampCount(
+          Math.round(
+            progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * GLOBE_NODE_SEEDS.length,
+          ),
+        )
+      : 0;
+  const verifiedNodeCount =
+    playbackSnapshot && finalSnapshot
+      ? Math.min(
+          discoveredNodeCount,
+          clampCount(
+            Math.round(
+              progressRatio(playbackSnapshot.successfulHandshakes, finalSnapshot.successfulHandshakes) *
+                GLOBE_NODE_SEEDS.length,
+            ),
+          ),
+        )
+      : 0;
   const scanX = 26 + visualLoopRatio * 332;
-  const visibleNodes = GLOBE_NODE_SEEDS.map((seed, index) => {
-    if (index >= discoveredNodeCount) {
-      return null;
-    }
+  const visibleNodes: VisibleMapNode[] = playbackSnapshot
+    ? GLOBE_NODE_SEEDS.map((seed, index) => {
+        if (index >= discoveredNodeCount) {
+          return null;
+        }
 
-    const projected = projectWorldNode(seed.lat, seed.lon);
+        const projected = projectWorldNode(seed.lat, seed.lon);
 
-    const isVerified = index < verifiedNodeCount;
-    const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
+        const isVerified = index < verifiedNodeCount;
+        const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
 
-    return {
-      ...projected,
-      key: `${seed.lat}-${seed.lon}`,
-      isVerified,
-      isRecent,
-    };
-  }).filter((node) => node !== null);
+        return {
+          ...projected,
+          key: `${seed.countryCode}-${seed.city}-${seed.lat}-${seed.lon}`,
+          city: seed.city,
+          countryCode: seed.countryCode,
+          countryName: seed.countryName,
+          locationKey: seed.countryCode,
+          asnLabel: seed.asnLabel,
+          isVerified,
+          isRecent,
+        };
+      }).filter((node) => node !== null)
+    : [];
+  const { locations: locationInsights, asns: asnInsights } = summarizeVisibleNodes(visibleNodes);
+  const mapLocations = locationInsights.slice(0, 8);
+  const activeLocationKey = pinnedLocationKey ?? hoveredLocationKey;
+  const activeLocation = activeLocationKey
+    ? locationInsights.find((location) => location.key === activeLocationKey) ?? null
+    : null;
   const activeFlowNodes = visibleNodes.filter((node) => node.isRecent).slice(0, 4);
-  const markers = signalPlayback.markers;
+  const activeLocationTooltipStyle = activeLocation
+    ? {
+        left: `${(((18 + activeLocation.x) / 420) * 100).toFixed(2)}%`,
+        top: `${(((16 + activeLocation.y) / 260) * 100).toFixed(2)}%`,
+        transform:
+          activeLocation.x > 280
+            ? "translate(-100%, calc(-100% - 0.75rem))"
+            : "translate(-12%, calc(-100% - 0.75rem))",
+      }
+    : null;
   const isHero = variant === "hero";
+  const isCompactPreview = variant === "default";
   const shellClass = isHero
     ? "space-y-4"
     : "rounded-[12px] border border-border/80 bg-background/88 p-4 shadow-[0_18px_42px_rgba(0,0,0,0.24)]";
@@ -331,9 +496,184 @@ export function CrawlerLiveSignal({
     ? "rounded-[14px] border border-primary/16 bg-[radial-gradient(circle_at_top,rgba(245,179,1,0.18),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:p-5"
     : "fx-ambient-panel rounded-[12px] border border-border/70 p-4";
   const canvasClass = isHero
-    ? "mt-5 rounded-[10px] border border-primary/16 bg-background/45 p-3 sm:p-4 xl:p-5"
-    : "mt-4 rounded-[10px] border border-border/70 bg-background/52 p-3";
-  const svgClass = isHero ? "h-[320px] w-full sm:h-[360px] xl:h-[420px]" : "h-[240px] w-full";
+    ? "relative mt-5 overflow-hidden rounded-[10px] border border-primary/16 bg-background/45 p-3 sm:p-4 xl:p-5"
+    : "relative mt-4 overflow-hidden rounded-[10px] border border-border/70 bg-background/52 p-3";
+  const mapFrameClass = isHero
+    ? "relative mx-auto aspect-[420/260] w-full max-w-[920px]"
+    : "relative mx-auto aspect-[420/260] w-full max-w-[620px]";
+  const svgClass = "absolute inset-0 h-full w-full";
+
+  useEffect(() => {
+    if (!hoveredLocationKey && !pinnedLocationKey) {
+      return;
+    }
+
+    if (hoveredLocationKey && !locationInsights.some((location) => location.key === hoveredLocationKey)) {
+      setHoveredLocationKey(null);
+    }
+
+    if (pinnedLocationKey && !locationInsights.some((location) => location.key === pinnedLocationKey)) {
+      setPinnedLocationKey(null);
+    }
+  }, [hoveredLocationKey, pinnedLocationKey, locationInsights]);
+
+  if (!signalPlayback || !playbackSnapshot || !finalSnapshot) {
+    return null;
+  }
+
+  const markers = signalPlayback.markers;
+
+  if (isCompactPreview) {
+    return (
+      <section className={shellClass}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
+              Crawler Snapshot
+            </p>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Latest public window, reduced to the shortest useful read.
+            </p>
+          </div>
+          <div className="rounded-[8px] border border-border/70 bg-muted/35 px-3 py-2.5 text-right">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Sweep State
+            </p>
+            <p className="mt-1 font-mono text-sm text-foreground">
+              {signalPlayback.isLive ? "Live" : "Archived"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {formatPhase(playbackSnapshot.phase)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <SignalMetric
+            label="Tracked"
+            value={playbackSnapshot.uniqueNodes.toLocaleString()}
+            detail="Endpoints in the latest snapshot window"
+          />
+          <SignalMetric
+            label="Verified"
+            value={playbackSnapshot.successfulHandshakes.toLocaleString()}
+            detail="Successful handshakes in the latest sweep"
+          />
+          <SignalMetric
+            label="Yield"
+            value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
+            detail={`${playbackSnapshot.scheduledTasks.toLocaleString()} total attempts`}
+          />
+        </div>
+
+        <div className="mt-4 rounded-[10px] border border-border/70 bg-background/62 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Global Sweep
+            </p>
+            <p className="text-[11px] text-muted-foreground">Static preview</p>
+          </div>
+          <div className="mt-3 relative mx-auto aspect-[420/260] w-full max-w-[420px]">
+            <svg
+              viewBox="0 0 420 260"
+              role="img"
+              aria-label="Crawler execution playback across a world route map"
+              className="absolute inset-0 h-full w-full cursor-default"
+            >
+              <defs>
+                <linearGradient id="map-scan-compact" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="rgba(245,179,1,0)" />
+                  <stop offset="45%" stopColor="rgba(245,179,1,0.02)" />
+                  <stop offset="50%" stopColor="rgba(245,179,1,0.12)" />
+                  <stop offset="55%" stopColor="rgba(245,179,1,0.02)" />
+                  <stop offset="100%" stopColor="rgba(245,179,1,0)" />
+                </linearGradient>
+              </defs>
+
+              <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
+
+              <g transform="translate(18 16)">
+                <rect
+                  x="0"
+                  y="0"
+                  width="384"
+                  height="228"
+                  rx="16"
+                  fill="rgba(8,8,8,0.34)"
+                  stroke="rgba(245,239,226,0.1)"
+                />
+
+                {WORLD_LANDMASSES.map((polygon, index) => (
+                  <path
+                    key={`compact-landmass-${index}`}
+                    d={buildProjectedPolygonPath(polygon)}
+                    fill={index % 2 === 0 ? "rgba(245,239,226,0.06)" : "rgba(245,239,226,0.048)"}
+                    stroke="rgba(245,239,226,0.08)"
+                    strokeWidth="1"
+                    strokeLinejoin="round"
+                  />
+                ))}
+
+                <rect x={scanX} y="18" width="22" height="192" fill="url(#map-scan-compact)" opacity="0.9" />
+
+                <g>
+                  <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.9)" />
+                  <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.12)" />
+                </g>
+
+                {activeFlowNodes.map((node) => (
+                  <g key={`compact-flow-${node.key}`}>
+                    <path
+                      d={buildFlowArcPath(18, 114, node.x, node.y)}
+                      fill="none"
+                      stroke={node.isVerified ? "rgba(245,179,1,0.58)" : "rgba(245,239,226,0.22)"}
+                      strokeWidth={node.isVerified ? 1.4 : 1}
+                      strokeLinecap="round"
+                      className="fx-arc-flow"
+                    />
+                  </g>
+                ))}
+
+                {visibleNodes.map((node) => (
+                  <g key={`compact-node-${node.key}`}>
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={node.isRecent ? 3.4 : 2.4}
+                      fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.68)"}
+                      stroke={node.isVerified ? "rgba(255,240,197,0.5)" : "rgba(245,239,226,0.18)"}
+                      strokeWidth="1"
+                    />
+                  </g>
+                ))}
+
+                {mapLocations.map((location) => (
+                  <g key={`compact-location-${location.key}`} transform={`translate(${location.x}, ${location.y})`} aria-hidden="true">
+                    <circle
+                      r={8 + Math.min(4, location.count)}
+                      fill="rgba(245,179,1,0.12)"
+                      stroke="rgba(245,179,1,0.34)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x="0"
+                      y="3.5"
+                      textAnchor="middle"
+                      className="fill-[rgba(245,239,226,0.82)]"
+                      style={{ fontSize: "9px", fontFamily: "monospace", fontWeight: 700 }}
+                    >
+                      {formatMapBubbleCount(location.count)}
+                    </text>
+                  </g>
+                ))}
+              </g>
+            </svg>
+          </div>
+        </div>
+
+      </section>
+    );
+  }
 
   return (
     <section className={shellClass}>
@@ -361,7 +701,7 @@ export function CrawlerLiveSignal({
         </div>
       )}
 
-      <div className={isHero ? "space-y-4" : "mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]"}>
+      <div className={isHero || isCompactPreview ? "mt-5 space-y-4" : "mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]"}>
         <div className={visualPanelClass}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -382,153 +722,340 @@ export function CrawlerLiveSignal({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2 text-right">
-                <SignalPill label="Tracked" value={playbackSnapshot.uniqueNodes} />
-                <SignalPill label="Verified" value={playbackSnapshot.successfulHandshakes} />
-                <SignalPill label="Frontier" value={playbackSnapshot.frontierSize} />
+              <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+                <div className="min-w-[12rem] flex-1 rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-center sm:max-w-[16rem]">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Map Focus
+                  </p>
+                  {activeLocation ? (
+                    <div className="mt-1">
+                      <p className="font-mono text-sm text-foreground">{activeLocation.count} nodes</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {activeLocation.topAsnLabel} · {activeLocation.topAsnCount}
+                      </p>
+                      {pinnedLocationKey ? (
+                        <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-primary/85">Pinned</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-muted-foreground">Hover a country hotspot or click to pin</p>
+                  )}
+                </div>
+                <div className="rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-right">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Sweep State
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-foreground">
+                    {signalPlayback.isLive ? "Live" : "Archived"}
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          <div className={canvasClass}>
-            <svg
-              viewBox="0 0 420 260"
-              role="img"
-              aria-label="Crawler execution playback across a world route map"
-              className={svgClass}
-            >
-              <defs>
-                <linearGradient id="map-scan" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="rgba(245,179,1,0)" />
-                  <stop offset="45%" stopColor="rgba(245,179,1,0.03)" />
-                  <stop offset="50%" stopColor="rgba(245,179,1,0.18)" />
-                  <stop offset="55%" stopColor="rgba(245,179,1,0.03)" />
-                  <stop offset="100%" stopColor="rgba(245,179,1,0)" />
-                </linearGradient>
-              </defs>
+          <div
+            className={canvasClass}
+            onClick={(event) => {
+              const target = event.target as Element;
+              if (target.closest("[data-map-hotspot='true']")) {
+                return;
+              }
 
-              <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
+              setPinnedLocationKey(null);
+              setHoveredLocationKey(null);
+            }}
+            onMouseLeave={() => {
+              if (!pinnedLocationKey) {
+                setHoveredLocationKey(null);
+              }
+            }}
+          >
+            <div className={mapFrameClass}>
+              {activeLocation && activeLocationTooltipStyle ? (
+                <div
+                  className="pointer-events-none absolute z-10 rounded-[8px] border border-primary/20 bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.82))] px-2.5 py-2 shadow-[0_12px_26px_rgba(0,0,0,0.28)]"
+                  style={activeLocationTooltipStyle}
+                >
+                  <p className="font-mono text-[11px] text-foreground">{activeLocation.countryName}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {activeLocation.count} nodes
+                  </p>
+                </div>
+              ) : null}
 
-              <g transform="translate(18 16)">
-                <rect
-                  x="0"
-                  y="0"
-                  width="384"
-                  height="228"
-                  rx="16"
-                  fill="rgba(8,8,8,0.34)"
-                  stroke="rgba(245,239,226,0.1)"
-                />
+              <svg
+                viewBox="0 0 420 260"
+                role="img"
+                aria-label="Crawler execution playback across a world route map"
+                className={`${svgClass} cursor-default`}
+              >
+                <defs>
+                  <linearGradient id="map-scan" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="rgba(245,179,1,0)" />
+                    <stop offset="45%" stopColor="rgba(245,179,1,0.03)" />
+                    <stop offset="50%" stopColor="rgba(245,179,1,0.18)" />
+                    <stop offset="55%" stopColor="rgba(245,179,1,0.03)" />
+                    <stop offset="100%" stopColor="rgba(245,179,1,0)" />
+                  </linearGradient>
+                </defs>
 
-                {[42, 76, 110, 144, 178].map((y) => (
-                  <line
-                    key={`lat-${y}`}
-                    x1="16"
-                    y1={y}
-                    x2="368"
-                    y2={y}
-                    stroke="rgba(245,239,226,0.06)"
-                    strokeWidth="1"
+                <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
+
+                <g transform="translate(18 16)">
+                  <rect
+                    x="0"
+                    y="0"
+                    width="384"
+                    height="228"
+                    rx="16"
+                    fill="rgba(8,8,8,0.34)"
+                    stroke="rgba(245,239,226,0.1)"
                   />
-                ))}
 
-                {[56, 104, 152, 200, 248, 296, 344].map((x) => (
-                  <line
-                    key={`lon-${x}`}
-                    x1={x}
-                    y1="18"
-                    x2={x}
-                    y2="210"
-                    stroke="rgba(245,239,226,0.05)"
-                    strokeWidth="1"
-                  />
-                ))}
-
-                <path
-                  d="M34 70 L78 42 L122 52 L138 86 L112 108 L76 102 L48 90 Z"
-                  fill="rgba(245,239,226,0.06)"
-                />
-                <path
-                  d="M118 118 L138 134 L134 174 L120 204 L104 178 L108 142 Z"
-                  fill="rgba(245,239,226,0.055)"
-                />
-                <path
-                  d="M184 60 L222 52 L248 66 L252 94 L238 106 L232 128 L244 176 L228 196 L204 174 L194 136 L176 104 L180 82 Z"
-                  fill="rgba(245,239,226,0.06)"
-                />
-                <path
-                  d="M238 64 L294 56 L344 76 L350 110 L332 120 L308 114 L278 118 L262 102 L248 90 Z"
-                  fill="rgba(245,239,226,0.05)"
-                />
-                <path
-                  d="M314 166 L340 174 L350 194 L336 206 L308 198 L300 178 Z"
-                  fill="rgba(245,239,226,0.055)"
-                />
-
-                <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
-
-                <g>
-                  <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.92)" />
-                  <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
-                </g>
-
-                {activeFlowNodes.map((node) => (
-                  <g key={`flow-${node.key}`}>
-                    <path
-                      d={buildFlowArcPath(18, 114, node.x, node.y)}
-                      fill="none"
-                      stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
-                      strokeWidth={node.isVerified ? 1.8 : 1.2}
-                      strokeLinecap="round"
-                      className="fx-arc-flow"
+                  {[42, 76, 110, 144, 178].map((y) => (
+                    <line
+                      key={`lat-${y}`}
+                      x1="16"
+                      y1={y}
+                      x2="368"
+                      y2={y}
+                      stroke="rgba(245,239,226,0.06)"
+                      strokeWidth="1"
                     />
-                  </g>
-                ))}
+                  ))}
 
-                {visibleNodes.map((node) => (
-                  <g key={node.key}>
-                    {node.isRecent ? (
+                  {[56, 104, 152, 200, 248, 296, 344].map((x) => (
+                    <line
+                      key={`lon-${x}`}
+                      x1={x}
+                      y1="18"
+                      x2={x}
+                      y2="210"
+                      stroke="rgba(245,239,226,0.05)"
+                      strokeWidth="1"
+                    />
+                  ))}
+
+                  {WORLD_LANDMASSES.map((polygon, index) => (
+                    <path
+                      key={`landmass-${index}`}
+                      d={buildProjectedPolygonPath(polygon)}
+                      fill={index % 2 === 0 ? "rgba(245,239,226,0.065)" : "rgba(245,239,226,0.052)"}
+                      stroke="rgba(245,239,226,0.08)"
+                      strokeWidth="1"
+                      strokeLinejoin="round"
+                    />
+                  ))}
+
+                  <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
+
+                  <g>
+                    <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.92)" />
+                    <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
+                  </g>
+
+                  {activeFlowNodes.map((node) => (
+                    <g key={`flow-${node.key}`}>
+                      <path
+                        d={buildFlowArcPath(18, 114, node.x, node.y)}
+                        fill="none"
+                        stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
+                        strokeWidth={node.isVerified ? 1.8 : 1.2}
+                        strokeLinecap="round"
+                        className="fx-arc-flow"
+                      />
+                    </g>
+                  ))}
+
+                  {visibleNodes.map((node) => (
+                    <g key={node.key}>
+                      {node.isRecent ? (
+                        <circle
+                          cx={node.x}
+                          cy={node.y}
+                          r="9"
+                          className="fx-node-pulse"
+                          fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
+                        />
+                      ) : null}
                       <circle
                         cx={node.x}
                         cy={node.y}
-                        r="9"
-                        className="fx-node-pulse"
-                        fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
+                        r={node.isRecent ? 3.8 : 2.8}
+                        fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.74)"}
+                        stroke={node.isVerified ? "rgba(255,240,197,0.65)" : "rgba(245,239,226,0.26)"}
+                        strokeWidth="1"
                       />
-                    ) : null}
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={node.isRecent ? 3.8 : 2.8}
-                      fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.74)"}
-                      stroke={node.isVerified ? "rgba(255,240,197,0.65)" : "rgba(245,239,226,0.26)"}
-                      strokeWidth="1"
-                    />
-                  </g>
-                ))}
+                    </g>
+                  ))}
 
-                {[0, 1, 2, 3, 4, 5].map((index) => {
-                  const x = 32 + ((visualLoopRatio * 332 + index * 48) % 332);
-                  const y = 24 + index * 30;
-                  return (
-                    <circle
-                      key={`orbit-${index}`}
-                      cx={x}
-                      cy={y}
-                      r={index % 2 === 0 ? 2.5 : 1.7}
-                      fill="rgba(245,179,1,0.72)"
-                      opacity={0.24 + index * 0.08}
-                    />
-                  );
-                })}
-              </g>
-            </svg>
+                  {mapLocations.map((location) => {
+                    const isActive = activeLocation?.key === location.key;
+                    const ringRadius = 9 + Math.min(6, location.count);
+
+                    return (
+                      <g
+                        key={`location-${location.key}`}
+                        transform={`translate(${location.x}, ${location.y})`}
+                        aria-hidden="true"
+                      >
+                        <circle
+                          r={ringRadius}
+                          fill={isActive ? "rgba(245,179,1,0.16)" : "rgba(0,0,0,0.28)"}
+                          stroke={isActive ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.16)"}
+                          strokeWidth="1"
+                        />
+                        <text
+                          x="0"
+                          y="3.5"
+                          textAnchor="middle"
+                          className={isActive ? "fill-primary" : "fill-[rgba(245,239,226,0.82)]"}
+                          style={{ fontSize: "10px", fontFamily: "monospace", fontWeight: 700 }}
+                        >
+                          {formatMapBubbleCount(location.count)}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {[0, 1, 2, 3, 4, 5].map((index) => {
+                    const x = 32 + ((visualLoopRatio * 332 + index * 48) % 332);
+                    const y = 24 + index * 30;
+                    return (
+                      <circle
+                        key={`orbit-${index}`}
+                        cx={x}
+                        cy={y}
+                        r={index % 2 === 0 ? 2.5 : 1.7}
+                        fill="rgba(245,179,1,0.72)"
+                        opacity={0.24 + index * 0.08}
+                      />
+                    );
+                  })}
+                </g>
+              </svg>
+
+              {mapLocations.map((location) => (
+                <button
+                  key={`hotspot-${location.key}`}
+                type="button"
+                data-map-hotspot="true"
+                aria-label={`Show node count for ${location.countryName}`}
+                className="absolute z-10 h-10 w-10 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border border-transparent bg-transparent outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+                style={{
+                  left: `${(((18 + location.x) / 420) * 100).toFixed(2)}%`,
+                  top: `${(((16 + location.y) / 260) * 100).toFixed(2)}%`,
+                }}
+                  onMouseEnter={() => setHoveredLocationKey(location.key)}
+                  onMouseMove={() => setHoveredLocationKey(location.key)}
+                  onMouseLeave={() => {
+                    if (!pinnedLocationKey) {
+                      setHoveredLocationKey(null);
+                    }
+                  }}
+                  onFocus={() => setHoveredLocationKey(location.key)}
+                  onBlur={() => {
+                    if (!pinnedLocationKey) {
+                      setHoveredLocationKey(null);
+                    }
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPinnedLocationKey((current) => (current === location.key ? null : location.key));
+                    setHoveredLocationKey(location.key);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-[10px] border border-border/70 bg-background/68 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Top Locations
+                </p>
+                <p className="font-mono text-[10px] text-muted-foreground">
+                  Hover map to inspect
+                </p>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {locationInsights.slice(0, 5).map((location) => (
+                  <button
+                    key={location.key}
+                    type="button"
+                    className={
+                      activeLocation?.key === location.key
+                        ? "flex items-center justify-between gap-3 rounded-[8px] border border-primary/25 bg-primary/10 px-3 py-2 text-left"
+                        : "flex items-center justify-between gap-3 rounded-[8px] border border-border/70 bg-muted/20 px-3 py-2 text-left"
+                    }
+                    onMouseEnter={() => setHoveredLocationKey(location.key)}
+                    onMouseMove={() => setHoveredLocationKey(location.key)}
+                    onFocus={() => setHoveredLocationKey(location.key)}
+                    onMouseLeave={() => {
+                      if (!pinnedLocationKey) {
+                        setHoveredLocationKey(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!pinnedLocationKey) {
+                        setHoveredLocationKey(null);
+                      }
+                    }}
+                    onClick={() => {
+                      setPinnedLocationKey((current) => (current === location.key ? null : location.key));
+                      setHoveredLocationKey(location.key);
+                    }}
+                  >
+                    <div>
+                      <p className="font-mono text-[11px] text-foreground">{location.countryName}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {location.topAsnLabel}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-sm text-foreground">{location.count}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {location.verifiedCount} verified
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[10px] border border-border/70 bg-background/68 p-3">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Top ASNs
+              </p>
+              <div className="mt-3 grid gap-2">
+                {asnInsights.slice(0, 5).map((asn) => (
+                  <div
+                    key={asn.key}
+                    className="flex items-center justify-between gap-3 rounded-[8px] border border-border/70 bg-muted/20 px-3 py-2"
+                  >
+                    <div>
+                      <p className="font-mono text-[11px] text-foreground">{asn.label}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Strongest footprint in {asn.leadCountryName}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-sm text-foreground">{asn.count}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {asn.countryCount} countries
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           {isHero ? null : <div className="fx-signal-track mt-4 h-[2px] rounded-full" />}
         </div>
 
-        {isHero ? null : (
+        {isHero || isCompactPreview ? null : (
           <div className="space-y-4">
             <SignalMetric
               label="Verification Yield"
@@ -716,17 +1243,6 @@ function hashSeed(value: string): number {
   return hash;
 }
 
-function SignalPill({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[6px] border border-border/70 bg-background/60 px-2.5 py-2">
-      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 font-mono text-sm text-foreground">{value}</p>
-    </div>
-  );
-}
-
 function SignalMetric({
   label,
   value,
@@ -855,11 +1371,138 @@ function clampCount(value: number): number {
   return Math.max(1, Math.min(GLOBE_NODE_SEEDS.length, value));
 }
 
+function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
+  locations: LocationInsight[];
+  asns: AsnInsight[];
+} {
+  const locationMap = new Map<
+    string,
+    {
+      key: string;
+      countryName: string;
+      countryCode: string;
+      count: number;
+      verifiedCount: number;
+      xTotal: number;
+      yTotal: number;
+      asnCounts: Map<string, number>;
+    }
+  >();
+  const asnMap = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      count: number;
+      verifiedCount: number;
+      countries: Map<string, number>;
+    }
+  >();
+
+  for (const node of visibleNodes) {
+    const nextLocation =
+      locationMap.get(node.locationKey) ??
+      {
+        key: node.locationKey,
+        countryName: node.countryName,
+        countryCode: node.countryCode,
+        count: 0,
+        verifiedCount: 0,
+        xTotal: 0,
+        yTotal: 0,
+        asnCounts: new Map<string, number>(),
+      };
+
+    nextLocation.count += 1;
+    nextLocation.verifiedCount += node.isVerified ? 1 : 0;
+    nextLocation.xTotal += node.x;
+    nextLocation.yTotal += node.y;
+    nextLocation.asnCounts.set(node.asnLabel, (nextLocation.asnCounts.get(node.asnLabel) ?? 0) + 1);
+    locationMap.set(node.locationKey, nextLocation);
+
+    const nextAsn =
+      asnMap.get(node.asnLabel) ??
+      {
+        key: node.asnLabel,
+        label: node.asnLabel,
+        count: 0,
+        verifiedCount: 0,
+        countries: new Map<string, number>(),
+      };
+
+    nextAsn.count += 1;
+    nextAsn.verifiedCount += node.isVerified ? 1 : 0;
+    nextAsn.countries.set(node.countryName, (nextAsn.countries.get(node.countryName) ?? 0) + 1);
+    asnMap.set(node.asnLabel, nextAsn);
+  }
+
+  const locations = [...locationMap.values()]
+    .map((location) => {
+      const [topAsnLabel, topAsnCount] =
+        [...location.asnCounts.entries()].sort(
+          (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+        )[0] ?? ["Unknown ASN", 0];
+
+      return {
+        key: location.key,
+        countryName: location.countryName,
+        countryCode: location.countryCode,
+        count: location.count,
+        verifiedCount: location.verifiedCount,
+        x: location.xTotal / location.count,
+        y: location.yTotal / location.count,
+        topAsnLabel,
+        topAsnCount,
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        right.verifiedCount - left.verifiedCount ||
+        left.countryName.localeCompare(right.countryName),
+    );
+
+  const asns = [...asnMap.values()]
+    .map((asn) => {
+      const [leadCountryName] =
+        [...asn.countries.entries()].sort(
+          (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+        )[0] ?? ["Unknown region", 0];
+
+      return {
+        key: asn.key,
+        label: asn.label,
+        count: asn.count,
+        verifiedCount: asn.verifiedCount,
+        countryCount: asn.countries.size,
+        leadCountryName,
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        right.verifiedCount - left.verifiedCount ||
+        left.label.localeCompare(right.label),
+    );
+
+  return { locations, asns };
+}
+
 function projectWorldNode(lat: number, lon: number) {
   return {
     x: 26 + ((lon + 180) / 360) * 332,
     y: 34 + ((90 - lat) / 180) * 152,
   };
+}
+
+function buildProjectedPolygonPath(points: readonly { lat: number; lon: number }[]): string {
+  return points
+    .map((point, index) => {
+      const projected = projectWorldNode(point.lat, point.lon);
+      return `${index === 0 ? "M" : "L"} ${projected.x.toFixed(1)} ${projected.y.toFixed(1)}`;
+    })
+    .concat("Z")
+    .join(" ");
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
@@ -889,6 +1532,18 @@ function formatDuration(valueMs: number): string {
 
 function formatPercent(value: number): string {
   return (Math.max(0, Math.min(1, value)) * 100).toFixed(1);
+}
+
+function formatMapBubbleCount(value: number): string {
+  if (value < 1000) {
+    return value.toString();
+  }
+
+  if (value < 1_000_000) {
+    return `${Math.round(value / 1000)}k`;
+  }
+
+  return `${Math.round(value / 1_000_000)}m`;
 }
 
 function formatPhase(value: string): string {
