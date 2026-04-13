@@ -3,6 +3,7 @@ import { Activity } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+import worldMap from "@/lib/maps/world-low-res.json";
 
 const PLAYBACK_IDLE_MS = 15 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
@@ -90,54 +91,47 @@ type AsnInsight = {
   leadCountryName: string;
 };
 
-const WORLD_MAP_PATHS = [
-  "M 34 50 C 44 40,61 37,79 43 C 93 46,102 55,104 65 C 104 72,100 80,92 86 C 88 91,89 97,97 101 C 108 105,121 103,130 95 C 137 89,141 80,139 71 C 136 63,129 57,128 49 C 119 43,104 41,92 43 C 81 45,73 40,62 37 C 50 35,40 40,34 50 Z",
-  "M 94 96 C 98 98,105 101,110 101 C 116 101,120 98,123 99 C 120 103,116 105,115 110 C 112 112,108 111,104 108 C 102 105,98 101,94 96 Z",
-  "M 128 41 C 136 37,146 39,151 46 C 151 53,147 59,141 61 C 134 62,128 57,126 50 C 125 46,126 43,128 41 Z",
-  "M 118 99 C 126 101,136 106,143 113 C 149 122,152 133,150 143 C 147 151,142 157,136 160 C 131 161,128 157,126 149 C 124 141,126 133,129 126 C 131 118,128 110,122 104 C 120 102,119 100,118 99 Z",
-  "M 183 62 C 189 58,198 58,206 61 C 213 61,220 60,225 63 C 227 67,225 72,220 75 C 215 77,209 77,205 80 C 200 82,194 79,190 75 C 186 72,183 68,183 62 Z",
-  "M 188 60 C 191 58,194 59,195 63 C 193 66,190 67,188 65 C 187 63,187 61,188 60 Z",
-  "M 175 80 C 183 76,193 77,201 81 C 209 86,219 92,225 102 C 229 111,230 121,227 131 C 223 139,216 145,209 146 C 202 146,196 141,193 133 C 189 125,186 118,182 110 C 177 103,174 93,175 80 Z",
-  "M 235 124 C 238 123,241 125,242 129 C 240 132,237 134,235 131 C 234 128,234 126,235 124 Z",
-  "M 214 77 C 223 71,236 70,250 74 C 262 77,276 82,288 88 C 301 95,312 92,321 84 C 329 77,332 68,327 60 C 318 54,304 53,290 58 C 279 62,268 67,260 72 C 252 77,247 84,247 92 C 249 99,257 103,267 103 C 278 104,287 104,293 109 C 292 114,286 117,277 117 C 266 118,257 115,250 111 C 242 106,235 103,229 100 C 221 96,215 89,214 77 Z",
-  "M 317 78 C 320 76,323 77,324 81 C 322 84,319 86,317 84 C 316 82,316 80,317 78 Z",
-  "M 285 110 C 291 108,298 109,304 112 C 301 115,294 116,288 115 C 286 114,285 112,285 110 Z",
-  "M 294 120 C 303 116,316 117,327 123 C 336 129,339 139,334 147 C 327 153,315 154,304 150 C 296 146,292 137,294 120 Z",
-  "M 192 64 C 194 62,197 62,199 64 C 199 67,197 69,194 69 C 192 68,191 66,192 64 Z",
-  "M 238 124 C 240 122,243 122,244 125 C 244 128,242 130,239 130 C 237 129,237 126,238 124 Z",
-  "M 351 143 C 354 142,356 144,356 147 C 354 149,352 149,351 147 Z",
-] as const;
-const WORLD_COUNTRY_VISUAL_ANCHORS: Record<string, { lat: number; lon: number }> = {
-  ar: { lat: -38, lon: -64 },
-  au: { lat: -24, lon: 134 },
-  br: { lat: -10, lon: -55 },
-  ca: { lat: 57, lon: -106 },
-  cl: { lat: -34, lon: -71 },
-  co: { lat: 4, lon: -73 },
-  gb: { lat: 54, lon: -2 },
-  de: { lat: 51, lon: 10 },
-  hk: { lat: 22.3, lon: 114.2 },
-  id: { lat: -2, lon: 118 },
-  in: { lat: 22, lon: 79 },
-  is: { lat: 65, lon: -19 },
-  ir: { lat: 32, lon: 54 },
-  jp: { lat: 37, lon: 138 },
-  ke: { lat: 0.2, lon: 37.8 },
-  mx: { lat: 23, lon: -102 },
-  nz: { lat: -41, lon: 173 },
-  pe: { lat: -9, lon: -75 },
-  ph: { lat: 13, lon: 122 },
-  pt: { lat: 39.5, lon: -8 },
-  ru: { lat: 60, lon: 90 },
-  sg: { lat: 1.3, lon: 104 },
-  se: { lat: 62, lon: 15 },
-  th: { lat: 15, lon: 101 },
-  tn: { lat: 34, lon: 9 },
-  ug: { lat: 1.5, lon: 32.4 },
-  us: { lat: 39, lon: -98 },
-  ae: { lat: 24.3, lon: 54.5 },
-  za: { lat: -29, lon: 24 },
-  zm: { lat: -13.5, lon: 27.8 },
+const WORLD_MAP_VIEWBOX = worldMap.viewBox;
+const WORLD_MAP_LAYER_INDEX = new Map(
+  worldMap.layers.map((layer) => [layer.id.toLowerCase(), layer]),
+);
+const WORLD_MAP_FRAME = {
+  x: 10,
+  y: 10,
+  width: 364,
+  height: 208,
+} as const;
+const WORLD_COUNTRY_VISUAL_ANCHORS: Record<string, { x: number; y: number }> = {
+  ae: { x: 252, y: 116 },
+  ar: { x: 119, y: 185 },
+  au: { x: 321, y: 186 },
+  br: { x: 124, y: 151 },
+  ca: { x: 82, y: 58 },
+  cl: { x: 102, y: 174 },
+  co: { x: 96, y: 130 },
+  de: { x: 193, y: 82 },
+  gb: { x: 181, y: 74 },
+  hk: { x: 318, y: 118 },
+  id: { x: 317, y: 161 },
+  in: { x: 271, y: 119 },
+  ir: { x: 242, y: 101 },
+  is: { x: 159, y: 48 },
+  jp: { x: 343, y: 100 },
+  ke: { x: 223, y: 151 },
+  mx: { x: 67, y: 110 },
+  nz: { x: 351, y: 208 },
+  pe: { x: 102, y: 151 },
+  ph: { x: 338, y: 131 },
+  pt: { x: 172, y: 90 },
+  ru: { x: 268, y: 56 },
+  se: { x: 208, y: 54 },
+  sg: { x: 319, y: 154 },
+  th: { x: 305, y: 128 },
+  tn: { x: 201, y: 106 },
+  ug: { x: 218, y: 145 },
+  us: { x: 75, y: 84 },
+  za: { x: 216, y: 194 },
+  zm: { x: 216, y: 173 },
 };
 
 type PlaybackSnapshot = {
@@ -406,7 +400,7 @@ export function CrawlerLiveSignal({
           return null;
         }
 
-        const projected = projectWorldNode(seed.lat, seed.lon);
+        const projected = projectWorldNode(seed);
 
         const isVerified = index < verifiedNodeCount;
         const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
@@ -558,16 +552,44 @@ export function CrawlerLiveSignal({
                   stroke="rgba(245,239,226,0.1)"
                 />
 
-                {WORLD_MAP_PATHS.map((path, index) => (
-                  <path
-                    key={`compact-landmass-${index}`}
-                    d={path}
-                    fill={index % 2 === 0 ? "rgba(245,239,226,0.06)" : "rgba(245,239,226,0.048)"}
-                    stroke="rgba(245,239,226,0.08)"
-                    strokeWidth="1"
-                    strokeLinejoin="round"
-                  />
-                ))}
+                <svg
+                  x={WORLD_MAP_FRAME.x}
+                  y={WORLD_MAP_FRAME.y}
+                  width={WORLD_MAP_FRAME.width}
+                  height={WORLD_MAP_FRAME.height}
+                  viewBox={WORLD_MAP_VIEWBOX}
+                  preserveAspectRatio="xMidYMid meet"
+                  aria-hidden="true"
+                >
+                  {worldMap.layers.map((layer) => (
+                    <path
+                      key={`compact-landmass-${layer.id}`}
+                      d={layer.d}
+                      fill="rgba(245,239,226,0.05)"
+                      stroke="rgba(245,239,226,0.075)"
+                      strokeWidth="0.7"
+                      strokeLinejoin="round"
+                    />
+                  ))}
+                  {mapLocations.map((location) => {
+                    const layer = WORLD_MAP_LAYER_INDEX.get(location.countryCode);
+
+                    if (!layer) {
+                      return null;
+                    }
+
+                    return (
+                      <path
+                        key={`compact-tracked-${location.key}`}
+                        d={layer.d}
+                        fill="rgba(245,179,1,0.055)"
+                        stroke="rgba(245,179,1,0.14)"
+                        strokeWidth="0.9"
+                        strokeLinejoin="round"
+                      />
+                    );
+                  })}
+                </svg>
 
                 <rect x={scanX} y="18" width="22" height="192" fill="url(#map-scan-compact)" opacity="0.9" />
 
@@ -791,16 +813,46 @@ export function CrawlerLiveSignal({
                     />
                   ))}
 
-                  {WORLD_MAP_PATHS.map((path, index) => (
-                    <path
-                      key={`landmass-${index}`}
-                      d={path}
-                      fill={index % 2 === 0 ? "rgba(245,239,226,0.065)" : "rgba(245,239,226,0.052)"}
-                      stroke="rgba(245,239,226,0.08)"
-                      strokeWidth="1"
-                      strokeLinejoin="round"
-                    />
-                  ))}
+                  <svg
+                    x={WORLD_MAP_FRAME.x}
+                    y={WORLD_MAP_FRAME.y}
+                    width={WORLD_MAP_FRAME.width}
+                    height={WORLD_MAP_FRAME.height}
+                    viewBox={WORLD_MAP_VIEWBOX}
+                    preserveAspectRatio="xMidYMid meet"
+                    aria-hidden="true"
+                  >
+                    {worldMap.layers.map((layer) => (
+                      <path
+                        key={`landmass-${layer.id}`}
+                        d={layer.d}
+                        fill="rgba(245,239,226,0.055)"
+                        stroke="rgba(245,239,226,0.075)"
+                        strokeWidth="0.8"
+                        strokeLinejoin="round"
+                      />
+                    ))}
+                    {locationInsights.map((location) => {
+                      const layer = WORLD_MAP_LAYER_INDEX.get(location.countryCode);
+
+                      if (!layer) {
+                        return null;
+                      }
+
+                      const isActive = activeLocation?.key === location.key;
+
+                      return (
+                        <path
+                          key={`tracked-${location.key}`}
+                          d={layer.d}
+                          fill={isActive ? "rgba(245,179,1,0.1)" : "rgba(245,179,1,0.045)"}
+                          stroke={isActive ? "rgba(245,179,1,0.28)" : "rgba(245,179,1,0.12)"}
+                          strokeWidth={isActive ? "1" : "0.9"}
+                          strokeLinejoin="round"
+                        />
+                      );
+                    })}
+                  </svg>
 
                   <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
 
@@ -1443,17 +1495,48 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
   return { locations, asns };
 }
 
-function projectWorldNode(lat: number, lon: number) {
+function projectWorldNode(seed: WorldNodeSeed) {
+  const anchor = getCountryVisualAnchor(seed.countryCode) ?? fallbackCountryVisualAnchor(seed.lat, seed.lon);
+  const offset = getCountryNodeOffset(seed);
+
   return {
-    x: 26 + ((lon + 180) / 360) * 332,
-    y: 34 + ((90 - lat) / 180) * 152,
+    x: anchor.x + offset.x,
+    y: anchor.y + offset.y,
   };
 }
 
 function getCountryVisualAnchor(countryCode: string) {
   const anchor = WORLD_COUNTRY_VISUAL_ANCHORS[countryCode];
 
-  return anchor ? projectWorldNode(anchor.lat, anchor.lon) : null;
+  return anchor ?? null;
+}
+
+function fallbackCountryVisualAnchor(lat: number, lon: number) {
+  return {
+    x: WORLD_MAP_FRAME.x + ((lon + 180) / 360) * WORLD_MAP_FRAME.width,
+    y: WORLD_MAP_FRAME.y + ((90 - lat) / 180) * WORLD_MAP_FRAME.height,
+  };
+}
+
+function getCountryNodeOffset(seed: WorldNodeSeed) {
+  const hash = hashString(`${seed.countryCode}:${seed.city}:${seed.asnLabel}`);
+  const angle = ((hash % 360) * Math.PI) / 180;
+  const radius = 2.5 + ((hash >> 8) % 8);
+
+  return {
+    x: Math.cos(angle) * radius,
+    y: Math.sin(angle) * radius * 0.72,
+  };
+}
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
