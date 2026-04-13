@@ -101,6 +101,7 @@ Run the smallest relevant scope while working. Run the broader gate before finis
 - Allowed PR title types are `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, and `build`
 - CI validates PR titles against that semantic pattern; scope is recommended but optional
 - Developers may opt into the repo-local `commit-msg` hook with `make setup-git-hooks` to validate commit subjects locally
+- Never commit or push directly to `main`; verify `git branch --show-current` before `git commit` or `git push`, and switch to a feature branch first if needed
 - If an `implementation-plan.md` exists, keep its progress tracker aligned with the active branch or PR when the work spans multiple commits or PRs
 - When work is being done on a dedicated implementation branch, open the corresponding PR or update the existing PR before treating the task as complete unless the user explicitly says not to
 - Open PRs as ready for review by default; use draft only when the user explicitly asks for a draft PR or the work is knowingly incomplete
