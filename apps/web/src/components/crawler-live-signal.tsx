@@ -18,6 +18,24 @@ const WORLD_MAP_VIEWBOX_HEIGHT = 651.45282;
 const WORLD_MAP_SCAN_WIDTH = 54;
 const WORLD_MAP_ORIGIN_X = 48;
 const WORLD_MAP_ORIGIN_Y = WORLD_MAP_VIEWBOX_HEIGHT * 0.47;
+const WORLD_COUNTRY_VISUAL_ANCHORS = new Map(
+  Object.entries({
+    ar: { lat: -38, lon: -64 },
+    au: { lat: -25, lon: 134 },
+    br: { lat: -10, lon: -54 },
+    ca: { lat: 57, lon: -106 },
+    cl: { lat: -35, lon: -71 },
+    gb: { lat: 54, lon: -2 },
+    id: { lat: -2, lon: 118 },
+    in: { lat: 22, lon: 79 },
+    jp: { lat: 37, lon: 138 },
+    mx: { lat: 23, lon: -102 },
+    nz: { lat: -41, lon: 174 },
+    ru: { lat: 60, lon: 90 },
+    us: { lat: 39, lon: -98 },
+    za: { lat: -29, lon: 24 },
+  }).map(([countryCode, anchor]) => [countryCode, projectWorldNode(anchor.lat, anchor.lon)]),
+);
 const WORLD_COUNTRY_CENTROIDS = new Map(
   worldMap.layers
     .map((layer) => {
@@ -1356,8 +1374,14 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
         countryCode: location.countryCode,
         count: location.count,
         verifiedCount: location.verifiedCount,
-        x: WORLD_COUNTRY_CENTROIDS.get(location.key)?.x ?? location.xTotal / location.count,
-        y: WORLD_COUNTRY_CENTROIDS.get(location.key)?.y ?? location.yTotal / location.count,
+        x:
+          WORLD_COUNTRY_VISUAL_ANCHORS.get(location.key)?.x ??
+          WORLD_COUNTRY_CENTROIDS.get(location.key)?.x ??
+          location.xTotal / location.count,
+        y:
+          WORLD_COUNTRY_VISUAL_ANCHORS.get(location.key)?.y ??
+          WORLD_COUNTRY_CENTROIDS.get(location.key)?.y ??
+          location.yTotal / location.count,
         topAsnLabel,
         topAsnCount,
       };
