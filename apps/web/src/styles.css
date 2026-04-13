@@ -144,6 +144,17 @@
   .fx-float-soft {
     animation: fx-float-soft 6s ease-in-out infinite;
   }
+
+  .fx-arc-flow {
+    stroke-dasharray: 6 10;
+    animation: fx-arc-flow 2.8s linear infinite;
+  }
+
+  .fx-node-pulse {
+    animation: fx-node-pulse 2.2s ease-out infinite;
+    transform-origin: center;
+    transform-box: fill-box;
+  }
 }
 
 @keyframes fx-ambient-pan {
@@ -192,8 +203,34 @@
   }
 }
 
+@keyframes fx-arc-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+@keyframes fx-node-pulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.9);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fx-ambient-panel,
+  .fx-arc-flow,
+  .fx-node-pulse,
   .fx-signal-track::after,
   .fx-fade-up,
   .fx-float-soft {

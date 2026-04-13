@@ -324,6 +324,7 @@ export function CrawlerLiveSignal({
       isRecent,
     };
   }).filter((node) => node !== null);
+  const activeFlowNodes = visibleNodes.filter((node) => node.isRecent).slice(0, 4);
   const markers = signalPlayback.markers;
   const isHero = variant === "hero";
   const shellClass = isHero
@@ -505,6 +506,24 @@ export function CrawlerLiveSignal({
                   />
                 </g>
 
+                <g>
+                  <circle cx="170" cy="122" r="6.5" fill="rgba(245,179,1,0.92)" />
+                  <circle cx="170" cy="122" r="13" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
+                </g>
+
+                {activeFlowNodes.map((node) => (
+                  <g key={`flow-${node.key}`}>
+                    <path
+                      d={buildFlowArcPath(170, 122, node.x, node.y)}
+                      fill="none"
+                      stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
+                      strokeWidth={node.isVerified ? 1.8 : 1.2}
+                      strokeLinecap="round"
+                      className="fx-arc-flow"
+                    />
+                  </g>
+                ))}
+
                 {visibleNodes.map((node) => (
                   <g key={node.key}>
                     {node.isRecent ? (
@@ -512,6 +531,7 @@ export function CrawlerLiveSignal({
                         cx={node.x}
                         cy={node.y}
                         r="9"
+                        className="fx-node-pulse"
                         fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
                       />
                     ) : null}
@@ -886,6 +906,18 @@ function projectNode(lat: number, lon: number, rotationDeg: number) {
     y: 130 - Math.sin(latRad) * 96,
     visible: horizon >= -0.14,
   };
+}
+
+function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
+  const midX = (fromX + toX) / 2;
+  const midY = (fromY + toY) / 2;
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const lift = Math.max(16, Math.min(42, distance * 0.22));
+  const controlY = midY - lift;
+
+  return `M ${fromX} ${fromY} Q ${midX} ${controlY} ${toX} ${toY}`;
 }
 
 function formatClock(valueMs: number): string {
