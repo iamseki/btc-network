@@ -21,17 +21,17 @@ const WORLD_MAP_ORIGIN_Y = WORLD_MAP_VIEWBOX_HEIGHT * 0.47;
 const WORLD_COUNTRY_CENTROIDS = new Map(
   worldMap.layers
     .map((layer) => {
-      const anchor = computeSvgPathAnchor(layer.d);
+      const bounds = computeSvgPathBounds(layer.d);
 
-      if (!anchor) {
+      if (!bounds) {
         return null;
       }
 
       return [
         layer.id,
         {
-          x: anchor.x,
-          y: anchor.y,
+          x: (bounds.minX + bounds.maxX) / 2,
+          y: (bounds.minY + bounds.maxY) / 2,
         },
       ] as const;
     })
@@ -1402,7 +1402,7 @@ function projectWorldNode(lat: number, lon: number) {
   };
 }
 
-function computeSvgPathAnchor(pathData: string) {
+function computeSvgPathBounds(pathData: string) {
   const tokens = pathData.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
 
   if (!tokens || tokens.length === 0) {
@@ -1415,8 +1415,6 @@ function computeSvgPathAnchor(pathData: string) {
   let currentY = 0;
   let startX = 0;
   let startY = 0;
-  let currentPolygon: Array<{ x: number; y: number }> = [];
-  const polygons: Array<Array<{ x: number; y: number }>> = [];
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -1427,7 +1425,6 @@ function computeSvgPathAnchor(pathData: string) {
     maxX = Math.max(maxX, x);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
-    currentPolygon.push({ x, y });
   };
 
   while (cursor < tokens.length) {
@@ -1438,11 +1435,6 @@ function computeSvgPathAnchor(pathData: string) {
       cursor += 1;
 
       if (command === "z" || command === "Z") {
-        if (currentPolygon.length >= 3) {
-          polygons.push(currentPolygon);
-        }
-
-        currentPolygon = [];
         currentX = startX;
         currentY = startY;
       }
@@ -1460,12 +1452,6 @@ function computeSvgPathAnchor(pathData: string) {
       case "L": {
         const x = Number(tokens[cursor]!);
         const y = Number(tokens[cursor + 1]!);
-
-        if (command === "M" && currentPolygon.length >= 3) {
-          polygons.push(currentPolygon);
-          currentPolygon = [];
-        }
-
         currentX = x;
         currentY = y;
         pushPoint(currentX, currentY);
@@ -1483,12 +1469,6 @@ function computeSvgPathAnchor(pathData: string) {
       case "l": {
         const dx = Number(tokens[cursor]!);
         const dy = Number(tokens[cursor + 1]!);
-
-        if (command === "m" && currentPolygon.length >= 3) {
-          polygons.push(currentPolygon);
-          currentPolygon = [];
-        }
-
         currentX += dx;
         currentY += dy;
         pushPoint(currentX, currentY);
@@ -1508,73 +1488,11 @@ function computeSvgPathAnchor(pathData: string) {
     }
   }
 
-  if (currentPolygon.length >= 3) {
-    polygons.push(currentPolygon);
-  }
-
   if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
     return null;
   }
 
-  let weightedArea = 0;
-  let centroidX = 0;
-  let centroidY = 0;
-
-  for (const polygon of polygons) {
-    const centroid = computePolygonCentroid(polygon);
-
-    if (!centroid || centroid.area <= 0) {
-      continue;
-    }
-
-    weightedArea += centroid.area;
-    centroidX += centroid.x * centroid.area;
-    centroidY += centroid.y * centroid.area;
-  }
-
-  if (weightedArea > 0) {
-    return {
-      x: centroidX / weightedArea,
-      y: centroidY / weightedArea,
-    };
-  }
-
-  return {
-    x: (minX + maxX) / 2,
-    y: (minY + maxY) / 2,
-  };
-}
-
-function computePolygonCentroid(points: Array<{ x: number; y: number }>) {
-  if (points.length < 3) {
-    return null;
-  }
-
-  let signedArea = 0;
-  let centroidX = 0;
-  let centroidY = 0;
-
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index]!;
-    const next = points[(index + 1) % points.length]!;
-    const cross = current.x * next.y - next.x * current.y;
-
-    signedArea += cross;
-    centroidX += (current.x + next.x) * cross;
-    centroidY += (current.y + next.y) * cross;
-  }
-
-  const area = signedArea / 2;
-
-  if (Math.abs(area) < 1e-6) {
-    return null;
-  }
-
-  return {
-    area: Math.abs(area),
-    x: centroidX / (6 * area),
-    y: centroidY / (6 * area),
-  };
+  return { minX, maxX, minY, maxY };
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
