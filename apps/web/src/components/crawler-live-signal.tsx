@@ -1561,13 +1561,32 @@ function projectWorldNode(lat: number, lon: number) {
 }
 
 function buildProjectedPolygonPath(points: readonly { lat: number; lon: number }[]): string {
-  return points
-    .map((point, index) => {
-      const projected = projectWorldNode(point.lat, point.lon);
-      return `${index === 0 ? "M" : "L"} ${projected.x.toFixed(1)} ${projected.y.toFixed(1)}`;
-    })
-    .concat("Z")
-    .join(" ");
+  const projected = points.map((point) => projectWorldNode(point.lat, point.lon));
+
+  if (projected.length < 3) {
+    return projected
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+      .concat("Z")
+      .join(" ");
+  }
+
+  const midpoints = projected.map((point, index) => {
+    const nextPoint = projected[(index + 1) % projected.length]!;
+
+    return {
+      x: (point.x + nextPoint.x) / 2,
+      y: (point.y + nextPoint.y) / 2,
+    };
+  });
+
+  return [
+    `M ${midpoints.at(-1)!.x.toFixed(1)} ${midpoints.at(-1)!.y.toFixed(1)}`,
+    ...projected.map((point, index) => {
+      const midpoint = midpoints[index]!;
+      return `Q ${point.x.toFixed(1)} ${point.y.toFixed(1)} ${midpoint.x.toFixed(1)} ${midpoint.y.toFixed(1)}`;
+    }),
+    "Z",
+  ].join(" ");
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
