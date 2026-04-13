@@ -259,7 +259,7 @@ describe("useCrawlerSignalPlayback", () => {
 
     expect(screen.getAllByText("Brazil").length).toBeGreaterThan(1);
     expect(screen.getAllByText("SouthMesh Transit").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("2 nodes").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("500 nodes").length).toBeGreaterThan(0);
 
     fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
 
@@ -286,6 +286,7 @@ describe("useCrawlerSignalPlayback", () => {
     expect(screen.getByText("Crawler Snapshot")).toBeTruthy();
     expect(screen.getByText("Global Sweep")).toBeTruthy();
     expect(screen.getByRole("img", { name: "Crawler execution playback across a world route map" })).toBeTruthy();
+    expect(screen.getByText("1k")).toBeTruthy();
     expect(screen.queryByText("Map Focus")).toBeNull();
     expect(screen.queryByText("Top Locations")).toBeNull();
     expect(screen.queryByText("Top ASNs")).toBeNull();
