@@ -103,8 +103,31 @@ const WORLD_MAP_PATHS = [
   "M 317 78 C 320 76,323 77,324 81 C 322 84,319 86,317 84 C 316 82,316 80,317 78 Z",
   "M 285 110 C 291 108,298 109,304 112 C 301 115,294 116,288 115 C 286 114,285 112,285 110 Z",
   "M 296 119 C 305 117,317 120,327 126 C 335 132,336 140,329 145 C 321 149,308 149,299 144 C 292 139,291 128,296 119 Z",
+  "M 192 64 C 194 62,197 62,199 64 C 199 67,197 69,194 69 C 192 68,191 66,192 64 Z",
+  "M 238 124 C 240 122,243 122,244 125 C 244 128,242 130,239 130 C 237 129,237 126,238 124 Z",
   "M 351 143 C 354 142,356 144,356 147 C 354 149,352 149,351 147 Z",
 ] as const;
+const WORLD_COUNTRY_VISUAL_ANCHORS: Record<string, { lat: number; lon: number }> = {
+  ar: { lat: -38, lon: -64 },
+  au: { lat: -24, lon: 134 },
+  br: { lat: -10, lon: -55 },
+  ca: { lat: 57, lon: -106 },
+  cl: { lat: -34, lon: -71 },
+  gb: { lat: 54, lon: -2 },
+  de: { lat: 51, lon: 10 },
+  id: { lat: -2, lon: 118 },
+  in: { lat: 22, lon: 79 },
+  ir: { lat: 32, lon: 54 },
+  jp: { lat: 37, lon: 138 },
+  mx: { lat: 23, lon: -102 },
+  nz: { lat: -41, lon: 173 },
+  ph: { lat: 13, lon: 122 },
+  ru: { lat: 60, lon: 90 },
+  sg: { lat: 1.3, lon: 104 },
+  th: { lat: 15, lon: 101 },
+  us: { lat: 39, lon: -98 },
+  za: { lat: -29, lon: 24 },
+};
 
 type PlaybackSnapshot = {
   phase: string;
@@ -1370,8 +1393,8 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
         countryCode: location.countryCode,
         count: location.count,
         verifiedCount: location.verifiedCount,
-        x: location.xTotal / location.count,
-        y: location.yTotal / location.count,
+        x: getCountryVisualAnchor(location.key)?.x ?? location.xTotal / location.count,
+        y: getCountryVisualAnchor(location.key)?.y ?? location.yTotal / location.count,
         topAsnLabel,
         topAsnCount,
       };
@@ -1414,6 +1437,12 @@ function projectWorldNode(lat: number, lon: number) {
     x: 26 + ((lon + 180) / 360) * 332,
     y: 34 + ((90 - lat) / 180) * 152,
   };
+}
+
+function getCountryVisualAnchor(countryCode: string) {
+  const anchor = WORLD_COUNTRY_VISUAL_ANCHORS[countryCode];
+
+  return anchor ? projectWorldNode(anchor.lat, anchor.lon) : null;
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
