@@ -1,5 +1,5 @@
 use btc_network::crawler::{CrawlRunCheckpoint, CrawlerRepositoryError, PersistedNodeObservation};
-use sqlx_core::query::query;
+use sqlx_core::{query::query, query_builder::QueryBuilder};
 use sqlx_postgres::{PgPool, Postgres};
 
 use crate::values::{
@@ -9,6 +9,10 @@ use crate::values::{
 
 use super::map_postgres_err;
 
+// Observation ingest is write-heavy; batching reduces round trips without
+// getting close to PostgreSQL's bind-parameter limit.
+const OBSERVATION_INSERT_CHUNK_SIZE: usize = 1000;
+
 pub(super) async fn insert_observations_stream(
     pool: &PgPool,
     observations: Vec<PersistedNodeObservation>,
@@ -17,19 +21,9 @@ pub(super) async fn insert_observations_stream(
         .begin()
         .await
         .map_err(|err| map_postgres_err("start observation transaction", err))?;
-    for observation in observations {
-        let latency_ms = observation.raw.latency.map(duration_to_millis);
-        let failure_classification = observation
-            .raw
-            .failure_classification
-            .as_ref()
-            .map(failure_classification_to_str);
-        let network_type = crawl_network_to_str(observation.raw.endpoint.network);
-        let endpoint = observation.raw.endpoint.canonical;
-        let services = observation.raw.services.map(|value| value.to_string());
-        let asn = observation.enrichment.asn.map(|value| value as i32);
 
-        query::<Postgres>(
+    for chunk in observations.chunks(OBSERVATION_INSERT_CHUNK_SIZE) {
+        let mut builder = QueryBuilder::<Postgres>::new(
             "
 INSERT INTO node_observations (
     observed_at,
@@ -51,34 +45,43 @@ INSERT INTO node_observations (
     country,
     prefix
 )
-VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-)
 ",
-        )
-        .bind(observation.raw.observed_at)
-        .bind(observation.raw.crawl_run_id.as_uuid())
-        .bind(observation.observation_id.as_uuid())
-        .bind(endpoint)
-        .bind(network_type)
-        .bind(observation.raw.protocol_version)
-        .bind(services)
-        .bind(observation.raw.user_agent)
-        .bind(observation.raw.start_height)
-        .bind(observation.raw.relay)
-        .bind(usize_to_i64(
-            observation.raw.discovered_peer_addresses_count,
-        ))
-        .bind(latency_ms)
-        .bind(failure_classification)
-        .bind(enrichment_status_to_str(observation.enrichment.status))
-        .bind(asn)
-        .bind(observation.enrichment.asn_organization)
-        .bind(observation.enrichment.country)
-        .bind(observation.enrichment.prefix)
-        .execute(&mut *transaction)
-        .await
-        .map_err(|err| map_postgres_err("write observation row", err))?;
+        );
+
+        builder.push_values(chunk, |mut b, observation| {
+            b.push_bind(observation.raw.observed_at)
+                .push_bind(observation.raw.crawl_run_id.as_uuid())
+                .push_bind(observation.observation_id.as_uuid())
+                .push_bind(observation.raw.endpoint.canonical.as_str())
+                .push_bind(crawl_network_to_str(observation.raw.endpoint.network))
+                .push_bind(observation.raw.protocol_version)
+                .push_bind(observation.raw.services.map(|value| value.to_string()))
+                .push_bind(observation.raw.user_agent.as_deref())
+                .push_bind(observation.raw.start_height)
+                .push_bind(observation.raw.relay)
+                .push_bind(usize_to_i64(
+                    observation.raw.discovered_peer_addresses_count,
+                ))
+                .push_bind(observation.raw.latency.map(duration_to_millis))
+                .push_bind(
+                    observation
+                        .raw
+                        .failure_classification
+                        .as_ref()
+                        .map(failure_classification_to_str),
+                )
+                .push_bind(enrichment_status_to_str(observation.enrichment.status))
+                .push_bind(observation.enrichment.asn.map(|value| value as i32))
+                .push_bind(observation.enrichment.asn_organization.as_deref())
+                .push_bind(observation.enrichment.country.as_deref())
+                .push_bind(observation.enrichment.prefix.as_deref());
+        });
+
+        builder
+            .build()
+            .execute(&mut *transaction)
+            .await
+            .map_err(|err| map_postgres_err("write observation batch", err))?;
     }
 
     transaction
