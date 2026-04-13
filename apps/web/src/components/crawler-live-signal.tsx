@@ -1,4 +1,4 @@
-import type { FocusEvent, MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Activity } from "lucide-react";
 import { VectorMap } from "@south-paw/react-vector-maps";
 import { useEffect, useState } from "react";
@@ -399,8 +399,6 @@ export function CrawlerLiveSignal({
             : "translate(-12%, calc(-100% - 0.75rem))",
       }
     : null;
-  const currentMapLayers = mapLocations.map((location) => location.key);
-  const activeMapLayers = activeLocation ? [activeLocation.key] : [];
   const isHero = variant === "hero";
   const isCompactPreview = variant === "default";
   const shellClass = isHero
@@ -416,28 +414,6 @@ export function CrawlerLiveSignal({
     ? "relative mx-auto aspect-[420/260] w-full max-w-[920px]"
     : "relative mx-auto aspect-[420/260] w-full max-w-[620px]";
   const svgClass = "absolute inset-0 h-full w-full";
-  const handleMapLocationEnter = (event: MouseEvent<SVGPathElement> | FocusEvent<SVGPathElement>) => {
-    const nextLocationKey = event.currentTarget.id;
-    setHoveredLocationKey(locationInsights.some((location) => location.key === nextLocationKey) ? nextLocationKey : null);
-  };
-  const handleMapLocationLeave = () => {
-    if (!pinnedLocationKey) {
-      setHoveredLocationKey(null);
-    }
-  };
-  const handleMapLocationClick = (event: MouseEvent<SVGPathElement>) => {
-    event.stopPropagation();
-    const nextLocationKey = event.currentTarget.id;
-
-    if (!locationInsights.some((location) => location.key === nextLocationKey)) {
-      setPinnedLocationKey(null);
-      setHoveredLocationKey(null);
-      return;
-    }
-
-    setPinnedLocationKey((current) => (current === nextLocationKey ? null : nextLocationKey));
-    setHoveredLocationKey(nextLocationKey);
-  };
 
   useEffect(() => {
     if (!hoveredLocationKey && !pinnedLocationKey) {
@@ -710,21 +686,13 @@ export function CrawlerLiveSignal({
                 {...worldMap}
                 role="img"
                 name="Crawler execution playback across a world route map"
-                tabIndex={0}
+                tabIndex={-1}
                 className={`${svgClass} cursor-default`}
-                currentLayers={currentMapLayers}
-                checkedLayers={activeMapLayers}
                 layerProps={{
                   fill: "rgba(245,239,226,0.055)",
                   stroke: "rgba(245,239,226,0.1)",
                   strokeWidth: 1.2,
-                  onMouseEnter: handleMapLocationEnter,
-                  onMouseMove: handleMapLocationEnter,
-                  onMouseLeave: handleMapLocationLeave,
-                  onFocus: handleMapLocationEnter,
-                  onBlur: handleMapLocationLeave,
-                  onClick: handleMapLocationClick,
-                  className: "cursor-pointer transition-opacity",
+                  pointerEvents: "none",
                 }}
               />
               <svg viewBox={worldMap.viewBox} aria-hidden="true" className={`${svgClass} pointer-events-none`}>
@@ -854,6 +822,38 @@ export function CrawlerLiveSignal({
                   );
                 })}
               </svg>
+
+              {mapLocations.map((location) => (
+                <button
+                  key={`hotspot-${location.key}`}
+                  type="button"
+                  data-map-hotspot="true"
+                  aria-label={`Show node count for ${location.countryName}`}
+                  className="absolute z-10 h-10 w-10 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border border-transparent bg-transparent outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+                  style={{
+                    left: `${((location.x / WORLD_MAP_VIEWBOX_WIDTH) * 100).toFixed(2)}%`,
+                    top: `${((location.y / WORLD_MAP_VIEWBOX_HEIGHT) * 100).toFixed(2)}%`,
+                  }}
+                  onMouseEnter={() => setHoveredLocationKey(location.key)}
+                  onMouseMove={() => setHoveredLocationKey(location.key)}
+                  onMouseLeave={() => {
+                    if (!pinnedLocationKey) {
+                      setHoveredLocationKey(null);
+                    }
+                  }}
+                  onFocus={() => setHoveredLocationKey(location.key)}
+                  onBlur={() => {
+                    if (!pinnedLocationKey) {
+                      setHoveredLocationKey(null);
+                    }
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPinnedLocationKey((current) => (current === location.key ? null : location.key));
+                    setHoveredLocationKey(location.key);
+                  }}
+                />
+              ))}
             </div>
           </div>
 
