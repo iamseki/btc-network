@@ -265,7 +265,9 @@ describe("App sidebar shell", () => {
       expect(screen.getByRole("heading", { name: "Network Risk API" })).toBeTruthy();
     });
     expect(screen.getByText("Why teams buy this")).toBeTruthy();
-    expect(screen.queryByRole("navigation", { name: "Crawler Runs Views" })).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Network Risk API Views" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
   });
 
   it("opens and closes the header crawl preview from the pulse in the header rail", async () => {
@@ -362,6 +364,11 @@ describe("App sidebar shell", () => {
 
     expect(screen.getByRole("button", { name: "Checkpoints" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Failures" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));
+
+    expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
   });
 
   it("updates the header eyebrow when the analytics sub-navigation changes", () => {

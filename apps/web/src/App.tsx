@@ -35,7 +35,7 @@ import {
   type NetworkAnalyticsPanel,
 } from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
-import { RiskApiPage } from "./pages/risk-api-page";
+import { RiskApiPage, type RiskApiPanel } from "./pages/risk-api-page";
 import { getAppClient } from "./lib/api";
 import type {
   AddrResult,
@@ -62,6 +62,7 @@ export function App() {
   const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
   const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
     useState<NetworkAnalyticsPanel>("overview");
+  const [riskApiPanel, setRiskApiPanel] = useState<RiskApiPanel>("overview");
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
@@ -141,6 +142,17 @@ export function App() {
             activeItem: crawlerRunsPanel,
             onSelect: (panel: string) => setCrawlerRunsPanel(panel as CrawlerRunsPanel),
           }
+        : selectedPage === "risk-api"
+          ? {
+              label: "Network Risk API Views",
+              items: [
+                { id: "overview", title: "Overview" },
+                { id: "access", title: "Access" },
+                { id: "docs", title: "Docs" },
+              ] satisfies { id: RiskApiPanel; title: string }[],
+              activeItem: riskApiPanel,
+              onSelect: (panel: string) => setRiskApiPanel(panel as RiskApiPanel),
+            }
         : null;
   const currentSubnavItemTitle =
     currentSubnav?.items.find((item) => item.id === currentSubnav.activeItem)?.title ?? "Overview";
@@ -156,6 +168,10 @@ export function App() {
 
     if (nextPage === "crawler-runs") {
       setCrawlerRunsPanel("overview");
+    }
+
+    if (nextPage === "risk-api") {
+      setRiskApiPanel("overview");
     }
 
     if (window.innerWidth < 768) {
@@ -614,7 +630,14 @@ export function App() {
                 />
               ) : null}
 
-              {selectedPage === "risk-api" ? <RiskApiPage client={client} /> : null}
+              {selectedPage === "risk-api" ? (
+                <RiskApiPage
+                  client={client}
+                  activePanel={riskApiPanel}
+                  onPanelChange={setRiskApiPanel}
+                  showPanelNav={false}
+                />
+              ) : null}
 
               {selectedPage === "connection" ? (
                 <ConnectionPage

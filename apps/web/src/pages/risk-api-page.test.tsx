@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BtcAppClient } from "@/lib/api/client";
@@ -98,20 +98,33 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
 }
 
 describe("RiskApiPage", () => {
-  it("renders a mocked commercial landing page driven by current analytics inputs", async () => {
+  it("renders a compact commercial overview driven by current analytics inputs", async () => {
     render(<RiskApiPage client={makeClient()} />);
 
     expect(await screen.findByText("Network Risk API")).toBeTruthy();
-    expect(screen.getByText("Bitcoin network risk intelligence, packaged as a clean API product.")).toBeTruthy();
+    expect(screen.getByText("Bitcoin network risk intelligence, sold as a clean API.")).toBeTruthy();
     expect(screen.getByText("Preview only")).toBeTruthy();
-    expect(screen.getByText("Product posture")).toBeTruthy();
-    expect(screen.getByText("Signal Loop")).toBeTruthy();
+    expect(screen.getByText("Launch posture")).toBeTruthy();
     expect(screen.getByText("Why teams buy this")).toBeTruthy();
-    expect(screen.getByText("Treasury and Custody Risk")).toBeTruthy();
-    expect(screen.getByText("Example Snapshot Contract")).toBeTruthy();
-    expect(screen.getByText(/\"lead_asn\": 64512/i)).toBeTruthy();
-    expect(screen.getByText(/\"chain_height\": 892345/i)).toBeTruthy();
+    expect(screen.getByText("Treasury and Custody")).toBeTruthy();
     expect(await screen.findByText(/Example ASN/i)).toBeTruthy();
+    expect(screen.queryByText("Example Snapshot Contract")).toBeNull();
+  });
+
+  it("switches between overview, access, and docs panels", async () => {
+    render(<RiskApiPage client={makeClient()} />);
+
+    expect(await screen.findByText("Why teams buy this")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Access" }));
+    expect(await screen.findByText("Access Flow")).toBeTruthy();
+    expect(screen.getByText("Subscription Shape")).toBeTruthy();
+    expect(screen.getByText("Get an API key")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Docs" }));
+    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
+    expect(screen.getByText("Future Scalar surface")).toBeTruthy();
+    expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
   it("falls back to commercial framing when live analytics loading fails", async () => {
@@ -122,7 +135,7 @@ describe("RiskApiPage", () => {
     render(<RiskApiPage client={client} />);
 
     expect(await screen.findByText("Preview is showing mocked commercial framing only")).toBeTruthy();
-    expect(screen.getByText("Bitcoin network risk intelligence, packaged as a clean API product.")).toBeTruthy();
-    expect(screen.getByText("Mocked browser-only commercial surface")).toBeTruthy();
+    expect(screen.getByText("Bitcoin network risk intelligence, sold as a clean API.")).toBeTruthy();
+    expect(screen.getByText("preview-v0")).toBeTruthy();
   });
 });
