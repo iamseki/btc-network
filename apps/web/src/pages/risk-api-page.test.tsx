@@ -102,8 +102,12 @@ describe("RiskApiPage", () => {
     render(<RiskApiPage client={makeClient()} />);
 
     expect(await screen.findByText("Network Risk API")).toBeTruthy();
-    expect(screen.getByText("Bitcoin network risk intelligence, sold as a clean API.")).toBeTruthy();
-    expect(screen.getByText("Preview only")).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Resilient Bitcoin network analytics for teams that need faster answers on concentration/i,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Early access")).toBeTruthy();
     expect(screen.getByText("Launch posture")).toBeTruthy();
     expect(screen.getByText("Why teams buy this")).toBeTruthy();
     expect(screen.getByText("Treasury and Custody")).toBeTruthy();
@@ -123,7 +127,7 @@ describe("RiskApiPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Docs" }));
     expect(await screen.findByText("Documentation Direction")).toBeTruthy();
-    expect(screen.getByText("Future Scalar surface")).toBeTruthy();
+    expect(screen.getByText("Scalar-style docs")).toBeTruthy();
     expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
@@ -134,8 +138,8 @@ describe("RiskApiPage", () => {
 
     render(<RiskApiPage client={client} />);
 
-    expect(await screen.findByText("Preview is showing mocked commercial framing only")).toBeTruthy();
-    expect(screen.getByText("Bitcoin network risk intelligence, sold as a clean API.")).toBeTruthy();
-    expect(screen.getByText("preview-v0")).toBeTruthy();
+    expect(await screen.findByText("Live analytics are temporarily unavailable")).toBeTruthy();
+    expect(screen.getByText("early-access")).toBeTruthy();
+    expect(screen.getByText("Early access")).toBeTruthy();
   });
 });

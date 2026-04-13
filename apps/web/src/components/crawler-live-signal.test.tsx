@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { renderHook, act, cleanup } from "@testing-library/react";
+import { renderHook, act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CrawlRunDetail } from "@/lib/api/types";
 
-import { useCrawlerSignalPlayback } from "./crawler-live-signal";
+import { CrawlerLiveSignal, type CrawlerSignalPlayback, useCrawlerSignalPlayback } from "./crawler-live-signal";
 
 const STORAGE_KEY = "btc-network:crawler-signal-cycle:v2:crawl-demo";
 const IDLE_WINDOW_MS = 15 * 60 * 1000;
@@ -78,6 +78,56 @@ const DETAIL = {
   failureCounts: [],
   networkOutcomes: [],
 } satisfies CrawlRunDetail;
+
+const PLAYBACK = {
+  currentSummary: {
+    successfulHandshakes: DETAIL.run.successfulHandshakes,
+    scheduledTasks: DETAIL.run.scheduledTasks,
+  },
+  finalSummary: {
+    successfulHandshakes: DETAIL.run.successfulHandshakes,
+    scheduledTasks: DETAIL.run.scheduledTasks,
+  },
+  playbackSnapshot: {
+    phase: "steady_state",
+    checkpointSequence: 3,
+    checkpointedAt: DETAIL.run.lastCheckpointedAt,
+    frontierSize: 1174,
+    inFlightWork: 0,
+    scheduledTasks: DETAIL.run.scheduledTasks,
+    successfulHandshakes: DETAIL.run.successfulHandshakes,
+    failedTasks: DETAIL.run.failedTasks,
+    uniqueNodes: DETAIL.run.uniqueNodes,
+    persistedObservationRows: DETAIL.run.persistedObservationRows,
+    writerBacklog: 0,
+  },
+  finalSnapshot: {
+    phase: "completed",
+    checkpointSequence: 3,
+    checkpointedAt: DETAIL.run.lastCheckpointedAt,
+    frontierSize: 1174,
+    inFlightWork: 0,
+    scheduledTasks: DETAIL.run.scheduledTasks,
+    successfulHandshakes: DETAIL.run.successfulHandshakes,
+    failedTasks: DETAIL.run.failedTasks,
+    uniqueNodes: DETAIL.run.uniqueNodes,
+    persistedObservationRows: DETAIL.run.persistedObservationRows,
+    writerBacklog: 0,
+  },
+  markers: [
+    { phase: "bootstrapping", sequence: 1, progressRatio: 0.33 },
+    { phase: "steady_state", sequence: 2, progressRatio: 0.66 },
+    { phase: "completed", sequence: 3, progressRatio: 1 },
+  ],
+  elapsedMs: 120_000,
+  loopDurationMs: 300_000,
+  loopRatio: 0.4,
+  cycleElapsedMs: 120_000,
+  visualLoopRatio: 0.55,
+  isLive: true,
+  startedAt: "2026-04-01T12:00:00Z",
+  completedAt: "2026-04-01T12:05:00Z",
+} satisfies CrawlerSignalPlayback;
 
 describe("useCrawlerSignalPlayback", () => {
   afterEach(() => {
@@ -193,6 +243,52 @@ describe("useCrawlerSignalPlayback", () => {
       lastSeenAtMs: now.getTime(),
     });
     expect(result.current?.isLive).toBe(true);
+  });
+
+  it("shows location and ASN rankings that respond to map hover", () => {
+    render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} variant="hero" />);
+
+    expect(screen.getByText("Top Locations")).toBeTruthy();
+    expect(screen.getByText("Top ASNs")).toBeTruthy();
+    expect(screen.queryByText("Map Focus")).toBeNull();
+    expect(screen.getAllByText("Brazil").length).toBe(1);
+
+    const hotspot = screen.getByLabelText("Show node count for Brazil");
+
+    fireEvent.mouseEnter(hotspot);
+
+    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("SouthMesh Transit").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2 nodes").length).toBeGreaterThan(0);
+
+    fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
+
+    expect(screen.getAllByText("Brazil").length).toBe(1);
+
+    fireEvent.click(hotspot);
+    fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
+    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(1);
+
+    fireEvent.click(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
+    expect(screen.getAllByText("Brazil").length).toBe(1);
+  });
+
+  it("renders after playback becomes available on the normal async mount path", async () => {
+    render(<CrawlerLiveSignal detail={DETAIL} variant="hero" />);
+
+    expect(await screen.findByText("Read-Only Snapshot")).toBeTruthy();
+    expect(screen.getByText("Top Locations")).toBeTruthy();
+  });
+
+  it("renders a compact map preview in the default variant", () => {
+    render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} />);
+
+    expect(screen.getByText("Crawler Snapshot")).toBeTruthy();
+    expect(screen.getByText("Global Sweep")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Crawler execution playback across a world route map" })).toBeTruthy();
+    expect(screen.queryByText("Map Focus")).toBeNull();
+    expect(screen.queryByText("Top Locations")).toBeNull();
+    expect(screen.queryByText("Top ASNs")).toBeNull();
   });
 });
 

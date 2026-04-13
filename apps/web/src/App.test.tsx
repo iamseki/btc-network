@@ -256,7 +256,7 @@ describe("App sidebar shell", () => {
     expect(screen.getByText(/latest public snapshot/i)).toBeTruthy();
   });
 
-  it("renders the mocked commercial API page from the analytics navigation", async () => {
+  it("renders the commercial API page from the analytics navigation", async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));

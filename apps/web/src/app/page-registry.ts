@@ -27,7 +27,7 @@ export const appPages: AppPage[] = [
     id: "risk-api",
     group: "network-analytics",
     title: "Network Risk API",
-    description: "Preview the mocked commercial API surface for Bitcoin network risk and resilience analytics.",
+    description: "Commercial API surface for Bitcoin network risk, resilience, and concentration analytics.",
   },
   {
     id: "crawler-runs",
