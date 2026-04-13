@@ -1,10 +1,8 @@
-import type { FocusEvent, MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Activity } from "lucide-react";
-import { VectorMap } from "@south-paw/react-vector-maps";
 import { useEffect, useState } from "react";
 
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
-import worldMap from "@/lib/maps/world-low-res.json";
 
 const PLAYBACK_IDLE_MS = 15 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
@@ -13,11 +11,6 @@ const VISUAL_SWEEP_LOOP_MS = 18_000;
 const REPLAY_RESUME_RESET_GAP_MS = PLAYBACK_IDLE_MS;
 const MAX_FUTURE_ANCHOR_DRIFT_MS = 60 * 1000;
 const MAX_PAST_ANCHOR_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const WORLD_MAP_VIEWBOX_WIDTH = 1008.8549;
-const WORLD_MAP_VIEWBOX_HEIGHT = 651.45282;
-const WORLD_MAP_SCAN_WIDTH = 54;
-const WORLD_MAP_ORIGIN_X = 48;
-const WORLD_MAP_ORIGIN_Y = WORLD_MAP_VIEWBOX_HEIGHT * 0.47;
 
 type WorldNodeSeed = {
   lat: number;
@@ -96,6 +89,22 @@ type AsnInsight = {
   countryCount: number;
   leadCountryName: string;
 };
+
+const WORLD_MAP_PATHS = [
+  "M 37 50 C 47 42,64 40,79 47 C 90 52,97 60,97 69 C 95 76,88 82,88 89 C 88 94,93 99,103 99 C 113 100,122 96,130 89 C 136 84,138 76,132 70 C 124 62,122 54,128 47 C 120 41,105 41,91 45 C 82 47,77 44,67 40 C 56 37,44 40,37 50 Z",
+  "M 94 96 C 98 98,105 101,110 101 C 116 101,120 98,123 99 C 120 103,116 105,115 110 C 112 112,108 111,104 108 C 102 105,98 101,94 96 Z",
+  "M 128 41 C 136 37,146 39,151 46 C 151 53,147 59,141 61 C 134 62,128 57,126 50 C 125 46,126 43,128 41 Z",
+  "M 118 99 C 126 101,134 104,141 110 C 149 118,153 128,151 137 C 149 145,144 151,138 156 C 134 158,129 156,127 150 C 126 143,129 136,132 130 C 134 124,132 118,128 112 C 124 107,120 104,118 99 Z",
+  "M 185 61 C 191 59,200 60,207 63 C 214 63,220 61,224 63 C 227 67,225 72,220 74 C 215 76,210 76,206 79 C 201 81,196 79,193 75 C 189 73,186 68,185 61 Z",
+  "M 188 60 C 191 58,194 59,195 63 C 193 66,190 67,188 65 C 187 63,187 61,188 60 Z",
+  "M 176 80 C 183 77,192 78,200 81 C 208 85,218 90,224 99 C 230 107,232 117,229 126 C 225 133,218 139,211 140 C 204 140,199 136,196 129 C 192 122,188 116,184 110 C 179 103,176 94,176 80 Z",
+  "M 235 124 C 238 123,241 125,242 129 C 240 132,237 134,235 131 C 234 128,234 126,235 124 Z",
+  "M 216 77 C 225 72,237 72,249 76 C 260 79,273 84,284 90 C 296 96,308 93,317 86 C 326 79,330 70,324 61 C 314 56,301 56,288 61 C 278 66,269 69,262 74 C 255 78,250 84,250 91 C 251 97,258 101,267 101 C 278 101,286 101,291 106 C 290 111,284 113,276 113 C 266 114,258 112,252 108 C 245 103,239 101,233 98 C 226 95,220 89,216 77 Z",
+  "M 317 78 C 320 76,323 77,324 81 C 322 84,319 86,317 84 C 316 82,316 80,317 78 Z",
+  "M 285 110 C 291 108,298 109,304 112 C 301 115,294 116,288 115 C 286 114,285 112,285 110 Z",
+  "M 296 119 C 305 117,317 120,327 126 C 335 132,336 140,329 145 C 321 149,308 149,299 144 C 292 139,291 128,296 119 Z",
+  "M 351 143 C 354 142,356 144,356 147 C 354 149,352 149,351 147 Z",
+] as const;
 
 type PlaybackSnapshot = {
   phase: string;
@@ -356,7 +365,7 @@ export function CrawlerLiveSignal({
           ),
         )
       : 0;
-  const scanX = visualLoopRatio * (WORLD_MAP_VIEWBOX_WIDTH - WORLD_MAP_SCAN_WIDTH);
+  const scanX = 26 + visualLoopRatio * 332;
   const visibleNodes: VisibleMapNode[] = playbackSnapshot
     ? GLOBE_NODE_SEEDS.map((seed, index) => {
         if (index >= discoveredNodeCount) {
@@ -374,7 +383,7 @@ export function CrawlerLiveSignal({
           city: seed.city,
           countryCode: seed.countryCode,
           countryName: seed.countryName,
-          locationKey: seed.countryCode.toLowerCase(),
+          locationKey: seed.countryCode,
           asnLabel: seed.asnLabel,
           nodeCount: seed.nodeCount,
           isVerified,
@@ -391,16 +400,14 @@ export function CrawlerLiveSignal({
   const activeFlowNodes = visibleNodes.filter((node) => node.isRecent).slice(0, 4);
   const activeLocationTooltipStyle = activeLocation
     ? {
-        left: `${((activeLocation.x / WORLD_MAP_VIEWBOX_WIDTH) * 100).toFixed(2)}%`,
-        top: `${((activeLocation.y / WORLD_MAP_VIEWBOX_HEIGHT) * 100).toFixed(2)}%`,
+        left: `${(((18 + activeLocation.x) / 420) * 100).toFixed(2)}%`,
+        top: `${(((16 + activeLocation.y) / 260) * 100).toFixed(2)}%`,
         transform:
-          activeLocation.x > WORLD_MAP_VIEWBOX_WIDTH * 0.7
+          activeLocation.x > 280
             ? "translate(-100%, calc(-100% - 0.75rem))"
             : "translate(-12%, calc(-100% - 0.75rem))",
       }
     : null;
-  const currentMapLayers = mapLocations.map((location) => location.key);
-  const activeMapLayers = activeLocation ? [activeLocation.key] : [];
   const isHero = variant === "hero";
   const isCompactPreview = variant === "default";
   const shellClass = isHero
@@ -416,28 +423,6 @@ export function CrawlerLiveSignal({
     ? "relative mx-auto aspect-[420/260] w-full max-w-[920px]"
     : "relative mx-auto aspect-[420/260] w-full max-w-[620px]";
   const svgClass = "absolute inset-0 h-full w-full";
-  const handleMapLocationEnter = (event: MouseEvent<SVGPathElement> | FocusEvent<SVGPathElement>) => {
-    const nextLocationKey = event.currentTarget.id;
-    setHoveredLocationKey(locationInsights.some((location) => location.key === nextLocationKey) ? nextLocationKey : null);
-  };
-  const handleMapLocationLeave = () => {
-    if (!pinnedLocationKey) {
-      setHoveredLocationKey(null);
-    }
-  };
-  const handleMapLocationClick = (event: MouseEvent<SVGPathElement>) => {
-    event.stopPropagation();
-    const nextLocationKey = event.currentTarget.id;
-
-    if (!locationInsights.some((location) => location.key === nextLocationKey)) {
-      setPinnedLocationKey(null);
-      setHoveredLocationKey(null);
-      return;
-    }
-
-    setPinnedLocationKey((current) => (current === nextLocationKey ? null : nextLocationKey));
-    setHoveredLocationKey(nextLocationKey);
-  };
 
   useEffect(() => {
     if (!hoveredLocationKey && !pinnedLocationKey) {
@@ -510,23 +495,11 @@ export function CrawlerLiveSignal({
             <p className="text-[11px] text-muted-foreground">Static preview</p>
           </div>
           <div className="mt-3 relative mx-auto aspect-[420/260] w-full max-w-[420px]">
-            <VectorMap
-              {...worldMap}
-              role="img"
-              name="Crawler execution playback across a world route map"
-              tabIndex={-1}
-              className="absolute inset-0 h-full w-full cursor-default"
-              layerProps={{
-                fill: "rgba(245,239,226,0.06)",
-                stroke: "rgba(245,239,226,0.08)",
-                strokeWidth: 1.2,
-                pointerEvents: "none",
-              }}
-            />
             <svg
-              viewBox={worldMap.viewBox}
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 h-full w-full"
+              viewBox="0 0 420 260"
+              role="img"
+              aria-label="Crawler execution playback across a world route map"
+              className="absolute inset-0 h-full w-full cursor-default"
             >
               <defs>
                 <linearGradient id="map-scan-compact" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -538,58 +511,83 @@ export function CrawlerLiveSignal({
                 </linearGradient>
               </defs>
 
-              <rect x={scanX} y="0" width={WORLD_MAP_SCAN_WIDTH} height={WORLD_MAP_VIEWBOX_HEIGHT} fill="url(#map-scan-compact)" opacity="0.9" />
+              <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
 
-              <g>
-                <circle cx={WORLD_MAP_ORIGIN_X} cy={WORLD_MAP_ORIGIN_Y} r="13" fill="rgba(245,179,1,0.9)" />
-                <circle cx={WORLD_MAP_ORIGIN_X} cy={WORLD_MAP_ORIGIN_Y} r="28" className="fx-node-pulse" fill="rgba(245,179,1,0.12)" />
-              </g>
+              <g transform="translate(18 16)">
+                <rect
+                  x="0"
+                  y="0"
+                  width="384"
+                  height="228"
+                  rx="16"
+                  fill="rgba(8,8,8,0.34)"
+                  stroke="rgba(245,239,226,0.1)"
+                />
 
-              {activeFlowNodes.map((node) => (
-                <g key={`compact-flow-${node.key}`}>
+                {WORLD_MAP_PATHS.map((path, index) => (
                   <path
-                    d={buildFlowArcPath(WORLD_MAP_ORIGIN_X, WORLD_MAP_ORIGIN_Y, node.x, node.y)}
-                    fill="none"
-                    stroke={node.isVerified ? "rgba(245,179,1,0.58)" : "rgba(245,239,226,0.22)"}
-                    strokeWidth={node.isVerified ? 3.2 : 2.2}
-                    strokeLinecap="round"
-                    className="fx-arc-flow"
+                    key={`compact-landmass-${index}`}
+                    d={path}
+                    fill={index % 2 === 0 ? "rgba(245,239,226,0.06)" : "rgba(245,239,226,0.048)"}
+                    stroke="rgba(245,239,226,0.08)"
+                    strokeWidth="1"
+                    strokeLinejoin="round"
                   />
-                </g>
-              ))}
+                ))}
 
-              {visibleNodes.map((node) => (
-                <g key={`compact-node-${node.key}`}>
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.isRecent ? 8.2 : 5.8}
-                    fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.68)"}
-                    stroke={node.isVerified ? "rgba(255,240,197,0.5)" : "rgba(245,239,226,0.18)"}
-                    strokeWidth="2"
-                  />
-                </g>
-              ))}
+                <rect x={scanX} y="18" width="22" height="192" fill="url(#map-scan-compact)" opacity="0.9" />
 
-              {mapLocations.map((location) => (
-                <g key={`compact-location-${location.key}`} transform={`translate(${location.x}, ${location.y})`} aria-hidden="true">
-                  <circle
-                    r={18 + Math.min(10, location.count / 120)}
-                    fill="rgba(245,179,1,0.12)"
-                    stroke="rgba(245,179,1,0.34)"
-                    strokeWidth="2"
-                  />
-                  <text
-                    x="0"
-                    y="7"
-                    textAnchor="middle"
-                    className="fill-[rgba(245,239,226,0.82)]"
-                    style={{ fontSize: "20px", fontFamily: "monospace", fontWeight: 700 }}
-                  >
-                    {formatMapBubbleCount(location.count)}
-                  </text>
+                <g>
+                  <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.9)" />
+                  <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.12)" />
                 </g>
-              ))}
+
+                {activeFlowNodes.map((node) => (
+                  <g key={`compact-flow-${node.key}`}>
+                    <path
+                      d={buildFlowArcPath(18, 114, node.x, node.y)}
+                      fill="none"
+                      stroke={node.isVerified ? "rgba(245,179,1,0.58)" : "rgba(245,239,226,0.22)"}
+                      strokeWidth={node.isVerified ? 1.4 : 1}
+                      strokeLinecap="round"
+                      className="fx-arc-flow"
+                    />
+                  </g>
+                ))}
+
+                {visibleNodes.map((node) => (
+                  <g key={`compact-node-${node.key}`}>
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={node.isRecent ? 3.4 : 2.4}
+                      fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.68)"}
+                      stroke={node.isVerified ? "rgba(255,240,197,0.5)" : "rgba(245,239,226,0.18)"}
+                      strokeWidth="1"
+                    />
+                  </g>
+                ))}
+
+                {mapLocations.map((location) => (
+                  <g key={`compact-location-${location.key}`} transform={`translate(${location.x}, ${location.y})`} aria-hidden="true">
+                    <circle
+                      r={8 + Math.min(4, location.count)}
+                      fill="rgba(245,179,1,0.12)"
+                      stroke="rgba(245,179,1,0.34)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x="0"
+                      y="3.5"
+                      textAnchor="middle"
+                      className="fill-[rgba(245,239,226,0.82)]"
+                      style={{ fontSize: "9px", fontFamily: "monospace", fontWeight: 700 }}
+                    >
+                      {formatMapBubbleCount(location.count)}
+                    </text>
+                  </g>
+                ))}
+              </g>
             </svg>
           </div>
         </div>
@@ -706,28 +704,12 @@ export function CrawlerLiveSignal({
                 </div>
               ) : null}
 
-              <VectorMap
-                {...worldMap}
+              <svg
+                viewBox="0 0 420 260"
                 role="img"
-                name="Crawler execution playback across a world route map"
-                tabIndex={0}
+                aria-label="Crawler execution playback across a world route map"
                 className={`${svgClass} cursor-default`}
-                currentLayers={currentMapLayers}
-                checkedLayers={activeMapLayers}
-                layerProps={{
-                  fill: "rgba(245,239,226,0.055)",
-                  stroke: "rgba(245,239,226,0.1)",
-                  strokeWidth: 1.2,
-                  onMouseEnter: handleMapLocationEnter,
-                  onMouseMove: handleMapLocationEnter,
-                  onMouseLeave: handleMapLocationLeave,
-                  onFocus: handleMapLocationEnter,
-                  onBlur: handleMapLocationLeave,
-                  onClick: handleMapLocationClick,
-                  className: "cursor-pointer transition-opacity",
-                }}
-              />
-              <svg viewBox={worldMap.viewBox} aria-hidden="true" className={`${svgClass} pointer-events-none`}>
+              >
                 <defs>
                   <linearGradient id="map-scan" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="rgba(245,179,1,0)" />
@@ -738,122 +720,173 @@ export function CrawlerLiveSignal({
                   </linearGradient>
                 </defs>
 
-                {Array.from({ length: 5 }, (_, index) => {
-                  const y = ((index + 1) / 6) * WORLD_MAP_VIEWBOX_HEIGHT;
-                  return (
+                <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
+
+                <g transform="translate(18 16)">
+                  <rect
+                    x="0"
+                    y="0"
+                    width="384"
+                    height="228"
+                    rx="16"
+                    fill="rgba(8,8,8,0.34)"
+                    stroke="rgba(245,239,226,0.1)"
+                  />
+
+                  {[42, 76, 110, 144, 178].map((y) => (
                     <line
-                      key={`lat-${index}`}
-                      x1="0"
+                      key={`lat-${y}`}
+                      x1="16"
                       y1={y}
-                      x2={WORLD_MAP_VIEWBOX_WIDTH}
+                      x2="368"
                       y2={y}
-                      stroke="rgba(245,239,226,0.04)"
+                      stroke="rgba(245,239,226,0.06)"
                       strokeWidth="1"
                     />
-                  );
-                })}
+                  ))}
 
-                {Array.from({ length: 7 }, (_, index) => {
-                  const x = ((index + 1) / 8) * WORLD_MAP_VIEWBOX_WIDTH;
-                  return (
+                  {[56, 104, 152, 200, 248, 296, 344].map((x) => (
                     <line
-                      key={`lon-${index}`}
+                      key={`lon-${x}`}
                       x1={x}
-                      y1="0"
+                      y1="18"
                       x2={x}
-                      y2={WORLD_MAP_VIEWBOX_HEIGHT}
-                      stroke="rgba(245,239,226,0.035)"
+                      y2="210"
+                      stroke="rgba(245,239,226,0.05)"
                       strokeWidth="1"
                     />
-                  );
-                })}
+                  ))}
 
-                <rect x={scanX} y="0" width={WORLD_MAP_SCAN_WIDTH} height={WORLD_MAP_VIEWBOX_HEIGHT} fill="url(#map-scan)" opacity="0.95" />
-
-                <g>
-                  <circle cx={WORLD_MAP_ORIGIN_X} cy={WORLD_MAP_ORIGIN_Y} r="13" fill="rgba(245,179,1,0.92)" />
-                  <circle cx={WORLD_MAP_ORIGIN_X} cy={WORLD_MAP_ORIGIN_Y} r="28" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
-                </g>
-
-                {activeFlowNodes.map((node) => (
-                  <g key={`flow-${node.key}`}>
+                  {WORLD_MAP_PATHS.map((path, index) => (
                     <path
-                      d={buildFlowArcPath(WORLD_MAP_ORIGIN_X, WORLD_MAP_ORIGIN_Y, node.x, node.y)}
-                      fill="none"
-                      stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
-                      strokeWidth={node.isVerified ? 4.2 : 2.8}
-                      strokeLinecap="round"
-                      className="fx-arc-flow"
+                      key={`landmass-${index}`}
+                      d={path}
+                      fill={index % 2 === 0 ? "rgba(245,239,226,0.065)" : "rgba(245,239,226,0.052)"}
+                      stroke="rgba(245,239,226,0.08)"
+                      strokeWidth="1"
+                      strokeLinejoin="round"
                     />
-                  </g>
-                ))}
+                  ))}
 
-                {visibleNodes.map((node) => (
-                  <g key={node.key}>
-                    {node.isRecent ? (
+                  <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
+
+                  <g>
+                    <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.92)" />
+                    <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
+                  </g>
+
+                  {activeFlowNodes.map((node) => (
+                    <g key={`flow-${node.key}`}>
+                      <path
+                        d={buildFlowArcPath(18, 114, node.x, node.y)}
+                        fill="none"
+                        stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
+                        strokeWidth={node.isVerified ? 1.8 : 1.2}
+                        strokeLinecap="round"
+                        className="fx-arc-flow"
+                      />
+                    </g>
+                  ))}
+
+                  {visibleNodes.map((node) => (
+                    <g key={node.key}>
+                      {node.isRecent ? (
+                        <circle
+                          cx={node.x}
+                          cy={node.y}
+                          r="9"
+                          className="fx-node-pulse"
+                          fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
+                        />
+                      ) : null}
                       <circle
                         cx={node.x}
                         cy={node.y}
-                        r="20"
-                        className="fx-node-pulse"
-                        fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
+                        r={node.isRecent ? 3.8 : 2.8}
+                        fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.74)"}
+                        stroke={node.isVerified ? "rgba(255,240,197,0.65)" : "rgba(245,239,226,0.26)"}
+                        strokeWidth="1"
                       />
-                    ) : null}
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={node.isRecent ? 8.8 : 6.4}
-                      fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.74)"}
-                      stroke={node.isVerified ? "rgba(255,240,197,0.65)" : "rgba(245,239,226,0.26)"}
-                      strokeWidth="2"
-                    />
-                  </g>
-                ))}
-
-                {mapLocations.map((location) => {
-                  const isActive = activeLocation?.key === location.key;
-                  const ringRadius = 20 + Math.min(14, location.count / 120);
-
-                  return (
-                    <g
-                      key={`location-${location.key}`}
-                      transform={`translate(${location.x}, ${location.y})`}
-                      aria-hidden="true"
-                    >
-                      <circle
-                        r={ringRadius}
-                        fill={isActive ? "rgba(245,179,1,0.16)" : "rgba(0,0,0,0.28)"}
-                        stroke={isActive ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.16)"}
-                        strokeWidth="2"
-                      />
-                      <text
-                        x="0"
-                        y="7"
-                        textAnchor="middle"
-                        className={isActive ? "fill-primary" : "fill-[rgba(245,239,226,0.82)]"}
-                        style={{ fontSize: "20px", fontFamily: "monospace", fontWeight: 700 }}
-                      >
-                        {formatMapBubbleCount(location.count)}
-                      </text>
                     </g>
-                  );
-                })}
+                  ))}
 
-                {[0, 1, 2, 3, 4, 5].map((index) => {
-                  const x = WORLD_MAP_ORIGIN_X + ((visualLoopRatio * 800 + index * 112) % 800);
-                  const y = 56 + index * 74;
-                  return (
-                    <circle
-                      key={`orbit-${index}`}
-                      cx={x}
-                      cy={y}
-                      r={index % 2 === 0 ? 6 : 4}
-                      fill="rgba(245,179,1,0.72)"
-                      opacity={0.24 + index * 0.08}
-                    />
-                  );
-                })}
+                  {mapLocations.map((location) => {
+                    const isActive = activeLocation?.key === location.key;
+                    const ringRadius = 9 + Math.min(6, location.count);
+
+                    return (
+                      <g
+                        key={`location-${location.key}`}
+                        transform={`translate(${location.x}, ${location.y})`}
+                        aria-hidden="true"
+                      >
+                        <circle
+                          r={ringRadius}
+                          fill={isActive ? "rgba(245,179,1,0.16)" : "rgba(0,0,0,0.28)"}
+                          stroke={isActive ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.16)"}
+                          strokeWidth="1"
+                        />
+                        <text
+                          x="0"
+                          y="3.5"
+                          textAnchor="middle"
+                          className={isActive ? "fill-primary" : "fill-[rgba(245,239,226,0.82)]"}
+                          style={{ fontSize: "10px", fontFamily: "monospace", fontWeight: 700 }}
+                        >
+                          {formatMapBubbleCount(location.count)}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {[0, 1, 2, 3, 4, 5].map((index) => {
+                    const x = 32 + ((visualLoopRatio * 332 + index * 48) % 332);
+                    const y = 24 + index * 30;
+                    return (
+                      <circle
+                        key={`orbit-${index}`}
+                        cx={x}
+                        cy={y}
+                        r={index % 2 === 0 ? 2.5 : 1.7}
+                        fill="rgba(245,179,1,0.72)"
+                        opacity={0.24 + index * 0.08}
+                      />
+                    );
+                  })}
+                </g>
               </svg>
+
+              {mapLocations.map((location) => (
+                <button
+                  key={`hotspot-${location.key}`}
+                type="button"
+                data-map-hotspot="true"
+                aria-label={`Show node count for ${location.countryName}`}
+                className="absolute z-10 h-10 w-10 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border border-transparent bg-transparent outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring"
+                style={{
+                  left: `${(((18 + location.x) / 420) * 100).toFixed(2)}%`,
+                  top: `${(((16 + location.y) / 260) * 100).toFixed(2)}%`,
+                }}
+                  onMouseEnter={() => setHoveredLocationKey(location.key)}
+                  onMouseMove={() => setHoveredLocationKey(location.key)}
+                  onMouseLeave={() => {
+                    if (!pinnedLocationKey) {
+                      setHoveredLocationKey(null);
+                    }
+                  }}
+                  onFocus={() => setHoveredLocationKey(location.key)}
+                  onBlur={() => {
+                    if (!pinnedLocationKey) {
+                      setHoveredLocationKey(null);
+                    }
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setPinnedLocationKey((current) => (current === location.key ? null : location.key));
+                    setHoveredLocationKey(location.key);
+                  }}
+                />
+              ))}
             </div>
           </div>
 
@@ -1378,8 +1411,8 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
 
 function projectWorldNode(lat: number, lon: number) {
   return {
-    x: ((lon + 180) / 360) * WORLD_MAP_VIEWBOX_WIDTH,
-    y: ((90 - lat) / 180) * WORLD_MAP_VIEWBOX_HEIGHT,
+    x: 26 + ((lon + 180) / 360) * 332,
+    y: 34 + ((90 - lat) / 180) * 152,
   };
 }
 
@@ -1389,7 +1422,7 @@ function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number
   const dx = toX - fromX;
   const dy = toY - fromY;
   const distance = Math.sqrt(dx * dx + dy * dy);
-  const lift = Math.max(34, Math.min(104, distance * 0.18));
+  const lift = Math.max(16, Math.min(42, distance * 0.22));
   const controlY = midY - lift;
 
   return `M ${fromX} ${fromY} Q ${midX} ${controlY} ${toX} ${toY}`;

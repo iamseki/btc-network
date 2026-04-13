@@ -253,7 +253,7 @@ describe("useCrawlerSignalPlayback", () => {
     expect(screen.queryByText("Map Focus")).toBeNull();
     expect(screen.getAllByText("Brazil").length).toBe(1);
 
-    const hotspot = screen.getByLabelText("Brazil");
+    const hotspot = screen.getByLabelText("Show node count for Brazil");
 
     fireEvent.mouseEnter(hotspot);
 
