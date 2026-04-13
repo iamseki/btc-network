@@ -303,16 +303,13 @@ export function CrawlerLiveSignal({
       ),
     ),
   );
-  const sweepRotation = -180 + visualLoopRatio * 360;
+  const scanX = 26 + visualLoopRatio * 332;
   const visibleNodes = GLOBE_NODE_SEEDS.map((seed, index) => {
     if (index >= discoveredNodeCount) {
       return null;
     }
 
-    const projected = projectNode(seed.lat, seed.lon, sweepRotation);
-    if (!projected.visible) {
-      return null;
-    }
+    const projected = projectWorldNode(seed.lat, seed.lon);
 
     const isVerified = index < verifiedNodeCount;
     const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
@@ -397,124 +394,88 @@ export function CrawlerLiveSignal({
             <svg
               viewBox="0 0 420 260"
               role="img"
-              aria-label="Crawler execution playback around a projected globe"
+              aria-label="Crawler execution playback across a world route map"
               className={svgClass}
             >
               <defs>
-                <radialGradient id="globe-core" cx="50%" cy="45%" r="60%">
-                  <stop offset="0%" stopColor="rgba(245,179,1,0.22)" />
-                  <stop offset="50%" stopColor="rgba(245,179,1,0.10)" />
-                  <stop offset="100%" stopColor="rgba(15,23,42,0.06)" />
-                </radialGradient>
-                <linearGradient id="globe-sweep" x1="0%" y1="0%" x2="100%" y2="100%">
+                <linearGradient id="map-scan" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="rgba(245,179,1,0)" />
-                  <stop offset="45%" stopColor="rgba(245,179,1,0.04)" />
-                  <stop offset="55%" stopColor="rgba(245,179,1,0.18)" />
+                  <stop offset="45%" stopColor="rgba(245,179,1,0.03)" />
+                  <stop offset="50%" stopColor="rgba(245,179,1,0.18)" />
+                  <stop offset="55%" stopColor="rgba(245,179,1,0.03)" />
                   <stop offset="100%" stopColor="rgba(245,179,1,0)" />
                 </linearGradient>
               </defs>
 
               <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
 
-              <g transform="translate(16 8)">
-                <ellipse cx="170" cy="122" rx="120" ry="96" fill="url(#globe-core)" />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="120"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.18)"
-                  strokeWidth="1.2"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="92"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.08)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="52"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.07)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="24"
-                  ry="96"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.06)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="103"
-                  ry="20"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.08)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="92"
-                  rx="88"
-                  ry="16"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.07)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="152"
-                  rx="88"
-                  ry="16"
-                  fill="none"
-                  stroke="rgba(245,239,226,0.07)"
-                  strokeWidth="1"
-                />
-                <ellipse
-                  cx="170"
-                  cy="122"
-                  rx="136"
-                  ry="110"
-                  fill="none"
-                  stroke="rgba(245,179,1,0.16)"
-                  strokeDasharray="3 8"
-                  strokeWidth="1"
+              <g transform="translate(18 16)">
+                <rect
+                  x="0"
+                  y="0"
+                  width="384"
+                  height="228"
+                  rx="16"
+                  fill="rgba(8,8,8,0.34)"
+                  stroke="rgba(245,239,226,0.1)"
                 />
 
-                <g
-                  transform={`rotate(${sweepRotation} 170 122)`}
-                  style={{ transformOrigin: "170px 122px" }}
-                >
-                  <ellipse
-                    cx="170"
-                    cy="122"
-                    rx="120"
-                    ry="96"
-                    fill="url(#globe-sweep)"
-                    opacity="0.8"
+                {[42, 76, 110, 144, 178].map((y) => (
+                  <line
+                    key={`lat-${y}`}
+                    x1="16"
+                    y1={y}
+                    x2="368"
+                    y2={y}
+                    stroke="rgba(245,239,226,0.06)"
+                    strokeWidth="1"
                   />
-                </g>
+                ))}
+
+                {[56, 104, 152, 200, 248, 296, 344].map((x) => (
+                  <line
+                    key={`lon-${x}`}
+                    x1={x}
+                    y1="18"
+                    x2={x}
+                    y2="210"
+                    stroke="rgba(245,239,226,0.05)"
+                    strokeWidth="1"
+                  />
+                ))}
+
+                <path
+                  d="M34 70 L78 42 L122 52 L138 86 L112 108 L76 102 L48 90 Z"
+                  fill="rgba(245,239,226,0.06)"
+                />
+                <path
+                  d="M118 118 L138 134 L134 174 L120 204 L104 178 L108 142 Z"
+                  fill="rgba(245,239,226,0.055)"
+                />
+                <path
+                  d="M184 60 L222 52 L248 66 L252 94 L238 106 L232 128 L244 176 L228 196 L204 174 L194 136 L176 104 L180 82 Z"
+                  fill="rgba(245,239,226,0.06)"
+                />
+                <path
+                  d="M238 64 L294 56 L344 76 L350 110 L332 120 L308 114 L278 118 L262 102 L248 90 Z"
+                  fill="rgba(245,239,226,0.05)"
+                />
+                <path
+                  d="M314 166 L340 174 L350 194 L336 206 L308 198 L300 178 Z"
+                  fill="rgba(245,239,226,0.055)"
+                />
+
+                <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
 
                 <g>
-                  <circle cx="170" cy="122" r="6.5" fill="rgba(245,179,1,0.92)" />
-                  <circle cx="170" cy="122" r="13" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
+                  <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.92)" />
+                  <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
                 </g>
 
                 {activeFlowNodes.map((node) => (
                   <g key={`flow-${node.key}`}>
                     <path
-                      d={buildFlowArcPath(170, 122, node.x, node.y)}
+                      d={buildFlowArcPath(18, 114, node.x, node.y)}
                       fill="none"
                       stroke={node.isVerified ? "rgba(245,179,1,0.72)" : "rgba(245,239,226,0.34)"}
                       strokeWidth={node.isVerified ? 1.8 : 1.2}
@@ -547,10 +508,8 @@ export function CrawlerLiveSignal({
                 ))}
 
                 {[0, 1, 2, 3, 4, 5].map((index) => {
-                  const orbitAngle = visualLoopRatio * Math.PI * 2 + index * ((Math.PI * 2) / 6);
-                  const x = 170 + Math.cos(orbitAngle) * 146;
-                  const y = 122 + Math.sin(orbitAngle) * 116;
-
+                  const x = 32 + ((visualLoopRatio * 332 + index * 48) % 332);
+                  const y = 24 + index * 30;
                   return (
                     <circle
                       key={`orbit-${index}`}
@@ -558,7 +517,7 @@ export function CrawlerLiveSignal({
                       cy={y}
                       r={index % 2 === 0 ? 2.5 : 1.7}
                       fill="rgba(245,179,1,0.72)"
-                      opacity={0.36 + index * 0.08}
+                      opacity={0.24 + index * 0.08}
                     />
                   );
                 })}
@@ -896,15 +855,10 @@ function clampCount(value: number): number {
   return Math.max(1, Math.min(GLOBE_NODE_SEEDS.length, value));
 }
 
-function projectNode(lat: number, lon: number, rotationDeg: number) {
-  const latRad = (lat * Math.PI) / 180;
-  const lonRad = ((lon - rotationDeg) * Math.PI) / 180;
-  const horizon = Math.cos(latRad) * Math.cos(lonRad);
-
+function projectWorldNode(lat: number, lon: number) {
   return {
-    x: 186 + Math.cos(latRad) * Math.sin(lonRad) * 120,
-    y: 130 - Math.sin(latRad) * 96,
-    visible: horizon >= -0.14,
+    x: 26 + ((lon + 180) / 360) * 332,
+    y: 34 + ((90 - lat) / 180) * 152,
   };
 }
 
