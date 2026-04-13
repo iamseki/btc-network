@@ -3,7 +3,14 @@ import { Activity } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
-import worldMap from "@/lib/maps/world-low-res.json";
+import {
+  getCountryVisualAnchor,
+  projectCountryNode,
+  worldMap,
+  WORLD_MAP_FRAME,
+  WORLD_MAP_LAYER_INDEX,
+  WORLD_MAP_VIEWBOX,
+} from "@/lib/maps/world-map";
 
 const PLAYBACK_IDLE_MS = 15 * 60 * 1000;
 const PLAYBACK_TICK_MS = 1000;
@@ -58,7 +65,7 @@ const GLOBE_NODE_SEEDS: readonly WorldNodeSeed[] = [
   { lat: 1, lon: 104, city: "Singapore", countryCode: "SG", countryName: "Singapore", asnLabel: "Southern Cross Exchange", nodeCount: 210 },
 ] as const;
 
-type VisibleMapNode = ReturnType<typeof projectWorldNode> & {
+type VisibleMapNode = ReturnType<typeof projectCountryNode> & {
   key: string;
   city: string;
   countryCode: string;
@@ -89,49 +96,6 @@ type AsnInsight = {
   verifiedCount: number;
   countryCount: number;
   leadCountryName: string;
-};
-
-const WORLD_MAP_VIEWBOX = worldMap.viewBox;
-const WORLD_MAP_LAYER_INDEX = new Map(
-  worldMap.layers.map((layer) => [layer.id.toLowerCase(), layer]),
-);
-const WORLD_MAP_FRAME = {
-  x: 10,
-  y: 10,
-  width: 364,
-  height: 208,
-} as const;
-const WORLD_COUNTRY_VISUAL_ANCHORS: Record<string, { x: number; y: number }> = {
-  ae: { x: 252, y: 116 },
-  ar: { x: 119, y: 185 },
-  au: { x: 321, y: 186 },
-  br: { x: 124, y: 151 },
-  ca: { x: 82, y: 58 },
-  cl: { x: 102, y: 174 },
-  co: { x: 96, y: 130 },
-  de: { x: 193, y: 82 },
-  gb: { x: 181, y: 74 },
-  hk: { x: 318, y: 118 },
-  id: { x: 317, y: 161 },
-  in: { x: 271, y: 119 },
-  ir: { x: 242, y: 101 },
-  is: { x: 159, y: 48 },
-  jp: { x: 343, y: 100 },
-  ke: { x: 223, y: 151 },
-  mx: { x: 67, y: 110 },
-  nz: { x: 351, y: 208 },
-  pe: { x: 102, y: 151 },
-  ph: { x: 338, y: 131 },
-  pt: { x: 172, y: 90 },
-  ru: { x: 268, y: 56 },
-  se: { x: 208, y: 54 },
-  sg: { x: 319, y: 154 },
-  th: { x: 305, y: 128 },
-  tn: { x: 201, y: 106 },
-  ug: { x: 218, y: 145 },
-  us: { x: 75, y: 84 },
-  za: { x: 216, y: 194 },
-  zm: { x: 216, y: 173 },
 };
 
 type PlaybackSnapshot = {
@@ -400,7 +364,7 @@ export function CrawlerLiveSignal({
           return null;
         }
 
-        const projected = projectWorldNode(seed);
+        const projected = projectCountryNode(seed);
 
         const isVerified = index < verifiedNodeCount;
         const isRecent = index >= Math.max(0, discoveredNodeCount - 4);
@@ -1493,50 +1457,6 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
     );
 
   return { locations, asns };
-}
-
-function projectWorldNode(seed: WorldNodeSeed) {
-  const anchor = getCountryVisualAnchor(seed.countryCode) ?? fallbackCountryVisualAnchor(seed.lat, seed.lon);
-  const offset = getCountryNodeOffset(seed);
-
-  return {
-    x: anchor.x + offset.x,
-    y: anchor.y + offset.y,
-  };
-}
-
-function getCountryVisualAnchor(countryCode: string) {
-  const anchor = WORLD_COUNTRY_VISUAL_ANCHORS[countryCode];
-
-  return anchor ?? null;
-}
-
-function fallbackCountryVisualAnchor(lat: number, lon: number) {
-  return {
-    x: WORLD_MAP_FRAME.x + ((lon + 180) / 360) * WORLD_MAP_FRAME.width,
-    y: WORLD_MAP_FRAME.y + ((90 - lat) / 180) * WORLD_MAP_FRAME.height,
-  };
-}
-
-function getCountryNodeOffset(seed: WorldNodeSeed) {
-  const hash = hashString(`${seed.countryCode}:${seed.city}:${seed.asnLabel}`);
-  const angle = ((hash % 360) * Math.PI) / 180;
-  const radius = 2.5 + ((hash >> 8) % 8);
-
-  return {
-    x: Math.cos(angle) * radius,
-    y: Math.sin(angle) * radius * 0.72,
-  };
-}
-
-function hashString(value: string) {
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
-  }
-
-  return hash;
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {
