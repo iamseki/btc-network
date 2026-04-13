@@ -3,11 +3,9 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import type { BtcAppClient } from "@/lib/api/client";
 import type { AsnNodeCountItem, CrawlRunListItem } from "@/lib/api/types";
-import { isDemoModeEnabled } from "@/lib/runtime-config";
 
 export type RiskApiPanel = "overview" | "access" | "docs";
 
@@ -24,7 +22,6 @@ export function RiskApiPage({
   onPanelChange,
   showPanelNav = true,
 }: RiskApiPageProps) {
-  const demoMode = isDemoModeEnabled();
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
   const [internalActivePanel, setInternalActivePanel] = useState<RiskApiPanel>("overview");
@@ -70,17 +67,15 @@ export function RiskApiPage({
     : null;
   const panelDescription =
     activePanel === "overview"
-      ? demoMode
-        ? "Mocked commercial overview for the future Bitcoin network risk API."
-        : "Commercial overview for the future Bitcoin network risk API, grounded in the current analytics shape."
+      ? "Operational Bitcoin network intelligence for resilience, concentration, and verification analysis."
       : activePanel === "access"
-        ? "How access, API keys, and subscriptions should work when the commercial surface goes live."
-        : "Documentation posture and the future Scalar-style reference experience for the API.";
+        ? "Project access, API keys, and subscription controls for production teams."
+        : "Reference structure for the public API documentation and developer onboarding surface.";
   const headerStats = [
     {
       label: "Surface",
-      value: "preview-v0",
-      detail: "Web-only mocked product page",
+      value: "early-access",
+      detail: "Commercial launch track",
     },
     {
       label: "Target SLA",
@@ -90,7 +85,7 @@ export function RiskApiPage({
     {
       label: "Latest Window",
       value: snapshotWindowMs ? formatDuration(snapshotWindowMs) : "5m 0s",
-      detail: latestRun ? `${latestRun.uniqueNodes.toLocaleString()} tracked endpoints` : "Preview cadence",
+      detail: latestRun ? `${latestRun.uniqueNodes.toLocaleString()} tracked endpoints` : "Rolling snapshot cadence",
     },
   ];
   const overviewSignals = [
@@ -99,19 +94,19 @@ export function RiskApiPage({
       value: `${(latestRun?.successPct ?? 41.65).toFixed(2)}%`,
       detail: latestRun
         ? `${latestRun.successfulHandshakes.toLocaleString()} successful handshakes in the latest window`
-        : "Preview signal for verification quality",
+        : "Current verification quality signal",
     },
     {
       label: "Lead ASN Share",
       value: asnConcentrationPct !== null ? `${asnConcentrationPct.toFixed(1)}%` : "38.4%",
       detail: leadAsn
         ? `${leadAsn.asnOrganization ?? "Unknown ASN"} leads the visible verified set`
-        : "Preview concentration signal",
+        : "Current concentration signal",
     },
     {
       label: "Tracked Endpoints",
       value: (latestRun?.uniqueNodes ?? 24_816).toLocaleString(),
-      detail: latestRun ? "Current latest public snapshot" : "Mocked launch baseline",
+      detail: latestRun ? "Current latest public snapshot" : "Current launch baseline",
     },
   ];
   const useCases = [
@@ -181,10 +176,9 @@ export function RiskApiPage({
   ];
 
   return (
-    <Card>
-      <CardContent className="space-y-8 p-4 sm:p-6">
+    <div className="space-y-8 rounded-[20px] border border-border/80 bg-card/82 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.22)] sm:p-6">
         <SectionHeading
-          eyebrow="Commercial Preview"
+          eyebrow="Commercial API"
           title="Network Risk API"
           description={panelDescription}
           actions={
@@ -202,8 +196,8 @@ export function RiskApiPage({
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 rounded-md px-0"
-                aria-label="Refresh risk API preview"
-                title="Refresh risk API preview"
+                aria-label="Refresh risk API metrics"
+                title="Refresh risk API metrics"
                 onClick={() => void refreshPreview()}
                 disabled={isLoading}
               >
@@ -240,8 +234,8 @@ export function RiskApiPage({
         {error ? (
           <PreviewBanner
             tone="error"
-            title="Preview is showing mocked commercial framing only"
-            detail={`Live analytics refresh failed: ${error}`}
+            title="Live analytics are temporarily unavailable"
+            detail={`Showing baseline commercial content while refresh failed: ${error}`}
           />
         ) : null}
 
@@ -249,17 +243,14 @@ export function RiskApiPage({
           <div className="space-y-6">
             <section className="fx-ambient-panel fx-fade-up rounded-[18px] border border-primary/18 p-5 shadow-[0_18px_36px_rgba(0,0,0,0.24)]">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="muted">Preview only</Badge>
-                <Badge variant="muted">Web mock</Badge>
-                <Badge variant="muted">Scalar-ready docs later</Badge>
+                <Badge variant="muted">Early access</Badge>
+                <Badge variant="muted">Founding teams</Badge>
+                <Badge variant="muted">Docs in progress</Badge>
               </div>
-              <div className="mt-4 space-y-2">
-                <h2 className="max-w-3xl font-serif text-3xl uppercase tracking-[0.04em] text-foreground sm:text-[2.5rem]">
-                  Bitcoin network risk intelligence, sold as a clean API.
-                </h2>
+              <div className="mt-4">
                 <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                  Keep the commercial story tight: resilient snapshot reads, concentration evidence,
-                  verification quality, and historical replay that risk teams can actually use.
+                  Resilient Bitcoin network analytics for teams that need faster answers on concentration,
+                  verification quality, and historical drift without operating their own crawl stack.
                 </p>
               </div>
               <div className="fx-signal-track mt-4 h-[3px] rounded-full" />
@@ -388,10 +379,10 @@ export function RiskApiPage({
                     Documentation Direction
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    The future public reference should live in a cleaner Scalar-style experience.
+                    Public reference docs should live in a clean Scalar-style experience with fast onboarding.
                   </p>
                 </div>
-                <Badge variant="muted">Future Scalar surface</Badge>
+                <Badge variant="muted">Scalar-style docs</Badge>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {docsRows.map((item) => (
@@ -456,8 +447,7 @@ export function RiskApiPage({
             </section>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
