@@ -375,8 +375,8 @@ export function RiskApiPage({
       ) : null}
 
       {activePanel === "docs" ? (
-        <div classsName="space-y-6">
-            <section className="rounded-[16px] border border-border/80 bg-background/74 p4">
+        <div className="space-y-6">
+            <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -584,7 +584,7 @@ function CommercialMetric({
         {label}
       </p>
       <p className="mt-1.5 font-mono text-sm text-foreground">{value}</p>
-      <p classsName="mt-2 text-[10px] leading-5 text-muted-foreground">{detail}</p>
+      <p className="mt-2 text-[10px] leading-5 text-muted-foreground">{detail}</p>
     </div>
   );
 }
