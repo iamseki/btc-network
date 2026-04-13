@@ -28,7 +28,6 @@ SELECT
     scheduled_tasks,
     successful_handshakes,
     failed_tasks,
-    queued_nodes_total,
     unique_nodes,
     persisted_observation_rows,
     writer_backlog
@@ -66,7 +65,6 @@ FROM (
         scheduled_tasks,
         successful_handshakes,
         failed_tasks,
-        queued_nodes_total,
         unique_nodes,
         persisted_observation_rows,
         writer_backlog
@@ -107,10 +105,6 @@ pub(super) fn row_to_checkpoint(row: PgRow) -> Result<CrawlRunCheckpoint, Crawle
         failed_tasks: row
             .try_get::<i64, _>("failed_tasks")
             .map_err(|err| map_postgres_err("decode failed_tasks", err))?
-            .max(0) as usize,
-        queued_nodes_total: row
-            .try_get::<i64, _>("queued_nodes_total")
-            .map_err(|err| map_postgres_err("decode queued_nodes_total", err))?
             .max(0) as usize,
         unique_nodes: row
             .try_get::<i64, _>("unique_nodes")

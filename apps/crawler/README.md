@@ -314,7 +314,6 @@ LIMIT 10;
 SELECT
     endpoint,
     network_type,
-    handshake_status,
     failure_classification,
     enrichment_status,
     asn,

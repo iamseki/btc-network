@@ -24,9 +24,8 @@ pub use analytics::{
 };
 pub use domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
-    CrawlRunMetrics, FailureClassification, HandshakeStatus, IpEnrichment, IpEnrichmentStatus,
-    ObservationId, PersistedNodeObservation, RawNodeObservation, StartCrawlRequest,
-    StopCrawlRequest,
+    CrawlRunMetrics, FailureClassification, IpEnrichment, IpEnrichmentStatus, ObservationId,
+    PersistedNodeObservation, RawNodeObservation, StartCrawlRequest, StopCrawlRequest,
 };
 use lifecycle::{
     CheckpointEmitterContext, SharedStopReason, capture_snapshot, checkpoint_from_capture,
@@ -130,7 +129,6 @@ impl Crawler {
 
         seed_initial_nodes(
             &state,
-            &stats,
             &queue_tx,
             request.seed_nodes,
             request.config.max_tracked_nodes,
@@ -350,7 +348,6 @@ impl Crawler {
             scheduled_tasks: stats.scheduled.load(Ordering::Relaxed),
             successful_handshakes: stats.success.load(Ordering::Relaxed),
             failed_tasks: stats.failed.load(Ordering::Relaxed),
-            queued_nodes_total: stats.queued_total.load(Ordering::Relaxed),
             unique_nodes: state_guard.seen_nodes.len(),
             elapsed: started_at.elapsed(),
         })

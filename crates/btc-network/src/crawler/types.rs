@@ -79,7 +79,6 @@ pub struct CrawlSummary {
     pub scheduled_tasks: usize,
     pub successful_handshakes: usize,
     pub failed_tasks: usize,
-    pub queued_nodes_total: usize,
     pub unique_nodes: usize,
     pub elapsed: Duration,
 }
@@ -89,7 +88,6 @@ pub(crate) struct CrawlerStats {
     pub(crate) scheduled: AtomicUsize,
     pub(crate) success: AtomicUsize,
     pub(crate) failed: AtomicUsize,
-    pub(crate) queued_total: AtomicUsize,
     pub(crate) in_flight: AtomicUsize,
     pub(crate) persisted_rows: AtomicUsize,
     pub(crate) writer_backlog: AtomicUsize,

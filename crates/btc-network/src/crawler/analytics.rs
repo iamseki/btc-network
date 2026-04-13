@@ -195,7 +195,6 @@ mod tests {
                 scheduled_tasks: 80,
                 successful_handshakes: 20,
                 failed_tasks: 60,
-                queued_nodes_total: 120,
                 unique_nodes: 100,
                 persisted_observation_rows: 80,
                 writer_backlog: 0,

@@ -59,7 +59,6 @@ SELECT
     pg_size_pretty(sum(pg_column_size(scheduled_tasks))) AS scheduled_tasks_total,
     pg_size_pretty(sum(pg_column_size(successful_handshakes))) AS successful_handshakes_total,
     pg_size_pretty(sum(pg_column_size(failed_tasks))) AS failed_tasks_total,
-    pg_size_pretty(sum(pg_column_size(queued_nodes_total))) AS queued_nodes_total_total,
     pg_size_pretty(sum(pg_column_size(unique_nodes))) AS unique_nodes_total,
     pg_size_pretty(sum(pg_column_size(persisted_observation_rows))) AS persisted_observation_rows_total,
     pg_size_pretty(sum(pg_column_size(writer_backlog))) AS writer_backlog_total
@@ -150,7 +149,6 @@ SELECT
     pg_size_pretty(sum(pg_column_size(scheduled_tasks))) AS scheduled_tasks_total,
     pg_size_pretty(sum(pg_column_size(successful_handshakes))) AS successful_handshakes_total,
     pg_size_pretty(sum(pg_column_size(failed_tasks))) AS failed_tasks_total,
-    pg_size_pretty(sum(pg_column_size(queued_nodes_total))) AS queued_nodes_total_total,
     pg_size_pretty(sum(pg_column_size(unique_nodes))) AS unique_nodes_total,
     pg_size_pretty(sum(pg_column_size(persisted_observation_rows))) AS persisted_observation_rows_total,
     pg_size_pretty(sum(pg_column_size(writer_backlog))) AS writer_backlog_total

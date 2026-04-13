@@ -92,13 +92,13 @@ SELECT
 FROM (
     SELECT DISTINCT ON (endpoint)
         endpoint,
-        handshake_status,
+        failure_classification,
         asn,
         asn_organization
     FROM node_observations
     ORDER BY endpoint, observed_at DESC, observation_id DESC
 ) latest_by_endpoint
-WHERE handshake_status = 'succeeded'
+WHERE failure_classification IS NULL
 GROUP BY asn, asn_organization
 ORDER BY verified_nodes DESC, asn ASC NULLS FIRST
 LIMIT $1
@@ -150,7 +150,6 @@ SELECT
     scheduled_tasks,
     successful_handshakes,
     failed_tasks,
-    queued_nodes_total,
     unique_nodes,
     persisted_observation_rows,
     writer_backlog
@@ -218,12 +217,12 @@ async fn list_network_outcomes(
 SELECT
     network_type,
     COUNT(*) AS observations,
-    COUNT(*) FILTER (WHERE handshake_status = 'succeeded') AS verified_nodes,
-    COUNT(*) FILTER (WHERE handshake_status = 'failed') AS failed_nodes,
+    COUNT(*) FILTER (WHERE failure_classification IS NULL) AS verified_nodes,
+    COUNT(*) FILTER (WHERE failure_classification IS NOT NULL) AS failed_nodes,
     COALESCE(
         ROUND(
             (
-                100.0 * COUNT(*) FILTER (WHERE handshake_status = 'succeeded')
+                100.0 * COUNT(*) FILTER (WHERE failure_classification IS NULL)
                 / NULLIF(COUNT(*), 0)
             )::numeric,
             2

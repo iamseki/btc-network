@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS crawler_run_checkpoints (
     scheduled_tasks BIGINT NOT NULL,
     successful_handshakes BIGINT NOT NULL,
     failed_tasks BIGINT NOT NULL,
-    queued_nodes_total BIGINT NOT NULL,
     unique_nodes BIGINT NOT NULL,
     persisted_observation_rows BIGINT NOT NULL,
     writer_backlog BIGINT NOT NULL

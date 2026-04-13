@@ -123,8 +123,8 @@ mod tests {
     use super::*;
     use crate::crawler::{
         AsnNodeCountItem, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem, CrawlRunDetail,
-        CrawlRunListItem, CrawlRunMetrics, FailureClassificationCount, HandshakeStatus,
-        NetworkOutcomeCount, ObservationId, RawNodeObservation,
+        CrawlRunListItem, CrawlRunMetrics, FailureClassificationCount, NetworkOutcomeCount,
+        ObservationId, RawNodeObservation,
     };
     use chrono::Utc;
     use std::net::{IpAddr, Ipv4Addr};
@@ -271,7 +271,6 @@ mod tests {
                 CrawlNetwork::Ipv4,
                 Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7))),
             ),
-            handshake_status: HandshakeStatus::Succeeded,
             protocol_version: Some(70016),
             services: Some(1),
             user_agent: Some("/Satoshi:27.0.0/".to_string()),
@@ -298,7 +297,6 @@ mod tests {
                 scheduled_tasks: 3,
                 successful_handshakes: 4,
                 failed_tasks: 1,
-                queued_nodes_total: 5,
                 unique_nodes: 5,
                 persisted_observation_rows: 2,
                 writer_backlog: 0,

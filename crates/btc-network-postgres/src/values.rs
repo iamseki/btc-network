@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use btc_network::crawler::{
-    CrawlNetwork, CrawlPhase, FailureClassification, HandshakeStatus, IpEnrichmentStatus,
-};
+use btc_network::crawler::{CrawlNetwork, CrawlPhase, FailureClassification, IpEnrichmentStatus};
 
 pub(crate) fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
     match value {
@@ -22,14 +20,6 @@ pub(crate) fn crawl_phase_from_str(value: &str) -> CrawlPhase {
         "completed" => CrawlPhase::Completed,
         "failed" => CrawlPhase::Failed,
         _ => CrawlPhase::Failed,
-    }
-}
-
-pub(crate) fn handshake_status_to_str(value: HandshakeStatus) -> &'static str {
-    match value {
-        HandshakeStatus::Succeeded => "succeeded",
-        HandshakeStatus::Failed => "failed",
-        HandshakeStatus::NotAttempted => "not_attempted",
     }
 }
 

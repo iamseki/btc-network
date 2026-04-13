@@ -4,7 +4,7 @@ use sqlx_postgres::{PgPool, Postgres};
 
 use crate::values::{
     crawl_network_to_str, crawl_phase_to_str, duration_to_millis, enrichment_status_to_str,
-    failure_classification_to_str, handshake_status_to_str, usize_to_i64,
+    failure_classification_to_str, usize_to_i64,
 };
 
 use super::map_postgres_err;
@@ -37,7 +37,6 @@ INSERT INTO node_observations (
     observation_id,
     endpoint,
     network_type,
-    handshake_status,
     protocol_version,
     services,
     user_agent,
@@ -53,7 +52,7 @@ INSERT INTO node_observations (
     prefix
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 )
 ",
         )
@@ -62,7 +61,6 @@ VALUES (
         .bind(observation.observation_id.as_uuid())
         .bind(endpoint)
         .bind(network_type)
-        .bind(handshake_status_to_str(observation.raw.handshake_status))
         .bind(observation.raw.protocol_version)
         .bind(services)
         .bind(observation.raw.user_agent)
@@ -108,13 +106,12 @@ INSERT INTO crawler_run_checkpoints (
     scheduled_tasks,
     successful_handshakes,
     failed_tasks,
-    queued_nodes_total,
     unique_nodes,
     persisted_observation_rows,
     writer_backlog
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
 ",
     )
@@ -130,7 +127,6 @@ VALUES (
     .bind(usize_to_i64(checkpoint.metrics.scheduled_tasks))
     .bind(usize_to_i64(checkpoint.metrics.successful_handshakes))
     .bind(usize_to_i64(checkpoint.metrics.failed_tasks))
-    .bind(usize_to_i64(checkpoint.metrics.queued_nodes_total))
     .bind(usize_to_i64(checkpoint.metrics.unique_nodes))
     .bind(usize_to_i64(checkpoint.metrics.persisted_observation_rows))
     .bind(usize_to_i64(checkpoint.metrics.writer_backlog))

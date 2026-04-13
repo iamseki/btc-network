@@ -285,13 +285,6 @@ fn is_routable_ipv6(ip: Ipv6Addr) -> bool {
         || (segments[0] == 0x2001 && segments[1] == 0x0db8))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HandshakeStatus {
-    Succeeded,
-    Failed,
-    NotAttempted,
-}
-
 /// Stage at which a node visit failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FailureClassification {
@@ -379,7 +372,6 @@ pub struct RawNodeObservation {
     pub observed_at: DateTime<Utc>,
     pub crawl_run_id: CrawlRunId,
     pub endpoint: CrawlEndpoint,
-    pub handshake_status: HandshakeStatus,
     pub protocol_version: Option<i32>,
     pub services: Option<u64>,
     pub user_agent: Option<String>,
@@ -403,7 +395,6 @@ impl RawNodeObservation {
             observed_at,
             crawl_run_id,
             endpoint,
-            handshake_status: HandshakeStatus::Succeeded,
             protocol_version: Some(state.version),
             services: Some(state.services),
             user_agent: Some(state.user_agent.clone()),
@@ -426,7 +417,6 @@ impl RawNodeObservation {
             observed_at,
             crawl_run_id,
             endpoint,
-            handshake_status: HandshakeStatus::Failed,
             protocol_version: None,
             services: None,
             user_agent: None,
@@ -469,7 +459,6 @@ pub struct CrawlRunMetrics {
     pub scheduled_tasks: usize,
     pub successful_handshakes: usize,
     pub failed_tasks: usize,
-    pub queued_nodes_total: usize,
     pub unique_nodes: usize,
     pub persisted_observation_rows: usize,
     pub writer_backlog: usize,
@@ -524,7 +513,6 @@ mod tests {
             observed_at: Utc::now(),
             crawl_run_id: CrawlRunId::from_u128(1),
             endpoint,
-            handshake_status: HandshakeStatus::Succeeded,
             protocol_version: Some(70016),
             services: Some(1),
             user_agent: Some("/Satoshi:27.0.0/".to_string()),

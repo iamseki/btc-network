@@ -155,7 +155,6 @@ pub(crate) async fn capture_snapshot(
             scheduled_tasks: stats.scheduled.load(Ordering::Relaxed),
             successful_handshakes: stats.success.load(Ordering::Relaxed),
             failed_tasks: stats.failed.load(Ordering::Relaxed),
-            queued_nodes_total: stats.queued_total.load(Ordering::Relaxed),
             unique_nodes: guard.seen_nodes.len(),
             persisted_observation_rows: stats.persisted_rows.load(Ordering::Relaxed),
             writer_backlog: stats.writer_backlog.load(Ordering::Relaxed),
@@ -468,7 +467,6 @@ mod tests {
             guard.pending_nodes.insert(endpoint);
         }
         let stats = Arc::new(CrawlerStats::default());
-        stats.queued_total.store(1, Ordering::Relaxed);
         stats.in_flight.store(2, Ordering::Relaxed);
         stats.persisted_rows.store(3, Ordering::Relaxed);
         stats.writer_backlog.store(4, Ordering::Relaxed);

@@ -139,9 +139,6 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 let queued_count = discovered.len();
 
                 if !discovered.is_empty() {
-                    stats
-                        .queued_total
-                        .fetch_add(queued_count, Ordering::Relaxed);
                     for candidate in discovered {
                         if stop.load(Ordering::Relaxed) {
                             break;
@@ -276,7 +273,6 @@ fn build_persisted_observation(
 
 pub(crate) async fn seed_initial_nodes(
     state: &Arc<Mutex<CrawlState>>,
-    stats: &Arc<CrawlerStats>,
     queue_tx: &mpsc::UnboundedSender<QueuedNode>,
     seeds: Vec<CrawlEndpoint>,
     max_tracked_nodes: usize,
@@ -293,9 +289,6 @@ pub(crate) async fn seed_initial_nodes(
     }
 
     if !newly_queued.is_empty() {
-        stats
-            .queued_total
-            .fetch_add(newly_queued.len(), Ordering::Relaxed);
         for endpoint in newly_queued {
             let _ = queue_tx.send(QueuedNode::initial(endpoint));
         }
@@ -478,7 +471,7 @@ mod tests {
     use super::*;
     use crate::crawler::node::NodeProcessor;
     use crate::crawler::types::NodeVisitResult;
-    use crate::crawler::{CrawlNetwork, CrawlRunId, FailureClassification, HandshakeStatus};
+    use crate::crawler::{CrawlNetwork, CrawlRunId, FailureClassification};
     use crate::wire::message::Services;
     use chrono::Utc;
     use std::collections::HashMap;
@@ -750,13 +743,12 @@ mod tests {
         assert_eq!(stats.scheduled.load(Ordering::Relaxed), 1);
         assert_eq!(stats.success.load(Ordering::Relaxed), 1);
         assert_eq!(stats.failed.load(Ordering::Relaxed), 0);
-        assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
         assert_eq!(
             out_rx.try_recv().ok().map(|queued| queued.endpoint),
             Some(discovered.clone())
         );
         assert!(out_rx.try_recv().is_err());
-        assert_eq!(persisted.raw.handshake_status, HandshakeStatus::Succeeded);
+        assert_eq!(persisted.raw.failure_classification, None);
         assert_eq!(persisted.enrichment.asn, Some(64512));
 
         let guard = state.lock().await;
@@ -817,7 +809,10 @@ mod tests {
         .await;
 
         let persisted = obs_rx.recv().await.expect("persisted observation");
-        assert_eq!(persisted.raw.handshake_status, HandshakeStatus::Failed);
+        assert_eq!(
+            persisted.raw.failure_classification,
+            Some(crate::crawler::FailureClassification::Connect)
+        );
         assert_eq!(
             persisted.enrichment.status,
             crate::crawler::IpEnrichmentStatus::NotApplicable
@@ -827,23 +822,14 @@ mod tests {
     #[tokio::test]
     async fn seed_initial_nodes_deduplicates_and_tracks_pending_frontier() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
-        let stats = Arc::new(CrawlerStats::default());
         let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
 
         let a = test_endpoint(2);
         let b = test_endpoint(3);
         let seeds = vec![a.clone(), b.clone(), a.clone()];
 
-        seed_initial_nodes(
-            &state,
-            &stats,
-            &queue_tx,
-            seeds,
-            test_config().max_tracked_nodes,
-        )
-        .await;
+        seed_initial_nodes(&state, &queue_tx, seeds, test_config().max_tracked_nodes).await;
 
-        assert_eq!(stats.queued_total.load(Ordering::Relaxed), 2);
         let first = queue_rx.try_recv().expect("first queued");
         let second = queue_rx.try_recv().expect("second queued");
         assert!(queue_rx.try_recv().is_err());
@@ -1167,19 +1153,16 @@ mod tests {
     #[tokio::test]
     async fn seed_initial_nodes_respects_max_tracked_nodes_limit() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
-        let stats = Arc::new(CrawlerStats::default());
         let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
 
         seed_initial_nodes(
             &state,
-            &stats,
             &queue_tx,
             vec![test_endpoint(2), test_endpoint(3)],
             1,
         )
         .await;
 
-        assert_eq!(stats.queued_total.load(Ordering::Relaxed), 1);
         assert!(queue_rx.try_recv().is_ok());
         assert!(queue_rx.try_recv().is_err());
         assert_eq!(state.lock().await.seen_nodes.len(), 1);

@@ -8,8 +8,8 @@ use std::{env, fs};
 
 use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
-    CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, HandshakeStatus, IpEnrichment,
-    IpEnrichmentProvider, ObservationId, PersistedNodeObservation, RawNodeObservation,
+    CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, IpEnrichment, IpEnrichmentProvider,
+    ObservationId, PersistedNodeObservation, RawNodeObservation,
 };
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_postgres::{
@@ -616,7 +616,6 @@ fn sample_verified_observation(
             CrawlNetwork::Ipv4,
             Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
         ),
-        handshake_status: HandshakeStatus::Succeeded,
         protocol_version: Some(70016),
         services: Some(1),
         user_agent: Some("/Satoshi:27.0.0/".to_string()),
@@ -648,7 +647,6 @@ fn sample_verified_observation_for_endpoint(
         observed_at,
         crawl_run_id: run_id.clone(),
         endpoint: endpoint.clone(),
-        handshake_status: HandshakeStatus::Succeeded,
         protocol_version: Some(70016),
         services: Some(1),
         user_agent: Some("/Satoshi:27.0.0/".to_string()),
@@ -676,7 +674,6 @@ fn sample_failed_observation(
             CrawlNetwork::Ipv4,
             Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
         ),
-        handshake_status: HandshakeStatus::Failed,
         protocol_version: None,
         services: None,
         user_agent: None,
@@ -718,7 +715,6 @@ fn sample_checkpoint(
             scheduled_tasks: 3,
             successful_handshakes: 4,
             failed_tasks: 1,
-            queued_nodes_total: 5,
             unique_nodes: 6,
             persisted_observation_rows: 8,
             writer_backlog: 0,
