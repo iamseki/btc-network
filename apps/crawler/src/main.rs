@@ -71,7 +71,7 @@ struct CrawlArgs {
     )]
     idle_timeout_minutes: u64,
 
-    /// Seconds between periodic durable checkpoints and recovery points.
+    /// Seconds between periodic durable progress checkpoints.
     #[arg(
         long,
         env = "BTC_NETWORK_CRAWLER_CHECKPOINT_INTERVAL_SECS",

@@ -1,6 +1,10 @@
 import { ChartColumn, Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck, Waypoints } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import {
+  AnalyticsHeaderStat,
+  AnalyticsPanelButton,
+} from "@/components/analytics/page-primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -177,70 +181,70 @@ export function RiskApiPage({
 
   return (
     <div className="space-y-8 rounded-[20px] border border-border/80 bg-card/82 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.22)] sm:p-6">
-        <SectionHeading
-          eyebrow="Commercial API"
-          title="Network Risk API"
-          description={panelDescription}
-          actions={
-            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-              {headerStats.map((stat) => (
-                <HeaderStat
-                  key={stat.label}
-                  label={stat.label}
-                  value={stat.value}
-                  detail={stat.detail}
-                />
-              ))}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 rounded-md px-0"
-                aria-label="Refresh risk API metrics"
-                title="Refresh risk API metrics"
-                onClick={() => void refreshPreview()}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCw className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          }
-        />
-
-        {showPanelNav ? (
-          <div className="flex flex-wrap gap-2">
-            <PanelButton
-              label="Overview"
-              selected={activePanel === "overview"}
-              onClick={() => selectPanel("overview")}
-            />
-            <PanelButton
-              label="Access"
-              selected={activePanel === "access"}
-              onClick={() => selectPanel("access")}
-            />
-            <PanelButton
-              label="Docs"
-              selected={activePanel === "docs"}
-              onClick={() => selectPanel("docs")}
-            />
+      <SectionHeading
+        eyebrow="Commercial API"
+        title="Network Risk API"
+        description={panelDescription}
+        actions={
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+            {headerStats.map((stat) => (
+              <AnalyticsHeaderStat
+                key={stat.label}
+                label={stat.label}
+                value={stat.value}
+                detail={stat.detail}
+              />
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 rounded-md px-0"
+              aria-label="Refresh risk API metrics"
+              title="Refresh risk API metrics"
+              onClick={() => void refreshPreview()}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCw className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        ) : null}
+        }
+      />
 
-        {error ? (
-          <PreviewBanner
-            tone="error"
-            title="Live analytics are temporarily unavailable"
-            detail={`Showing baseline commercial content while refresh failed: ${error}`}
+      {showPanelNav ? (
+        <div className="flex flex-wrap gap-2">
+          <AnalyticsPanelButton
+            label="Overview"
+            selected={activePanel === "overview"}
+            onClick={() => selectPanel("overview")}
           />
-        ) : null}
+          <AnalyticsPanelButton
+            label="Access"
+            selected={activePanel === "access"}
+            onClick={() => selectPanel("access")}
+          />
+          <AnalyticsPanelButton
+            label="Docs"
+            selected={activePanel === "docs"}
+            onClick={() => selectPanel("docs")}
+          />
+        </div>
+      ) : null}
 
-        {activePanel === "overview" ? (
-          <div className="space-y-6">
+      {error ? (
+        <PreviewBanner
+          tone="error"
+          title="Live analytics are temporarily unavailable"
+          detail={`Showing baseline commercial content while refresh failed: ${error}`}
+        />
+      ) : null}
+
+      {activePanel === "overview" ? (
+        <div className="space-y-6">
             <section className="fx-ambient-panel fx-fade-up rounded-[18px] border border-primary/18 p-5 shadow-[0_18px_36px_rgba(0,0,0,0.24)]">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="muted">Early access</Badge>
@@ -306,11 +310,11 @@ export function RiskApiPage({
                 </div>
               </div>
             </section>
-          </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        {activePanel === "access" ? (
-          <div className="space-y-6">
+      {activePanel === "access" ? (
+        <div className="space-y-6">
             <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                 Access Flow
@@ -367,12 +371,12 @@ export function RiskApiPage({
                 </div>
               </div>
             </section>
-          </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        {activePanel === "docs" ? (
-          <div className="space-y-6">
-            <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
+      {activePanel === "docs" ? (
+        <div classsName="space-y-6">
+            <section className="rounded-[16px] border border-border/80 bg-background/74 p4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -445,44 +449,8 @@ export function RiskApiPage({
                 </div>
               </div>
             </section>
-          </div>
-        ) : null}
-    </div>
-  );
-}
-
-function PanelButton({
-  label,
-  selected,
-  onClick,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button type="button" variant={selected ? "default" : "secondary"} size="sm" onClick={onClick}>
-      {label}
-    </Button>
-  );
-}
-
-function HeaderStat({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <div className="min-w-[8rem] rounded-[8px] border border-border/70 bg-background/75 px-2.5 py-2 text-left sm:min-w-[8.75rem]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 break-all font-mono text-[13px] text-foreground">{value}</p>
-      <p className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -616,7 +584,7 @@ function CommercialMetric({
         {label}
       </p>
       <p className="mt-1.5 font-mono text-sm text-foreground">{value}</p>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{detail}</p>
+      <p classsName="mt-2 text-[10px] leading-5 text-muted-foreground">{detail}</p>
     </div>
   );
 }
