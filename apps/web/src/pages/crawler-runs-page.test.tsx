@@ -246,7 +246,7 @@ describe("CrawlerRunsPage", () => {
     await waitFor(() => {
       expect(getRun).toHaveBeenCalledWith("crawl-2");
     });
-    fireEvent.click(screen.getByRole("button", { name: "Failures" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Failures" }));
     expect(await screen.findByText("Failure Mix")).toBeTruthy();
     expect((await screen.findAllByText("handshake")).length).toBeGreaterThan(0);
   });

@@ -301,6 +301,48 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
 }
 
 #[tokio::test]
+async fn repository_batches_large_observation_streams() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+
+    let run_id = run_id(11);
+    let base_time = Utc::now();
+    let observations = (0..1001)
+        .map(|index| {
+            let host = format!("10.1.{}.{}", index / 256, index % 256);
+            sample_verified_observation(
+                &run_id,
+                &host,
+                10_000 + index as u128,
+                base_time + Duration::milliseconds(index as i64),
+                Some(64512),
+                Some("Example ASN"),
+                Some("US"),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    repository.insert_observations_stream(observations).await?;
+
+    let client = db.connect().await?;
+    let row = query::<Postgres>(
+        "
+SELECT COUNT(*) AS observations
+FROM node_observations
+WHERE crawl_run_id = $1
+",
+    )
+    .bind(run_id.as_uuid())
+    .fetch_one(&client)
+    .await?;
+
+    assert_eq!(row.get::<i64, _>("observations"), 1001);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestResult {
     let db = TestDatabase::start().await?;
     db.apply_migrations().await?;
