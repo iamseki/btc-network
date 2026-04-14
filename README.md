@@ -12,20 +12,17 @@ btc-network is a Rust-based Bitcoin P2P research and observability project focus
 ## Repository Shape
 
 - `crates/btc-network` — shared Rust protocol, session, client, and crawler code
+- `apps/api` — browser-safe HTTP API for crawler analytics reads
 - `apps/cli` — single-peer CLI flows
 - `apps/crawler` — network crawler binary
+- `apps/postgres-migrate` — PostgreSQL migration runner for local and container flows
 - `apps/web` — web-first React frontend
 - `apps/desktop` — Tauri desktop shell reusing the web UI
 
 ## Current Capabilities
 
-- Bitcoin handshake (`version` / `verack`)
-- `addr` / BIP155 `addrv2`
-- `getaddr`
-- `getheaders`
-- iterative tip sync
-- block summary
-- block download
+- read-only crawler analytics API for runs, run detail, and top ASN counts
+- web analytics surfaces for crawler runs, network analytics, and commercial API previews
 - desktop-backed UI flows for handshake, ping, addresses, chain height, block summary, and block download
 - session log, handshake service-name summaries, and chain-height progress in the current UI
 
@@ -49,15 +46,6 @@ List the repository helper commands:
 make help
 ```
 
-Useful focused commands:
-
-```bash
-cargo test -p btc-network
-cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
-npm run test --prefix apps/web
-npm run build --prefix apps/web
-```
-
 Optional local git hook setup:
 
 ```bash
@@ -78,10 +66,16 @@ make cli ARGS="--node seed.bitnodes.io:8333 get-block --hash <block-hash>"
 make cli ARGS="--node seed.bitnodes.io:8333 download-block --hash <block-hash>"
 ```
 
-Crawler:
+Crawler with docker:
 
 ```bash
-make crawler
+make infra-crawler-up
+```
+
+API:
+
+```bash
+make api
 ```
 
 For the preferred local crawler setup with the shared Docker-backed PostgreSQL service and local MMDB files, see [apps/crawler/README.md](apps/crawler/README.md).
@@ -103,10 +97,13 @@ Equivalent `make` wrappers:
 
 ```bash
 make infra-postgres-up
+make infra-postgres-down
+make infra-postgres-reset
 make infra-crawler-up
 make infra-api-up
 make infra-crawler-api-up
 make infra-compose-down
+make infra-compose-reset
 ```
 
 Desktop app:
@@ -121,6 +118,7 @@ Web app:
 ```bash
 make web-install
 make web-dev
+make web-dev-demo
 ```
 
 ## Deploying Web
@@ -133,7 +131,7 @@ See [docs/deployment.md](docs/deployment.md) for the current production setup, r
 
 - The root `Cargo.toml` is a virtual workspace manifest.
 - The root `Cargo.lock` is authoritative for the Rust workspace.
-- The plain web runtime still uses placeholder-backed flows where a browser-safe backend does not exist yet.
+- The web app uses `apps/api` for browser-safe crawler analytics reads and still uses placeholder-backed flows where a browser-safe backend does not exist yet.
 - Desktop builds on Ubuntu/Debian require system packages documented in `apps/desktop/README.md`.
 
 ## License
