@@ -1,17 +1,18 @@
 services:
   crawler:
-    image: rust:1.93.1-bookworm
-    working_dir: /workspace
+    image: btc-network-crawler-local:dev
+    build:
+      context: .
+      dockerfile: apps/crawler/Dockerfile
+      target: runtime
     container_name: btc-network-crawler
     profiles: ["crawler"]
-    cpus: ${BTC_NETWORK_API_CPUS:-2.0}
-    mem_limit: ${BTC_NETWORK_API_MEM_LIMIT:-2g}
+    cpus: ${BTC_NETWORK_CRAWLER_CPUS:-2.0}
+    mem_limit: ${BTC_NETWORK_CRAWLER_MEM_LIMIT:-6g}
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully
     environment:
-      CARGO_HOME: /cargo
-      CARGO_TARGET_DIR: /cargo-target
       BTC_NETWORK_POSTGRES_URL: postgresql://btc_network_dev:btc_network_dev@postgres:5432/btc_network
       BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: ${BTC_NETWORK_POSTGRES_MAX_CONNECTIONS:-16}
       BTC_NETWORK_CRAWLER_MAX_CONCURRENCY: ${BTC_NETWORK_CRAWLER_MAX_CONCURRENCY:-10000}
@@ -26,14 +27,10 @@ services:
       BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS: ${BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS:-20}
       BTC_NETWORK_CRAWLER_SHUTDOWN_GRACE_PERIOD_SECS: ${BTC_NETWORK_CRAWLER_SHUTDOWN_GRACE_PERIOD_SECS:-15}
       BTC_NETWORK_CRAWLER_VERBOSE: ${BTC_NETWORK_CRAWLER_VERBOSE:-false}
-      BTC_NETWORK_MMDB_ASN_PATH: ${BTC_NETWORK_MMDB_ASN_PATH:-/workspace/.dev-data/mmdb/GeoLite2-ASN.mmdb}
-      BTC_NETWORK_MMDB_COUNTRY_PATH: ${BTC_NETWORK_MMDB_COUNTRY_PATH:-/workspace/.dev-data/mmdb/GeoLite2-Country.mmdb}
-    command: cargo run -p btc-network-crawler --locked --
+      BTC_NETWORK_MMDB_ASN_PATH: ${BTC_NETWORK_MMDB_ASN_PATH:-/data/mmdb/GeoLite2-ASN.mmdb}
+      BTC_NETWORK_MMDB_COUNTRY_PATH: ${BTC_NETWORK_MMDB_COUNTRY_PATH:-/data/mmdb/GeoLite2-Country.mmdb}
     volumes:
-      - .:/workspace # TODO: improve this, maybe docker ignore or something?
-      - cargo-registry:/cargo/registry
-      - cargo-git:/cargo/git
-      - cargo-target:/cargo-target
+      - ./.dev-data/mmdb:/data/mmdb:ro
     ulimits:
       nofile:
         soft: ${BTC_NETWORK_CRAWLER_NOFILE_SOFT:-1024}

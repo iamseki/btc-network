@@ -1,0 +1,15 @@
+.git
+.github
+.cargo-home
+.npm-cache
+.dev-data
+artifacts
+blk-*.dat
+node_modules
+target
+**/target
+**/node_modules
+**/dist
+**/.DS_Store
+.vscode
+.idea

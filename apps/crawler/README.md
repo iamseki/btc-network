@@ -95,9 +95,20 @@ make infra-crawler-api-up
 make infra-compose-down
 ```
 
-The profiled services run the checked-in Rust binaries inside a shared
-`rust:1.93.1-bookworm` container image and reuse named Cargo caches for
-dependency downloads and build artifacts.
+The profiled crawler services now build a local multi-stage Docker image from
+`apps/crawler/Dockerfile` and run optimized binaries directly instead of
+invoking `cargo run` inside a generic Rust toolchain container.
+
+That means the runtime containers:
+
+- do not bind-mount the full repository
+- do not compile on every start
+- only mount the host-managed MMDB directory read-only when the crawler needs it
+
+The image includes both binaries used by the crawler stack:
+
+- `btc-network-crawler`
+- `btc-network-postgres-migrate`
 
 The profiled crawler service also sets default runtime tuning through
 environment variables in `compose/crawler.yml`, including:
@@ -106,12 +117,12 @@ environment variables in `compose/crawler.yml`, including:
 - `BTC_NETWORK_CRAWLER_MAX_IN_FLIGHT_CONNECTS=512`
 - `BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES=500000`
 - `BTC_NETWORK_POSTGRES_MAX_CONNECTIONS=16`
-- `BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS=10`
+- `BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS=5`
 - `BTC_NETWORK_CRAWLER_CONNECT_RETRY_BACKOFF_MS=250`
 - `BTC_NETWORK_CRAWLER_CONNECT_TIMEOUT_SECS=30`
 - `BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS=20`
-- `BTC_NETWORK_MMDB_ASN_PATH=/workspace/.dev-data/mmdb/GeoLite2-ASN.mmdb`
-- `BTC_NETWORK_MMDB_COUNTRY_PATH=/workspace/.dev-data/mmdb/GeoLite2-Country.mmdb`
+- `BTC_NETWORK_MMDB_ASN_PATH=/data/mmdb/GeoLite2-ASN.mmdb`
+- `BTC_NETWORK_MMDB_COUNTRY_PATH=/data/mmdb/GeoLite2-Country.mmdb`
 
 Compose resource defaults are also set there:
 
@@ -276,9 +287,10 @@ Optional crawler tuning overrides:
 
 The crawler still runs without MMDB files, but enrichment will be unavailable and ASN/country data will not be persisted.
 
-The profiled `crawler` container now defaults to the checked-out
-`.dev-data/mmdb/*.mmdb` paths. Run `make crawler-mmdb-update` before starting
-the Compose crawler stack so those files exist on the bind-mounted workspace.
+The profiled `crawler` container now defaults to `/data/mmdb/*.mmdb`, backed by
+a read-only bind mount from the checked-out `.dev-data/mmdb/` directory. Run
+`make crawler-mmdb-update` before starting the Compose crawler stack so those
+files exist on the host.
 
 Do not bake MMDB files into a crawler image for this local workflow. They are
 host-managed datasets refreshed on a weekly cadence, so bind-mounting the

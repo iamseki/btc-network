@@ -22,3 +22,9 @@ default-members = [
     "crates/btc-network-observability",
 ]
 resolver = "3"
+
+[profile.dist]
+inherits = "release"
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
