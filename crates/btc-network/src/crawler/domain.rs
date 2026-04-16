@@ -82,13 +82,14 @@ impl Display for ObservationId {
 }
 
 /// Lifecycle phase of a crawler run.
+/// The run ends in a terminal `Finished` phase. The reason for ending is
+/// represented separately by `stop_reason` and `failure_reason`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CrawlPhase {
     Bootstrap,
     Crawling,
     Draining,
-    Completed,
-    Failed,
+    Finished,
 }
 
 /// Network family inferred for a discovered endpoint.

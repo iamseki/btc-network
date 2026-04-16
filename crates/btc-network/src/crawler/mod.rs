@@ -312,11 +312,9 @@ impl Crawler {
         }
         task_set.signal_handle.abort();
 
-        let final_phase = if failure_reason.is_some() {
-            CrawlPhase::Failed
-        } else {
-            CrawlPhase::Completed
-        };
+        // All terminal runs reach 'Finished' phase. The reason for ending is
+        // captured separately in 'stop_reason' or 'failure_reason'.
+        let final_phase = CrawlPhase::Finished;
         {
             let mut guard = phase.lock().await;
             let from_phase = *guard;
@@ -1086,7 +1084,7 @@ mod tests {
         let checkpoints = repository.list_runs().await.expect("list checkpoints");
         let final_checkpoint = checkpoints.last().expect("final checkpoint");
 
-        assert_eq!(final_checkpoint.phase, CrawlPhase::Completed);
+        assert_eq!(final_checkpoint.phase, CrawlPhase::Finished);
         assert!(
             final_checkpoint
                 .stop_reason

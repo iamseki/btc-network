@@ -21,3 +21,9 @@ CREATE INDEX IF NOT EXISTS crawler_run_checkpoints_run_latest_idx
 
 CREATE INDEX IF NOT EXISTS crawler_run_checkpoints_latest_idx
     ON crawler_run_checkpoints (checkpointed_at DESC, checkpoint_sequence DESC);
+
+-- Add a partial index on the finished phase for efficient queries like:
+--   SELECT * FROM crawler_run_checkpoints WHERE phase = 'finished' ORDER BY run_id DESC LIMIT 1
+CREATE INDEX IF NOT EXISTS crawler_run_checkpoints_finished_phase_idx
+    ON crawler_run_checkpoints (run_id DESC)
+    WHERE phase = 'finished';

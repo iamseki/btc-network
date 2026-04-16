@@ -7,8 +7,7 @@ pub(crate) fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
         CrawlPhase::Bootstrap => "bootstrap",
         CrawlPhase::Crawling => "crawling",
         CrawlPhase::Draining => "draining",
-        CrawlPhase::Completed => "completed",
-        CrawlPhase::Failed => "failed",
+        CrawlPhase::Finished => "finished",
     }
 }
 
@@ -17,9 +16,8 @@ pub(crate) fn crawl_phase_from_str(value: &str) -> CrawlPhase {
         "bootstrap" => CrawlPhase::Bootstrap,
         "crawling" => CrawlPhase::Crawling,
         "draining" => CrawlPhase::Draining,
-        "completed" => CrawlPhase::Completed,
-        "failed" => CrawlPhase::Failed,
-        _ => CrawlPhase::Failed,
+        "finished" => CrawlPhase::Finished,
+        _ => CrawlPhase::Finished,
     }
 }
 
