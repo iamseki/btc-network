@@ -416,7 +416,7 @@ mod tests {
     fn sample_run() -> CrawlRunListItem {
         CrawlRunListItem {
             run_id: "00000000-0000-0000-0000-000000000001".to_string(),
-            phase: "completed".to_string(),
+            phase: "finished".to_string(),
             started_at: "2026-03-30T12:00:00+00:00".to_string(),
             last_checkpointed_at: "2026-03-30T12:10:00+00:00".to_string(),
             stop_reason: Some("idle timeout".to_string()),

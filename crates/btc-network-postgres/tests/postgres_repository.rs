@@ -363,7 +363,7 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
     repository
         .insert_run_checkpoint(sample_checkpoint(
             &run_id,
-            CrawlPhase::Failed,
+            CrawlPhase::Finished,
             tied_time,
             2,
             Some("checkpoint tie".to_string()),
@@ -374,7 +374,7 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
         .get_run_checkpoint(&run_id)
         .await?
         .expect("checkpoint");
-    assert_eq!(latest.phase, CrawlPhase::Failed);
+    assert_eq!(latest.phase, CrawlPhase::Finished);
     assert_eq!(latest.checkpoint_sequence, 2);
     assert_eq!(latest.stop_reason.as_deref(), Some("checkpoint tie"));
 
@@ -383,7 +383,7 @@ async fn repository_uses_checkpoint_sequence_to_break_timestamp_ties() -> TestRe
         .into_iter()
         .find(|checkpoint| checkpoint.run_id == run_id)
         .expect("run summary");
-    assert_eq!(run.phase, CrawlPhase::Failed);
+    assert_eq!(run.phase, CrawlPhase::Finished);
     assert_eq!(run.checkpoint_sequence, 2);
     assert_eq!(run.stop_reason.as_deref(), Some("checkpoint tie"));
     assert_eq!(run.metrics.unique_nodes, 6);
@@ -503,7 +503,7 @@ async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
     repository
         .insert_run_checkpoint(sample_checkpoint(
             &run_id(6),
-            CrawlPhase::Completed,
+            CrawlPhase::Finished,
             base_time,
             1,
             Some("idle timeout".to_string()),
@@ -512,10 +512,10 @@ async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
     repository
         .insert_run_checkpoint(sample_checkpoint(
             &run_id(7),
-            CrawlPhase::Failed,
+            CrawlPhase::Finished,
             base_time + Duration::seconds(5),
             1,
-            Some("checkpoint failure".to_string()),
+            Some("connection failure".to_string()),
         ))
         .await?;
 
@@ -523,7 +523,7 @@ async fn analytics_reader_lists_runs_with_derived_percentages() -> TestResult {
 
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].run_id, run_id(7).to_string());
-    assert_eq!(runs[0].phase, "failed");
+    assert_eq!(runs[0].phase, "finished");
     assert_eq!(runs[0].success_pct, 133.33);
     assert_eq!(runs[0].scheduled_pct, 50.0);
     assert_eq!(runs[0].unscheduled_gap, 3);
@@ -565,7 +565,7 @@ async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns
     repository
         .insert_run_checkpoint(sample_checkpoint(
             &run_id,
-            CrawlPhase::Failed,
+            CrawlPhase::Finished,
             base_time + Duration::seconds(3),
             2,
             Some("checkpoint failure".to_string()),
@@ -577,9 +577,9 @@ async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns
         .expect("run detail");
 
     assert_eq!(detail.run.run_id, run_id.to_string());
-    assert_eq!(detail.run.phase, "failed");
+    assert_eq!(detail.run.phase, "finished");
     assert_eq!(detail.checkpoints.len(), 2);
-    assert_eq!(detail.checkpoints[0].phase, "failed");
+    assert_eq!(detail.checkpoints[0].phase, "finished");
     assert_eq!(detail.failure_counts.len(), 1);
     assert_eq!(detail.failure_counts[0].classification, "handshake");
     assert_eq!(detail.failure_counts[0].observations, 1);

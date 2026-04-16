@@ -149,8 +149,7 @@ pub fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
         CrawlPhase::Bootstrap => "bootstrap",
         CrawlPhase::Crawling => "crawling",
         CrawlPhase::Draining => "draining",
-        CrawlPhase::Completed => "completed",
-        CrawlPhase::Failed => "failed",
+        CrawlPhase::Finished => "finished",
     }
 }
 
@@ -183,7 +182,7 @@ mod tests {
     fn crawl_run_list_item_derives_percentages_from_checkpoint() {
         let checkpoint = CrawlRunCheckpoint {
             run_id: CrawlRunId::from_u128(1),
-            phase: CrawlPhase::Completed,
+            phase: CrawlPhase::Finished,
             checkpointed_at: Utc.with_ymd_and_hms(2026, 3, 30, 12, 0, 0).unwrap(),
             checkpoint_sequence: 3,
             started_at: Utc.with_ymd_and_hms(2026, 3, 30, 11, 30, 0).unwrap(),
@@ -204,7 +203,7 @@ mod tests {
         let item = CrawlRunListItem::from_checkpoint(&checkpoint);
 
         assert_eq!(item.run_id, CrawlRunId::from_u128(1).to_string());
-        assert_eq!(item.phase, "completed");
+        assert_eq!(item.phase, "finished");
         assert_eq!(item.success_pct, 25.0);
         assert_eq!(item.scheduled_pct, 80.0);
         assert_eq!(item.unscheduled_gap, 20);
