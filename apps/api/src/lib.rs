@@ -10,7 +10,10 @@ use axum::routing::get;
 use axum::{Json, Router};
 use btc_network::crawler::{
     AsnNodeCountItem, CrawlRunDetail, CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader,
-    CrawlerRepositoryError,
+    CrawlerRepositoryError, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
+    LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
+    LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
+    LastRunUserAgentCountItem,
 };
 use btc_network_postgres::{PostgresConnectionConfig, PostgresCrawlerRepository};
 use serde::{Deserialize, Serialize};
@@ -25,6 +28,9 @@ const DEFAULT_RUN_LIMIT: usize = 10;
 const DEFAULT_ASN_LIMIT: usize = 10;
 const DEFAULT_CHECKPOINT_LIMIT: usize = 10;
 const MAX_PAGE_LIMIT: usize = 100;
+const DEFAULT_LAST_RUN_BUCKET_LIMIT: usize = 100;
+const DEFAULT_LAST_RUN_NODE_LIMIT: usize = 500;
+const MAX_LAST_RUN_NODE_LIMIT: usize = 1_000;
 const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 10;
 const DEFAULT_CONCURRENCY_LIMIT: usize = 64;
 const DEFAULT_ALLOWED_ORIGINS: [&str; 7] = [
@@ -80,6 +86,36 @@ fn build_router_with_config(
         .route("/api/v1/crawler/runs", get(list_crawl_runs))
         .route("/api/v1/crawler/runs/{run_id}", get(get_crawl_run))
         .route("/api/v1/crawler/asn", get(count_nodes_by_asn))
+        .route(
+            "/api/v1/crawler/last-run/services",
+            get(list_last_run_services),
+        )
+        .route(
+            "/api/v1/crawler/last-run/protocol-versions",
+            get(list_last_run_protocol_versions),
+        )
+        .route(
+            "/api/v1/crawler/last-run/user-agents",
+            get(list_last_run_user_agents),
+        )
+        .route(
+            "/api/v1/crawler/last-run/network-types",
+            get(list_last_run_network_types),
+        )
+        .route(
+            "/api/v1/crawler/last-run/countries",
+            get(list_last_run_countries),
+        )
+        .route("/api/v1/crawler/last-run/asns", get(list_last_run_asns))
+        .route(
+            "/api/v1/crawler/last-run/start-heights",
+            get(list_last_run_start_heights),
+        )
+        .route(
+            "/api/v1/crawler/last-run/asn-organizations",
+            get(list_last_run_asn_organizations),
+        )
+        .route("/api/v1/crawler/last-run/nodes", get(list_last_run_nodes))
         .layer(
             ServiceBuilder::new()
                 .layer(ConcurrencyLimitLayer::new(config.concurrency_limit))
@@ -124,8 +160,8 @@ struct CrawlRunsResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AsnCountsResponse {
-    rows: Vec<AsnNodeCountItem>,
+struct RowsResponse<T> {
+    rows: Vec<T>,
 }
 
 async fn list_crawl_runs(
@@ -163,7 +199,7 @@ async fn get_crawl_run(
 async fn count_nodes_by_asn(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
-) -> Result<Json<AsnCountsResponse>, ApiError> {
+) -> Result<Json<RowsResponse<AsnNodeCountItem>>, ApiError> {
     let limit = parse_limit(query.limit, DEFAULT_ASN_LIMIT)?;
     let rows = state
         .analytics_reader
@@ -171,7 +207,128 @@ async fn count_nodes_by_asn(
         .await
         .map_err(ApiError::internal)?;
 
-    Ok(Json(AsnCountsResponse { rows }))
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_services(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunServicesCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_services(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_protocol_versions(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunProtocolVersionCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_protocol_versions(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_user_agents(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunUserAgentCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_user_agents(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_network_types(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunNetworkTypeCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_network_types(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_countries(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunCountryCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_countries(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_asns(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunAsnCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_asns(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_start_heights(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunStartHeightCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_start_heights(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_asn_organizations(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunAsnOrganizationCountItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_asn_organizations(parse_limit(query.limit, DEFAULT_LAST_RUN_BUCKET_LIMIT)?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
+}
+
+async fn list_last_run_nodes(
+    State(state): State<AppState>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<Json<RowsResponse<LastRunNodeSummaryItem>>, ApiError> {
+    let rows = state
+        .analytics_reader
+        .list_last_run_nodes(parse_limit_with_max(
+            query.limit,
+            DEFAULT_LAST_RUN_NODE_LIMIT,
+            MAX_LAST_RUN_NODE_LIMIT,
+        )?)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(RowsResponse { rows }))
 }
 
 fn parse_bind_addr() -> Result<SocketAddr, Box<dyn std::error::Error>> {
@@ -272,16 +429,24 @@ fn parse_positive_u64_env(
 }
 
 fn parse_limit(value: Option<usize>, default_value: usize) -> Result<usize, ApiError> {
+    parse_limit_with_max(value, default_value, MAX_PAGE_LIMIT)
+}
+
+fn parse_limit_with_max(
+    value: Option<usize>,
+    default_value: usize,
+    max_value: usize,
+) -> Result<usize, ApiError> {
     let limit = value.unwrap_or(default_value);
 
     if limit == 0 {
         return Err(ApiError::bad_request("limit must be greater than zero"));
     }
 
-    if limit > MAX_PAGE_LIMIT {
-        return Err(ApiError::bad_request(
-            "limit must be less than or equal to 100",
-        ));
+    if limit > max_value {
+        return Err(ApiError::bad_request(format!(
+            "limit must be less than or equal to {max_value}"
+        )));
     }
 
     Ok(limit)
@@ -368,6 +533,15 @@ mod tests {
         runs: Vec<CrawlRunListItem>,
         detail: Option<CrawlRunDetail>,
         asn_rows: Vec<AsnNodeCountItem>,
+        last_run_services: Vec<LastRunServicesCountItem>,
+        last_run_protocol_versions: Vec<LastRunProtocolVersionCountItem>,
+        last_run_user_agents: Vec<LastRunUserAgentCountItem>,
+        last_run_network_types: Vec<LastRunNetworkTypeCountItem>,
+        last_run_countries: Vec<LastRunCountryCountItem>,
+        last_run_asns: Vec<LastRunAsnCountItem>,
+        last_run_start_heights: Vec<LastRunStartHeightCountItem>,
+        last_run_asn_organizations: Vec<LastRunAsnOrganizationCountItem>,
+        last_run_nodes: Vec<LastRunNodeSummaryItem>,
         fail_with: Option<CrawlerRepositoryError>,
     }
 
@@ -411,6 +585,136 @@ mod tests {
                 Ok(self.asn_rows.clone())
             })
         }
+
+        fn list_last_run_services<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_services.clone())
+            })
+        }
+
+        fn list_last_run_protocol_versions<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<
+            'a,
+            Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError>,
+        > {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_protocol_versions.clone())
+            })
+        }
+
+        fn list_last_run_user_agents<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_user_agents.clone())
+            })
+        }
+
+        fn list_last_run_network_types<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_network_types.clone())
+            })
+        }
+
+        fn list_last_run_countries<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_countries.clone())
+            })
+        }
+
+        fn list_last_run_asns<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_asns.clone())
+            })
+        }
+
+        fn list_last_run_start_heights<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_start_heights.clone())
+            })
+        }
+
+        fn list_last_run_asn_organizations<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<
+            'a,
+            Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError>,
+        > {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_asn_organizations.clone())
+            })
+        }
+
+        fn list_last_run_nodes<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move {
+                if let Some(error) = &self.fail_with {
+                    return Err(error.clone());
+                }
+
+                Ok(self.last_run_nodes.clone())
+            })
+        }
     }
 
     fn sample_run() -> CrawlRunListItem {
@@ -447,6 +751,28 @@ mod tests {
                 failed_nodes: 6,
                 verified_pct: 40.0,
             }],
+        }
+    }
+
+    fn sample_last_run_asn() -> LastRunAsnCountItem {
+        LastRunAsnCountItem {
+            asn: 64512,
+            asn_organization: Some("Example ASN".to_string()),
+            node_count: 4,
+        }
+    }
+
+    fn sample_last_run_node() -> LastRunNodeSummaryItem {
+        LastRunNodeSummaryItem {
+            endpoint: "1.1.1.7:8333".to_string(),
+            network_type: "ipv4".to_string(),
+            protocol_version: 70016,
+            user_agent: "/Satoshi:27.0.0/".to_string(),
+            services: "1".to_string(),
+            start_height: 900_000,
+            country: Some("US".to_string()),
+            asn: Some(64512),
+            asn_organization: Some("Example ASN".to_string()),
         }
     }
 
@@ -589,6 +915,81 @@ mod tests {
                 .windows("raw postgres detail".len())
                 .any(|window| window == b"raw postgres detail")
         );
+    }
+
+    #[tokio::test]
+    async fn last_run_asns_returns_rows_payload() {
+        let app = build_router(Arc::new(StubAnalyticsReader {
+            last_run_asns: vec![sample_last_run_asn()],
+            ..StubAnalyticsReader::default()
+        }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/crawler/last-run/asns?limit=10")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: Value = serde_json::from_slice(&body).expect("json body");
+
+        assert_eq!(json["rows"][0]["asn"], 64512);
+        assert_eq!(json["rows"][0]["asnOrganization"], "Example ASN");
+        assert_eq!(json["rows"][0]["nodeCount"], 4);
+    }
+
+    #[tokio::test]
+    async fn last_run_nodes_returns_table_rows_payload() {
+        let app = build_router(Arc::new(StubAnalyticsReader {
+            last_run_nodes: vec![sample_last_run_node()],
+            ..StubAnalyticsReader::default()
+        }));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/crawler/last-run/nodes?limit=25")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: Value = serde_json::from_slice(&body).expect("json body");
+
+        assert_eq!(json["rows"][0]["endpoint"], "1.1.1.7:8333");
+        assert_eq!(json["rows"][0]["protocolVersion"], 70016);
+        assert_eq!(json["rows"][0]["userAgent"], "/Satoshi:27.0.0/");
+    }
+
+    #[tokio::test]
+    async fn last_run_nodes_rejects_limit_above_node_max() {
+        let app = build_router(Arc::new(StubAnalyticsReader::default()));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/crawler/last-run/nodes?limit=1001")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]

@@ -36,6 +36,15 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
       networkOutcomes: [],
     }),
     countNodesByAsn: vi.fn().mockResolvedValue([]),
+    listLastRunServices: vi.fn().mockResolvedValue([]),
+    listLastRunProtocolVersions: vi.fn().mockResolvedValue([]),
+    listLastRunUserAgents: vi.fn().mockResolvedValue([]),
+    listLastRunNetworkTypes: vi.fn().mockResolvedValue([]),
+    listLastRunCountries: vi.fn().mockResolvedValue([]),
+    listLastRunAsns: vi.fn().mockResolvedValue([]),
+    listLastRunStartHeights: vi.fn().mockResolvedValue([]),
+    listLastRunAsnOrganizations: vi.fn().mockResolvedValue([]),
+    listLastRunNodes: vi.fn().mockResolvedValue([]),
     handshake: vi.fn(),
     ping: vi.fn(),
     getAddr: vi.fn(),
@@ -92,6 +101,40 @@ describe("NetworkAnalyticsPage", () => {
           verifiedNodes: 18,
         },
       ]),
+      listLastRunAsns: vi.fn().mockResolvedValue([
+        {
+          asn: 64512,
+          asnOrganization: "Example ASN",
+          nodeCount: 18,
+        },
+      ]),
+      listLastRunServices: vi.fn().mockResolvedValue([{ services: "1033", nodeCount: 18 }]),
+      listLastRunNetworkTypes: vi.fn().mockResolvedValue([
+        { networkType: "ipv4", nodeCount: 24 },
+        { networkType: "ipv6", nodeCount: 6 },
+      ]),
+      listLastRunCountries: vi.fn().mockResolvedValue([
+        { country: "US", nodeCount: 14 },
+        { country: "DE", nodeCount: 10 },
+      ]),
+      listLastRunStartHeights: vi.fn().mockResolvedValue([
+        { startHeight: 900000, nodeCount: 15 },
+        { startHeight: 899999, nodeCount: 10 },
+        { startHeight: 900001, nodeCount: 5 },
+      ]),
+      listLastRunNodes: vi.fn().mockResolvedValue([
+        {
+          endpoint: "1.1.1.7:8333",
+          networkType: "ipv4",
+          protocolVersion: 70016,
+          userAgent: "/Satoshi:27.0.0/",
+          services: "1033",
+          startHeight: 900000,
+          country: "US",
+          asn: 64512,
+          asnOrganization: "Example ASN",
+        },
+      ]),
       getCrawlRun: vi.fn().mockResolvedValue({
         run: {
           runId: "crawl-7",
@@ -126,26 +169,29 @@ describe("NetworkAnalyticsPage", () => {
     render(<NetworkAnalyticsPage client={client} />);
 
     expect(await screen.findByText("Network Risk Snapshot")).toBeTruthy();
+    expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
+    expect(screen.queryByText("Checkpoint Rail")).toBeNull();
+    expect(screen.getByRole("button", { name: "Network Analytics overview" })).toBeTruthy();
+    expect(screen.queryByText("Block Height")).toBeNull();
+    expect(screen.getByText("Network Type Distribution")).toBeTruthy();
+    expect(screen.getByText("Height Consensus")).toBeTruthy();
+    expect(screen.getByText("Top ASN Distribution")).toBeTruthy();
+    expect(screen.getByText("Top Country Distribution")).toBeTruthy();
+    expect(screen.queryByText("Node Inventory")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Risk" }));
     expect(await screen.findByText("Decentralization Score")).toBeTruthy();
     expect(screen.getByText("Eclipse Exposure (Proxy)")).toBeTruthy();
     expect(screen.getByText("Observation Confidence")).toBeTruthy();
     expect(screen.getByText("Transport Diversity")).toBeTruthy();
-    expect(scoreCardValue("Decentralization Score")).toBe("15");
-    expect(scoreCardValue("Eclipse Exposure (Proxy)")).toBe("86");
+    expect(scoreCardValue("Decentralization Score")).toBe("37");
+    expect(scoreCardValue("Eclipse Exposure (Proxy)")).toBe("65");
     expect(scoreCardValue("Observation Confidence")).toBe("58");
-    expect(scoreCardValue("Transport Diversity")).toBe("0");
+    expect(scoreCardValue("Transport Diversity")).toBe("72");
     expect(screen.getByRole("button", { name: "Decentralization Score score explanation" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Eclipse Exposure (Proxy) score explanation" })).toBeTruthy();
-    expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
     expect(screen.getByText("What This Means")).toBeTruthy();
     expect(await screen.findByText("Risk Drivers")).toBeTruthy();
-    expect(screen.queryByText("Checkpoint Rail")).toBeNull();
-    expect(screen.getByText(/Public home dashboard from the latest read-only crawler snapshot\./i)).toBeTruthy();
-    expect(screen.getByText("Block Height")).toBeTruthy();
-    expect(screen.getAllByText("892,345").length).toBeGreaterThan(0);
-    expect(screen.getByText("Verification Distribution")).toBeTruthy();
-    expect(screen.getByText("Example ASN")).toBeTruthy();
-    expect(screen.getAllByText("ipv4").length).toBeGreaterThan(0);
     expect(screen.getByText("Exchange view")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));

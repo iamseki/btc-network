@@ -5,10 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
+  LastRunDashboard,
+  LastRunSidebarCharts,
+} from "@/components/analytics/last-run-dashboard";
+import {
   CrawlerLiveSignal,
   useCrawlerSignalPlayback,
 } from "@/components/crawler-live-signal";
-import { SectionHeading } from "@/components/ui/section-heading";
 import {
   Table,
   TableBody,
@@ -19,14 +22,19 @@ import {
 } from "@/components/ui/table";
 import type { BtcAppClient } from "@/lib/api/client";
 import type {
-  AsnNodeCountItem,
   CrawlRunDetail,
   CrawlRunListItem,
   LastBlockHeightResult,
+  LastRunAsnCountItem,
+  LastRunCountryCountItem,
+  LastRunNetworkTypeCountItem,
+  LastRunNodeSummaryItem,
+  LastRunServicesCountItem,
+  LastRunStartHeightCountItem,
 } from "@/lib/api/types";
 import { isDemoModeEnabled } from "@/lib/runtime-config";
 
-export type NetworkAnalyticsPanel = "overview" | "asn" | "verification";
+export type NetworkAnalyticsPanel = "overview" | "risk" | "asn" | "verification";
 
 const ANALYTICS_HEIGHT_NODE = "seed.bitnodes.io:8333";
 
@@ -44,7 +52,12 @@ export function NetworkAnalyticsPage({
   showPanelNav = true,
 }: NetworkAnalyticsPageProps) {
   const demoMode = isDemoModeEnabled();
-  const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
+  const [lastRunAsns, setLastRunAsns] = useState<LastRunAsnCountItem[]>([]);
+  const [lastRunServices, setLastRunServices] = useState<LastRunServicesCountItem[]>([]);
+  const [lastRunNetworkTypes, setLastRunNetworkTypes] = useState<LastRunNetworkTypeCountItem[]>([]);
+  const [lastRunCountries, setLastRunCountries] = useState<LastRunCountryCountItem[]>([]);
+  const [lastRunStartHeights, setLastRunStartHeights] = useState<LastRunStartHeightCountItem[]>([]);
+  const [lastRunNodes, setLastRunNodes] = useState<LastRunNodeSummaryItem[]>([]);
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [latestDetail, setLatestDetail] = useState<CrawlRunDetail | null>(null);
   const [lastBlockHeight, setLastBlockHeight] = useState<LastBlockHeightResult | null>(null);
@@ -70,22 +83,46 @@ export function NetworkAnalyticsPage({
     setError(null);
 
     try {
-      const [runs, nextAsnRows, nextBlockHeight] = await Promise.all([
-        client.listCrawlRuns(1),
-        client.countNodesByAsn(10),
+      const [
+        runs,
+        nextLastRunAsns,
+        nextLastRunServices,
+        nextLastRunNetworkTypes,
+        nextLastRunCountries,
+        nextLastRunStartHeights,
+        nextLastRunNodes,
+        nextBlockHeight,
+      ] = await Promise.all([
+        client.listCrawlRuns(10),
+        client.listLastRunAsns(10),
+        client.listLastRunServices(10),
+        client.listLastRunNetworkTypes(10),
+        client.listLastRunCountries(10),
+        client.listLastRunStartHeights(5),
+        client.listLastRunNodes(250),
         client.getLastBlockHeight(ANALYTICS_HEIGHT_NODE).catch(() => null),
       ]);
-      const mostRecentRun = runs[0] ?? null;
+      const mostRecentRun = runs.find((run) => run.phase === "finished") ?? runs[0] ?? null;
       const detail = mostRecentRun ? await client.getCrawlRun(mostRecentRun.runId) : null;
 
       setLatestRun(mostRecentRun);
       setLatestDetail(detail);
-      setAsnRows(nextAsnRows);
+      setLastRunAsns(nextLastRunAsns);
+      setLastRunServices(nextLastRunServices);
+      setLastRunNetworkTypes(nextLastRunNetworkTypes);
+      setLastRunCountries(nextLastRunCountries);
+      setLastRunStartHeights(nextLastRunStartHeights);
+      setLastRunNodes(nextLastRunNodes);
       setLastBlockHeight(nextBlockHeight);
     } catch (nextError) {
       setLatestRun(null);
       setLatestDetail(null);
-      setAsnRows([]);
+      setLastRunAsns([]);
+      setLastRunServices([]);
+      setLastRunNetworkTypes([]);
+      setLastRunCountries([]);
+      setLastRunStartHeights([]);
+      setLastRunNodes([]);
       setLastBlockHeight(null);
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -94,19 +131,30 @@ export function NetworkAnalyticsPage({
   }
 
   const networkOutcomes = latestDetail?.networkOutcomes ?? [];
-  const hasAnyAnalytics = asnRows.length > 0 || networkOutcomes.length > 0 || latestRun !== null;
-  const leadAsn = asnRows[0] ?? null;
-  const secondAsn = asnRows[1] ?? null;
-  const topNetwork = [...networkOutcomes].sort((left, right) => right.verifiedNodes - left.verifiedNodes)[0] ?? null;
+  const hasAnyAnalytics =
+    lastRunAsns.length > 0 ||
+    lastRunNetworkTypes.length > 0 ||
+    lastRunCountries.length > 0 ||
+    lastRunStartHeights.length > 0 ||
+    lastRunNodes.length > 0 ||
+    networkOutcomes.length > 0 ||
+    latestRun !== null;
+  const leadAsn = lastRunAsns[0] ?? null;
   const dominantNetwork =
-    [...networkOutcomes].sort((left, right) => right.observations - left.observations)[0] ?? null;
+    [...lastRunNetworkTypes].sort((left, right) => right.nodeCount - left.nodeCount)[0] ?? null;
   const weakestNetwork =
     [...networkOutcomes].sort((left, right) => left.verifiedPct - right.verifiedPct)[0] ?? null;
   const playback = useCrawlerSignalPlayback(latestDetail);
-  const observedNodes = networkOutcomes.reduce((sum, row) => sum + row.observations, 0);
-  const visibleVerifiedNodes = asnRows.reduce((sum, row) => sum + row.verifiedNodes, 0);
+  const overviewPhaseLabel = playback ? formatPhase(playback.playbackSnapshot.phase) : "Awaiting snapshot";
+  const overviewSweepLabel = playback
+    ? playback.isLive
+      ? "Background sweep active"
+      : "Last sweep archived"
+    : "Waiting for sweep state";
+  const observedNodes = lastRunNetworkTypes.reduce((sum, row) => sum + row.nodeCount, 0);
+  const visibleVerifiedNodes = lastRunAsns.reduce((sum, row) => sum + row.nodeCount, 0);
   const asnConcentrationPct =
-    visibleVerifiedNodes > 0 && leadAsn ? (leadAsn.verifiedNodes / visibleVerifiedNodes) * 100 : null;
+    visibleVerifiedNodes > 0 && leadAsn ? (leadAsn.nodeCount / visibleVerifiedNodes) * 100 : null;
   const verificationFailurePct = latestRun ? Math.max(0, 100 - latestRun.successPct) : null;
   const frontierGapPct =
     latestRun && latestRun.uniqueNodes > 0
@@ -114,7 +162,7 @@ export function NetworkAnalyticsPage({
       : null;
   const weakestNetworkFailurePct = weakestNetwork ? Math.max(0, 100 - weakestNetwork.verifiedPct) : null;
   const transportDiversityScore = computeDiversityScore(
-    networkOutcomes.map((row) => row.observations),
+    lastRunNetworkTypes.map((row) => row.nodeCount),
   );
   const transportCentralizationRisk = 100 - transportDiversityScore;
   const persistenceCoveragePct =
@@ -159,7 +207,11 @@ export function NetworkAnalyticsPage({
     activePanel === "overview"
       ? demoMode
         ? "Public home dashboard from the hosted demo snapshot."
-        : "Public home dashboard from the latest read-only crawler snapshot."
+        : "Public home dashboard from the latest finished read-only crawler snapshot."
+      : activePanel === "risk"
+        ? demoMode
+          ? "Inspect the demo risk brief and derived resilience signals without changing the live snapshot surface."
+          : "Inspect derived resilience signals and risk brief context from the latest finished crawl run."
       : activePanel === "asn"
         ? demoMode
           ? "Inspect the embedded demo ASN concentration set without depending on the public API."
@@ -167,115 +219,42 @@ export function NetworkAnalyticsPage({
         : demoMode
           ? "Compare demo observed, verified, and failed nodes by network type for the latest run."
           : "Compare observed, verified, and failed nodes by network type for the latest run.";
-  const headerStats =
-    activePanel === "overview"
-      ? [
-          {
-            label: "Latest Run",
-            value: latestRun?.runId ?? "No recent run",
-            detail: latestRun?.phase ?? "No phase recorded",
-          },
-          {
-            label: "Sweep Window",
-            value: playback ? formatDuration(playback.loopDurationMs) : "n/a",
-            detail: playback
-              ? `Started ${formatTimestamp(playback.startedAt)}`
-              : latestRun
-                ? formatTimestamp(latestRun.lastCheckpointedAt)
-                : "No snapshot window",
-          },
-          {
-            label: "Block Height",
-            value: lastBlockHeight ? lastBlockHeight.height.toLocaleString() : "n/a",
-            detail: lastBlockHeight?.bestBlockHash
-              ? `Tip ${truncateHash(lastBlockHeight.bestBlockHash)}`
-              : "Read-only peer tip lookup",
-          },
-        ]
-      : activePanel === "asn"
-        ? [
-            {
-              label: "Lead ASN",
-              value: leadAsn?.asn ?? "n/a",
-              detail: leadAsn?.asnOrganization ?? "No ASN concentration returned",
-            },
-            {
-              label: "Lead Verified",
-              value: leadAsn?.verifiedNodes ?? "n/a",
-              detail: leadAsn ? "Verified nodes tied to the leading ASN" : "No ASN rows available",
-            },
-            {
-              label: "Second ASN",
-              value: secondAsn?.asn ?? "n/a",
-              detail: secondAsn?.asnOrganization ?? "No second ASN available",
-            },
-            {
-              label: "ASN Rows",
-              value: asnRows.length,
-              detail: latestRun ? `Latest run ${latestRun.runId}` : "Current analytics snapshot",
-            },
-          ]
-        : [
-            {
-              label: "Best Network",
-              value: topNetwork?.networkType ?? "n/a",
-              detail: topNetwork ? `${topNetwork.verifiedPct.toFixed(2)}% verified` : "No outcome rows available",
-            },
-            {
-              label: "Weakest Network",
-              value: weakestNetwork?.networkType ?? "n/a",
-              detail: weakestNetwork
-                ? `${weakestNetwork.verifiedPct.toFixed(2)}% verified`
-                : "No outcome rows available",
-            },
-            {
-              label: "Observed Nodes",
-              value: networkOutcomes.reduce((sum, row) => sum + row.observations, 0),
-              detail: "Observed nodes across the current network breakdown",
-            },
-            {
-              label: "Latest Run",
-              value: latestRun?.runId ?? "No recent run",
-              detail: latestRun?.phase ?? "No phase recorded",
-            },
-          ];
-
   return (
     <Card>
       <CardContent className="space-y-8 p-4 sm:p-6">
-        <SectionHeading
-          eyebrow={activePanel === "overview" ? "Network Risk Snapshot" : "Network Analytics"}
-          title="Network Analytics"
-          description={panelDescription}
-          actions={
-            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-              {headerStats.map((stat) => (
-                <HeaderStat
-                  key={stat.label}
-                  label={stat.label}
-                  value={stat.value}
-                  detail={stat.detail}
-                />
-              ))}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 rounded-md px-0"
-                aria-label="Refresh network analytics"
-                title="Refresh network analytics"
-                onClick={() => void refreshAnalytics()}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCw className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          }
-        />
+        <div className="flex items-center justify-between gap-3 border-b border-border/80 pb-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="sr-only">Network Analytics</h1>
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-primary">
+              Network Risk Snapshot
+            </p>
+            <HeaderTooltip label="Network Analytics overview" tooltip={panelDescription} />
+            {activePanel === "overview" ? (
+              <>
+                <span className="hidden h-3 w-px bg-border/80 sm:inline-block" />
+                <span className="font-mono text-[11px] text-foreground">{overviewPhaseLabel}</span>
+                <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">•</span>
+                <span className="text-[11px] text-muted-foreground">{overviewSweepLabel}</span>
+              </>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 rounded-md px-0"
+            aria-label="Refresh network analytics"
+            title="Refresh network analytics"
+            onClick={() => void refreshAnalytics()}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCw className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
 
         {isLoading ? (
           <StatusPanel
@@ -305,6 +284,11 @@ export function NetworkAnalyticsPage({
                   onClick={() => selectPanel("overview")}
                 />
                 <PanelButton
+                  label="Risk"
+                  selected={activePanel === "risk"}
+                  onClick={() => selectPanel("risk")}
+                />
+                <PanelButton
                   label="Top ASNs"
                   selected={activePanel === "asn"}
                   onClick={() => selectPanel("asn")}
@@ -322,20 +306,45 @@ export function NetworkAnalyticsPage({
                 <section className="grid gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-start">
                   <div className="order-1 xl:order-1">
                     {latestDetail ? (
-                      <CrawlerLiveSignal detail={latestDetail} playback={playback} variant="hero" />
+                      <CrawlerLiveSignal
+                        detail={latestDetail}
+                        playback={playback}
+                        variant="hero"
+                        hideHeroHeader
+                      />
                     ) : (
                       <StatusPanel message="No latest snapshot is available for replay." />
                     )}
                   </div>
 
-                  <div className="order-2 w-full self-start rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-3 shadow-[0_14px_24px_rgba(0,0,0,0.14)] xl:order-2">
+                  <div className="order-2 xl:order-2">
+                    <LastRunSidebarCharts
+                      networkTypes={lastRunNetworkTypes}
+                      startHeights={lastRunStartHeights}
+                    />
+                  </div>
+                </section>
+
+                <LastRunDashboard
+                  asns={lastRunAsns}
+                  countries={lastRunCountries}
+                  runId={latestRun?.runId ?? null}
+                />
+
+              </div>
+            ) : null}
+
+            {activePanel === "risk" ? (
+              <div className="space-y-6">
+                <section className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                  <div className="w-full self-start rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-3 shadow-[0_14px_24px_rgba(0,0,0,0.14)]">
                     <div className="flex items-center justify-between gap-3 rounded-[10px] border border-border/60 bg-background/38 px-3 py-2.5">
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                           Control Deck
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          First read from the current network snapshot
+                          Derived resilience view from the latest finished crawl run
                         </p>
                       </div>
                       <Badge variant="muted">{latestRun?.phase ?? "awaiting run"}</Badge>
@@ -417,74 +426,105 @@ export function NetworkAnalyticsPage({
                       </div>
                     </div>
                   </div>
-                </section>
 
-                {latestDetail ? (
-                  <RiskDriversStrip
-                    runId={latestDetail.run.runId}
-                    items={[
-                      {
-                        label: "Lead Concentration",
-                        value:
-                          asnConcentrationPct !== null
-                            ? `${asnConcentrationPct.toFixed(1)}%`
-                            : "n/a",
-                        detail: leadAsn
-                          ? `${leadAsn.asnOrganization ?? "Unknown ASN"} leads visible verified nodes`
-                          : "Waiting for ASN concentration data",
-                      },
-                      {
-                        label: "Weakest Transport",
-                        value: weakestNetwork ? weakestNetwork.networkType : "n/a",
-                        detail: weakestNetworkFailurePct !== null
-                          ? `${weakestNetworkFailurePct.toFixed(1)}% failure pressure on this network`
-                          : "Waiting for transport verification mix",
-                      },
-                      {
-                        label: "Frontier Gap",
-                        value: frontierGapPct !== null ? `${frontierGapPct.toFixed(1)}%` : "n/a",
-                        detail: latestRun
-                          ? `${latestRun.unscheduledGap.toLocaleString()} tracked endpoints still unscheduled`
-                          : "Waiting for crawl coverage data",
-                      },
-                      {
-                        label: "Chain Height",
-                        value: lastBlockHeight ? lastBlockHeight.height.toLocaleString() : "n/a",
-                        detail: lastBlockHeight?.bestBlockHash
-                          ? `Peer tip ${truncateHash(lastBlockHeight.bestBlockHash)}`
-                          : "Read-only peer tip lookup",
-                      },
-                    ]}
-                  />
-                ) : null}
+                  <div className="space-y-6">
+                    {latestDetail ? (
+                      <RiskDriversStrip
+                        runId={latestDetail.run.runId}
+                        items={[
+                          {
+                            label: "Lead Concentration",
+                            value:
+                              asnConcentrationPct !== null
+                                ? `${asnConcentrationPct.toFixed(1)}%`
+                                : "n/a",
+                            detail: leadAsn
+                              ? `${leadAsn.asnOrganization ?? "Unknown ASN"} leads visible verified nodes`
+                              : "Waiting for ASN concentration data",
+                          },
+                          {
+                            label: "Weakest Transport",
+                            value: weakestNetwork ? weakestNetwork.networkType : "n/a",
+                            detail: weakestNetworkFailurePct !== null
+                              ? `${weakestNetworkFailurePct.toFixed(1)}% failure pressure on this network`
+                              : "Waiting for transport verification mix",
+                          },
+                          {
+                            label: "Frontier Gap",
+                            value: frontierGapPct !== null ? `${frontierGapPct.toFixed(1)}%` : "n/a",
+                            detail: latestRun
+                              ? `${latestRun.unscheduledGap.toLocaleString()} tracked endpoints still unscheduled`
+                              : "Waiting for crawl coverage data",
+                          },
+                          {
+                            label: "Chain Height",
+                            value: lastBlockHeight ? lastBlockHeight.height.toLocaleString() : "n/a",
+                            detail: lastBlockHeight?.bestBlockHash
+                              ? `Peer tip ${truncateHash(lastBlockHeight.bestBlockHash)}`
+                              : "Read-only peer tip lookup",
+                          },
+                        ]}
+                      />
+                    ) : null}
 
-                <section className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                  <div className="rounded-[14px] border border-border/80 bg-background/72 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                          What This Means
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          What this dashboard means in product and risk terms.
-                        </p>
+                    <section className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                      <div className="rounded-[14px] border border-border/80 bg-background/72 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                              What This Means
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              What this dashboard means in product and risk terms.
+                            </p>
+                          </div>
+                          <Badge variant="muted">
+                            {demoMode ? "Demo dataset" : "Latest finished run"}
+                          </Badge>
+                        </div>
+
+                        <div className="mt-4 grid gap-3">
+                          {operatorDeckItems.map((item) => (
+                            <OperatorBriefCard key={item.label} label={item.label} detail={item.detail} />
+                          ))}
+                        </div>
                       </div>
-                      <Badge variant="muted">Mocked web-first home</Badge>
-                    </div>
 
-                    <div className="mt-4 grid gap-3">
-                      {operatorDeckItems.map((item) => (
-                        <OperatorBriefCard key={item.label} label={item.label} detail={item.detail} />
-                      ))}
-                    </div>
-                  </div>
+                      <div className="rounded-[14px] border border-border/80 bg-background/72 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                              Last-Run Inputs
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Inputs backing the charts below from the latest finished crawl run.
+                            </p>
+                          </div>
+                          <Badge variant="muted">{lastRunNodes.length} nodes</Badge>
+                        </div>
 
-                  <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
-                    <VerificationMixChart title="Verification Distribution" rows={networkOutcomes} />
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <OperatorBriefCard
+                            label="Lead Service Flags"
+                            detail={
+                              lastRunServices[0]
+                                ? `${lastRunServices[0].services} appears on ${lastRunServices[0].nodeCount.toLocaleString()} verified nodes in the latest finished run.`
+                                : "Waiting for last-run services buckets."
+                            }
+                          />
+                          <OperatorBriefCard
+                            label="Transport Leader"
+                            detail={
+                              dominantNetwork
+                                ? `${dominantNetwork.networkType} leads the latest finished run with ${dominantNetwork.nodeCount.toLocaleString()} verified nodes.`
+                                : "Waiting for last-run network-type buckets."
+                            }
+                          />
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 </section>
-
               </div>
             ) : null}
 
@@ -494,13 +534,13 @@ export function NetworkAnalyticsPage({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
                     Top ASNs
                   </p>
-                  <Badge variant="muted">{asnRows.length} rows</Badge>
+                  <Badge variant="muted">{lastRunAsns.length} rows</Badge>
                 </div>
-                {asnRows.length === 0 ? (
+                {lastRunAsns.length === 0 ? (
                   <StatusPanel message="No ASN matches were returned yet." />
                 ) : (
                   <div className="space-y-4">
-                    <AsnConcentrationChart title="ASN Concentration" rows={asnRows} />
+                    <AsnConcentrationChart title="ASN Concentration" rows={lastRunAsns} />
                     <div className="overflow-x-auto rounded-[8px] border border-border/80 bg-background/70">
                       <Table>
                         <TableHeader>
@@ -511,12 +551,12 @@ export function NetworkAnalyticsPage({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {asnRows.map((row) => (
+                          {lastRunAsns.map((row) => (
                             <TableRow key={`${row.asn ?? "none"}-${row.asnOrganization ?? "unknown"}`}>
                               <TableCell className="font-mono">{row.asn ?? "n/a"}</TableCell>
                               <TableCell>{row.asnOrganization ?? "Unknown ASN"}</TableCell>
                               <TableCell className="text-right font-mono">
-                                {row.verifiedNodes.toLocaleString()}
+                                {row.nodeCount.toLocaleString()}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -587,6 +627,26 @@ export function NetworkAnalyticsPage({
   );
 }
 
+function HeaderTooltip({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <span className="group/tooltip relative inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <CircleHelp className="h-3.5 w-3.5" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-[calc(100%+0.45rem)] z-10 w-64 rounded-[8px] border border-border/80 bg-popover/96 px-2.5 py-2 text-[11px] leading-4 text-popover-foreground opacity-0 shadow-[0_14px_28px_rgba(0,0,0,0.3)] transition-all duration-150 group-hover/tooltip:translate-y-0.5 group-hover/tooltip:opacity-100 group-focus-within/tooltip:translate-y-0.5 group-focus-within/tooltip:opacity-100"
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
 function PanelButton({
   label,
   selected,
@@ -600,26 +660,6 @@ function PanelButton({
     <Button type="button" variant={selected ? "default" : "secondary"} size="sm" onClick={onClick}>
       {label}
     </Button>
-  );
-}
-
-function HeaderStat({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string | number;
-  detail: string;
-}) {
-  return (
-    <div className="min-w-[8rem] rounded-[8px] border border-border/70 bg-background/75 px-2.5 py-2 text-left sm:min-w-[8.75rem]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 break-all font-mono text-[13px] text-foreground">{value}</p>
-      <p className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</p>
-    </div>
   );
 }
 
@@ -823,9 +863,9 @@ function AsnConcentrationChart({
   rows,
 }: {
   title: string;
-  rows: AsnNodeCountItem[];
+  rows: LastRunAsnCountItem[];
 }) {
-  const maxValue = Math.max(...rows.map((row) => row.verifiedNodes), 1);
+  const maxValue = Math.max(...rows.map((row) => row.nodeCount), 1);
 
   return (
     <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
@@ -839,22 +879,22 @@ function AsnConcentrationChart({
             <div className="flex items-end justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-mono text-xs text-foreground">{row.asn ?? "n/a"}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {row.asnOrganization ?? "Unknown ASN"}
-                </p>
-              </div>
-              <p className="shrink-0 font-mono text-xs text-foreground">
-                {row.verifiedNodes.toLocaleString()}
+              <p className="truncate text-xs text-muted-foreground">
+                {row.asnOrganization ?? "Unknown ASN"}
               </p>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted/40">
-              <div
-                className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.92))]"
-                style={{ width: `${Math.max(8, (row.verifiedNodes / maxValue) * 100)}%` }}
-              />
-            </div>
+            <p className="shrink-0 font-mono text-xs text-foreground">
+                {row.nodeCount.toLocaleString()}
+            </p>
           </div>
-        ))}
+          <div className="h-2 overflow-hidden rounded-full bg-muted/40">
+            <div
+              className="h-full rounded-full bg-[linear-gradient(90deg,rgba(245,179,1,0.42),rgba(245,179,1,0.92))]"
+                style={{ width: `${Math.max(8, (row.nodeCount / maxValue) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ))}
       </div>
     </div>
   );
@@ -1005,26 +1045,16 @@ function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function formatTimestamp(value: string): string {
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
+function formatPhase(value: string): string {
+  if (!value) {
+    return "Unknown";
   }
 
-  return parsed.toLocaleString();
-}
-
-function formatDuration(durationMs: number): string {
-  if (!Number.isFinite(durationMs) || durationMs <= 0) {
-    return "n/a";
-  }
-
-  const totalSeconds = Math.round(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  return value
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((token) => token[0]!.toUpperCase() + token.slice(1))
+    .join(" ");
 }
 
 function truncateHash(value: string): string {

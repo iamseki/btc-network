@@ -20,7 +20,10 @@ use tracing::{info, warn};
 
 pub use analytics::{
     AsnNodeCountItem, CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem,
-    FailureClassificationCount, NetworkOutcomeCount,
+    FailureClassificationCount, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
+    LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
+    LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
+    LastRunUserAgentCountItem, NetworkOutcomeCount,
 };
 pub use domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,

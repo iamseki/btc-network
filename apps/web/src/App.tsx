@@ -120,13 +120,14 @@ export function App() {
     : "md:grid-cols-[252px_minmax(0,1fr)]";
   const currentSubnav =
     selectedPage === "network-analytics"
-      ? {
-          label: "Network Analytics Views",
-          items: [
-            { id: "overview", title: "Overview" },
-            { id: "asn", title: "Top ASNs" },
-            { id: "verification", title: "Verification" },
-          ] satisfies { id: NetworkAnalyticsPanel; title: string }[],
+        ? {
+            label: "Network Analytics Views",
+            items: [
+              { id: "overview", title: "Overview" },
+              { id: "risk", title: "Risk" },
+              { id: "asn", title: "Top ASNs" },
+              { id: "verification", title: "Verification" },
+            ] satisfies { id: NetworkAnalyticsPanel; title: string }[],
           activeItem: networkAnalyticsPanel,
           onSelect: (panel: string) => setNetworkAnalyticsPanel(panel as NetworkAnalyticsPanel),
         }

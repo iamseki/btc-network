@@ -128,6 +128,86 @@ impl From<CountNodesByAsnRow> for AsnNodeCountItem {
     }
 }
 
+/// Latest finished-run services distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunServicesCountItem {
+    pub services: String,
+    pub node_count: u64,
+}
+
+/// Latest finished-run protocol version distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunProtocolVersionCountItem {
+    pub protocol_version: i32,
+    pub node_count: u64,
+}
+
+/// Latest finished-run user agent distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunUserAgentCountItem {
+    pub user_agent: String,
+    pub node_count: u64,
+}
+
+/// Latest finished-run network type distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunNetworkTypeCountItem {
+    pub network_type: String,
+    pub node_count: u64,
+}
+
+/// Latest finished-run country distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunCountryCountItem {
+    pub country: String,
+    pub node_count: u64,
+}
+
+/// Latest finished-run ASN distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunAsnCountItem {
+    pub asn: u32,
+    pub asn_organization: Option<String>,
+    pub node_count: u64,
+}
+
+/// Latest finished-run start-height distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunStartHeightCountItem {
+    pub start_height: i32,
+    pub node_count: u64,
+}
+
+/// Latest finished-run ASN organization distribution bucket.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunAsnOrganizationCountItem {
+    pub asn_organization: String,
+    pub node_count: u64,
+}
+
+/// Latest finished-run verified node row for table-oriented UI views.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRunNodeSummaryItem {
+    pub endpoint: String,
+    pub network_type: String,
+    pub protocol_version: i32,
+    pub user_agent: String,
+    pub services: String,
+    pub start_height: i32,
+    pub country: Option<String>,
+    pub asn: Option<u32>,
+    pub asn_organization: Option<String>,
+}
+
 /// Full crawl-run payload returned by analytics detail APIs.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

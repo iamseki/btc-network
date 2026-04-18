@@ -322,11 +322,13 @@ export function CrawlerLiveSignal({
   detail,
   playback,
   variant = "default",
+  hideHeroHeader = false,
   heroFooter,
 }: {
   detail: CrawlRunDetail;
   playback?: CrawlerSignalPlayback | null;
   variant?: "default" | "hero";
+  hideHeroHeader?: boolean;
   heroFooter?: ReactNode;
 }) {
   const localPlayback = useCrawlerSignalPlayback(detail);
@@ -383,7 +385,7 @@ export function CrawlerLiveSignal({
         };
       }).filter((node) => node !== null)
     : [];
-  const { locations: locationInsights, asns: asnInsights } = summarizeVisibleNodes(visibleNodes);
+  const { locations: locationInsights } = summarizeVisibleNodes(visibleNodes);
   const mapLocations = locationInsights.slice(0, 8);
   const activeLocationKey = pinnedLocationKey ?? hoveredLocationKey;
   const activeLocation = activeLocationKey
@@ -411,8 +413,18 @@ export function CrawlerLiveSignal({
   const canvasClass = isHero
     ? "relative mt-5 overflow-hidden rounded-[10px] border border-primary/16 bg-background/45 p-3 sm:p-4 xl:p-5"
     : "relative mt-4 overflow-hidden rounded-[10px] border border-border/70 bg-background/52 p-3";
+  const heroPanelClass =
+    isHero && hideHeroHeader
+      ? "rounded-[14px] shadow-[0_18px_40px_rgba(0,0,0,0.18)]"
+      : visualPanelClass;
+  const heroCanvasClass =
+    isHero && hideHeroHeader
+      ? "relative overflow-hidden rounded-[14px]"
+      : canvasClass;
   const mapFrameClass = isHero
-    ? "relative mx-auto aspect-[420/260] w-full max-w-[920px]"
+    ? hideHeroHeader
+      ? "relative aspect-[420/260] w-full"
+      : "relative mx-auto aspect-[420/260] w-full max-w-[920px]"
     : "relative mx-auto aspect-[420/260] w-full max-w-[620px]";
   const svgClass = "absolute inset-0 h-full w-full";
 
@@ -656,59 +668,61 @@ export function CrawlerLiveSignal({
       )}
 
       <div className={isHero || isCompactPreview ? "mt-5 space-y-4" : "mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]"}>
-        <div className={visualPanelClass}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Read-Only Snapshot
-              </p>
-              <p className="mt-1 font-mono text-lg text-foreground">
-                {formatPhase(playbackSnapshot.phase)}
-              </p>
-            </div>
-            {isHero ? (
-              <div className="rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-right">
+        <div className={heroPanelClass}>
+          {isHero && hideHeroHeader ? null : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Sweep State
+                  Read-Only Snapshot
                 </p>
-                <p className="mt-1 font-mono text-sm text-foreground">
-                  {signalPlayback.isLive ? "Background sweep active" : "Last sweep archived"}
+                <p className="mt-1 font-mono text-lg text-foreground">
+                  {formatPhase(playbackSnapshot.phase)}
                 </p>
               </div>
-            ) : (
-              <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
-                <div className="min-w-[12rem] flex-1 rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-center sm:max-w-[16rem]">
-                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Map Focus
-                  </p>
-                  {activeLocation ? (
-                    <div className="mt-1">
-                      <p className="font-mono text-sm text-foreground">{activeLocation.count} nodes</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {activeLocation.topAsnLabel} · {activeLocation.topAsnCount}
-                      </p>
-                      {pinnedLocationKey ? (
-                        <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-primary/85">Pinned</p>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-[11px] text-muted-foreground">Hover a country hotspot or click to pin</p>
-                  )}
-                </div>
+              {isHero ? (
                 <div className="rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-right">
                   <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     Sweep State
                   </p>
                   <p className="mt-1 font-mono text-sm text-foreground">
-                    {signalPlayback.isLive ? "Live" : "Archived"}
+                    {signalPlayback.isLive ? "Background sweep active" : "Last sweep archived"}
                   </p>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="flex flex-1 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+                  <div className="min-w-[12rem] flex-1 rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-center sm:max-w-[16rem]">
+                    <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Map Focus
+                    </p>
+                    {activeLocation ? (
+                      <div className="mt-1">
+                        <p className="font-mono text-sm text-foreground">{activeLocation.count} nodes</p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {activeLocation.topAsnLabel} · {activeLocation.topAsnCount}
+                        </p>
+                        {pinnedLocationKey ? (
+                          <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-primary/85">Pinned</p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-muted-foreground">Hover a country hotspot or click to pin</p>
+                    )}
+                  </div>
+                  <div className="rounded-[8px] border border-border/60 bg-background/35 px-3 py-2 text-right">
+                    <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Sweep State
+                    </p>
+                    <p className="mt-1 font-mono text-sm text-foreground">
+                      {signalPlayback.isLive ? "Live" : "Archived"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div
-            className={canvasClass}
+            className={heroCanvasClass}
             onClick={(event) => {
               const target = event.target as Element;
               if (target.closest("[data-map-hotspot='true']")) {
@@ -955,89 +969,6 @@ export function CrawlerLiveSignal({
                   }}
                 />
               ))}
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <div className="rounded-[10px] border border-border/70 bg-background/68 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Top Locations
-                </p>
-                <p className="font-mono text-[10px] text-muted-foreground">
-                  Hover map to inspect
-                </p>
-              </div>
-              <div className="mt-3 grid gap-2">
-                {locationInsights.slice(0, 5).map((location) => (
-                  <button
-                    key={location.key}
-                    type="button"
-                    className={
-                      activeLocation?.key === location.key
-                        ? "flex items-center justify-between gap-3 rounded-[8px] border border-primary/25 bg-primary/10 px-3 py-2 text-left"
-                        : "flex items-center justify-between gap-3 rounded-[8px] border border-border/70 bg-muted/20 px-3 py-2 text-left"
-                    }
-                    onMouseEnter={() => setHoveredLocationKey(location.key)}
-                    onMouseMove={() => setHoveredLocationKey(location.key)}
-                    onFocus={() => setHoveredLocationKey(location.key)}
-                    onMouseLeave={() => {
-                      if (!pinnedLocationKey) {
-                        setHoveredLocationKey(null);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!pinnedLocationKey) {
-                        setHoveredLocationKey(null);
-                      }
-                    }}
-                    onClick={() => {
-                      setPinnedLocationKey((current) => (current === location.key ? null : location.key));
-                      setHoveredLocationKey(location.key);
-                    }}
-                  >
-                    <div>
-                      <p className="font-mono text-[11px] text-foreground">{location.countryName}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        {location.topAsnLabel}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm text-foreground">{location.count}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {location.verifiedCount} verified
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[10px] border border-border/70 bg-background/68 p-3">
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Top ASNs
-              </p>
-              <div className="mt-3 grid gap-2">
-                {asnInsights.slice(0, 5).map((asn) => (
-                  <div
-                    key={asn.key}
-                    className="flex items-center justify-between gap-3 rounded-[8px] border border-border/70 bg-muted/20 px-3 py-2"
-                  >
-                    <div>
-                      <p className="font-mono text-[11px] text-foreground">{asn.label}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Strongest footprint in {asn.leadCountryName}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm text-foreground">{asn.count}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {asn.countryCount} countries
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
 

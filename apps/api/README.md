@@ -17,6 +17,15 @@ Default backend:
 - `GET /api/v1/crawler/runs?limit=<n>`
 - `GET /api/v1/crawler/runs/:run_id`
 - `GET /api/v1/crawler/asn?limit=<n>`
+- `GET /api/v1/crawler/last-run/services?limit=<n>`
+- `GET /api/v1/crawler/last-run/protocol-versions?limit=<n>`
+- `GET /api/v1/crawler/last-run/user-agents?limit=<n>`
+- `GET /api/v1/crawler/last-run/network-types?limit=<n>`
+- `GET /api/v1/crawler/last-run/countries?limit=<n>`
+- `GET /api/v1/crawler/last-run/asns?limit=<n>`
+- `GET /api/v1/crawler/last-run/start-heights?limit=<n>`
+- `GET /api/v1/crawler/last-run/asn-organizations?limit=<n>`
+- `GET /api/v1/crawler/last-run/nodes?limit=<n>`
 
 ## Environment
 
@@ -43,6 +52,7 @@ Default backend:
 ## Notes
 
 - this app is intentionally read-only in the current slice
+- last-run analytics endpoints read from the latest finished crawl run only
 - local development uses the shared PostgreSQL service defined in the repository root `docker-compose.yml`
 - the shared local PostgreSQL container uses PostgreSQL 18 with `PGDATA=/var/lib/postgresql/18/btc-network`
 - enabling the `api` profile also runs the one-shot `postgres-migrate` service before the API process starts
