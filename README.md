@@ -8,6 +8,7 @@ btc-network is a Rust-based Bitcoin P2P research and observability project focus
 - [Contributing guide](CONTRIBUTING.md)
 - [Deployment guide](docs/deployment.md)
 - [Design docs index](docs/design_docs/README.md)
+- [Agent guidance](AGENTS.md)
 
 ## Repository Shape
 
