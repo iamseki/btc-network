@@ -2,6 +2,15 @@ import type { BtcAppClient } from "./client";
 import {
   countNodesByAsn as countNodesByAsnHttp,
   getCrawlRun as getCrawlRunHttp,
+  listLastRunAsnOrganizations as listLastRunAsnOrganizationsHttp,
+  listLastRunAsns as listLastRunAsnsHttp,
+  listLastRunCountries as listLastRunCountriesHttp,
+  listLastRunNetworkTypes as listLastRunNetworkTypesHttp,
+  listLastRunNodes as listLastRunNodesHttp,
+  listLastRunProtocolVersions as listLastRunProtocolVersionsHttp,
+  listLastRunServices as listLastRunServicesHttp,
+  listLastRunStartHeights as listLastRunStartHeightsHttp,
+  listLastRunUserAgents as listLastRunUserAgentsHttp,
   listCrawlRuns as listCrawlRunsHttp,
 } from "./analytics-http";
 import type {
@@ -13,6 +22,15 @@ import type {
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
+  LastRunAsnCountItem,
+  LastRunAsnOrganizationCountItem,
+  LastRunCountryCountItem,
+  LastRunNetworkTypeCountItem,
+  LastRunNodeSummaryItem,
+  LastRunProtocolVersionCountItem,
+  LastRunServicesCountItem,
+  LastRunStartHeightCountItem,
+  LastRunUserAgentCountItem,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -44,6 +62,33 @@ export const tauriClient: BtcAppClient = {
   },
   countNodesByAsn(limit) {
     return countNodesByAsnHttp(limit);
+  },
+  listLastRunServices(limit): Promise<LastRunServicesCountItem[]> {
+    return listLastRunServicesHttp(limit);
+  },
+  listLastRunProtocolVersions(limit): Promise<LastRunProtocolVersionCountItem[]> {
+    return listLastRunProtocolVersionsHttp(limit);
+  },
+  listLastRunUserAgents(limit): Promise<LastRunUserAgentCountItem[]> {
+    return listLastRunUserAgentsHttp(limit);
+  },
+  listLastRunNetworkTypes(limit): Promise<LastRunNetworkTypeCountItem[]> {
+    return listLastRunNetworkTypesHttp(limit);
+  },
+  listLastRunCountries(limit): Promise<LastRunCountryCountItem[]> {
+    return listLastRunCountriesHttp(limit);
+  },
+  listLastRunAsns(limit): Promise<LastRunAsnCountItem[]> {
+    return listLastRunAsnsHttp(limit);
+  },
+  listLastRunStartHeights(limit): Promise<LastRunStartHeightCountItem[]> {
+    return listLastRunStartHeightsHttp(limit);
+  },
+  listLastRunAsnOrganizations(limit): Promise<LastRunAsnOrganizationCountItem[]> {
+    return listLastRunAsnOrganizationsHttp(limit);
+  },
+  listLastRunNodes(limit): Promise<LastRunNodeSummaryItem[]> {
+    return listLastRunNodesHttp(limit);
   },
   handshake(request: ConnectionRequest): Promise<HandshakeResult> {
     return invoke<HandshakeResult>("handshake", { request });

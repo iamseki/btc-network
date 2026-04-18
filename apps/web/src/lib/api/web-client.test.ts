@@ -45,10 +45,12 @@ describe("webClient", () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("fetch should not run in demo mode"));
     vi.stubGlobal("fetch", fetchMock);
 
-    const [runs, detail, asnRows] = await Promise.all([
+    const [runs, detail, asnRows, networkTypes, lastRunNodes] = await Promise.all([
       webClient.listCrawlRuns(2),
       webClient.getCrawlRun("crawl-demo-2026-03-31-1800"),
       webClient.countNodesByAsn(3),
+      webClient.listLastRunNetworkTypes(3),
+      webClient.listLastRunNodes(2),
     ]);
 
     expect(runs).toHaveLength(2);
@@ -56,6 +58,9 @@ describe("webClient", () => {
     expect(detail.run.runId).toBe("crawl-demo-2026-03-31-1800");
     expect(detail.networkOutcomes.length).toBeGreaterThan(0);
     expect(asnRows).toHaveLength(3);
+    expect(networkTypes[0]?.networkType).toBe("ipv4");
+    expect(lastRunNodes).toHaveLength(2);
+    expect(lastRunNodes[0]?.protocolVersion).toBeGreaterThan(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

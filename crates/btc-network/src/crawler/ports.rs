@@ -7,7 +7,12 @@ use super::domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunId, IpEnrichment,
     PersistedNodeObservation,
 };
-use super::{AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem};
+use super::{
+    AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem, LastRunAsnCountItem,
+    LastRunAsnOrganizationCountItem, LastRunCountryCountItem, LastRunNetworkTypeCountItem,
+    LastRunNodeSummaryItem, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
+    LastRunStartHeightCountItem, LastRunUserAgentCountItem,
+};
 
 /// Boxed async result type used by crawler storage and analytics ports.
 pub type RepositoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -116,6 +121,60 @@ pub trait CrawlerAnalyticsReader: Send + Sync {
         &'a self,
         limit: usize,
     ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by services.
+    fn list_last_run_services<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by protocol version.
+    fn list_last_run_protocol_versions<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by user agent.
+    fn list_last_run_user_agents<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by network type.
+    fn list_last_run_network_types<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by country.
+    fn list_last_run_countries<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by ASN.
+    fn list_last_run_asns<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by start height.
+    fn list_last_run_start_heights<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified-node counts grouped by ASN organization.
+    fn list_last_run_asn_organizations<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest finished-run verified node rows for table-oriented UI views.
+    fn list_last_run_nodes<'a>(
+        &'a self,
+        limit: usize,
+    ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>;
 }
 
 #[cfg(test)]
@@ -258,6 +317,82 @@ mod tests {
                     .map(Into::into)
                     .collect())
             })
+        }
+
+        fn list_last_run_services<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_protocol_versions<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<
+            'a,
+            Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError>,
+        > {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_user_agents<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_network_types<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_countries<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_asns<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_start_heights<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_asn_organizations<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<
+            'a,
+            Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError>,
+        > {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_last_run_nodes<'a>(
+            &'a self,
+            _limit: usize,
+        ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>
+        {
+            Box::pin(async move { Ok(Vec::new()) })
         }
     }
 

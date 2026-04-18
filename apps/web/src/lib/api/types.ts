@@ -131,6 +131,59 @@ export type AsnNodeCountItem = {
   verifiedNodes: number;
 };
 
+export type LastRunServicesCountItem = {
+  services: string;
+  nodeCount: number;
+};
+
+export type LastRunProtocolVersionCountItem = {
+  protocolVersion: number;
+  nodeCount: number;
+};
+
+export type LastRunUserAgentCountItem = {
+  userAgent: string;
+  nodeCount: number;
+};
+
+export type LastRunNetworkTypeCountItem = {
+  networkType: string;
+  nodeCount: number;
+};
+
+export type LastRunCountryCountItem = {
+  country: string;
+  nodeCount: number;
+};
+
+export type LastRunAsnCountItem = {
+  asn: number;
+  asnOrganization: string | null;
+  nodeCount: number;
+};
+
+export type LastRunStartHeightCountItem = {
+  startHeight: number;
+  nodeCount: number;
+};
+
+export type LastRunAsnOrganizationCountItem = {
+  asnOrganization: string;
+  nodeCount: number;
+};
+
+export type LastRunNodeSummaryItem = {
+  endpoint: string;
+  networkType: string;
+  protocolVersion: number;
+  userAgent: string;
+  services: string;
+  startHeight: number;
+  country: string | null;
+  asn: number | null;
+  asnOrganization: string | null;
+};
+
 export type CrawlRunDetail = {
   run: CrawlRunListItem;
   checkpoints: CrawlRunCheckpointItem[];

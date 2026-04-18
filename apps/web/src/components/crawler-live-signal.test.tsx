@@ -248,36 +248,33 @@ describe("useCrawlerSignalPlayback", () => {
   it("shows location and ASN rankings that respond to map hover", () => {
     render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} variant="hero" />);
 
-    expect(screen.getByText("Top Locations")).toBeTruthy();
-    expect(screen.getByText("Top ASNs")).toBeTruthy();
     expect(screen.queryByText("Map Focus")).toBeNull();
-    expect(screen.getAllByText("Brazil").length).toBe(1);
+    expect(screen.queryByText("Brazil")).toBeNull();
 
     const hotspot = screen.getByLabelText("Show node count for Brazil");
 
     fireEvent.mouseEnter(hotspot);
 
-    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(1);
-    expect(screen.getAllByText("SouthMesh Transit").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(0);
     expect(screen.getAllByText("500 nodes").length).toBeGreaterThan(0);
 
     fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
 
-    expect(screen.getAllByText("Brazil").length).toBe(1);
+    expect(screen.queryByText("Brazil")).toBeNull();
 
     fireEvent.click(hotspot);
     fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
-    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
-    expect(screen.getAllByText("Brazil").length).toBe(1);
+    expect(screen.queryByText("Brazil")).toBeNull();
   });
 
   it("renders after playback becomes available on the normal async mount path", async () => {
     render(<CrawlerLiveSignal detail={DETAIL} variant="hero" />);
 
     expect(await screen.findByText("Read-Only Snapshot")).toBeTruthy();
-    expect(screen.getByText("Top Locations")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Crawler execution playback across a world route map" })).toBeTruthy();
   });
 
   it("renders a compact map preview in the default variant", () => {

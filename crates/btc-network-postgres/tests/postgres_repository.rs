@@ -632,6 +632,125 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
     Ok(())
 }
 
+#[tokio::test]
+async fn analytics_reader_last_run_aggregations_use_latest_finished_run() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+    let finished_run_id = run_id(10);
+    let newer_unfinished_run_id = run_id(11);
+    let base_time = Utc::now();
+
+    repository
+        .insert_observations_stream(vec![
+            sample_verified_observation(
+                &finished_run_id,
+                "1.1.1.7",
+                601,
+                base_time,
+                Some(64512),
+                Some("Example ASN"),
+                Some("US"),
+            ),
+            sample_verified_observation(
+                &finished_run_id,
+                "1.1.1.8",
+                602,
+                base_time + Duration::seconds(1),
+                Some(64512),
+                Some("Example ASN"),
+                Some("US"),
+            ),
+            sample_verified_observation(
+                &newer_unfinished_run_id,
+                "8.8.8.8",
+                603,
+                base_time + Duration::seconds(2),
+                Some(15169),
+                Some("Google LLC"),
+                Some("US"),
+            ),
+        ])
+        .await?;
+
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &finished_run_id,
+            CrawlPhase::Finished,
+            base_time + Duration::seconds(3),
+            1,
+            Some("idle timeout".to_string()),
+        ))
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &newer_unfinished_run_id,
+            CrawlPhase::Crawling,
+            base_time + Duration::seconds(4),
+            1,
+            None,
+        ))
+        .await?;
+
+    let asn_rows = CrawlerAnalyticsReader::list_last_run_asns(&repository, 10).await?;
+    let network_rows = CrawlerAnalyticsReader::list_last_run_network_types(&repository, 10).await?;
+
+    assert_eq!(asn_rows.len(), 1);
+    assert_eq!(asn_rows[0].asn, 64512);
+    assert_eq!(asn_rows[0].asn_organization.as_deref(), Some("Example ASN"));
+    assert_eq!(asn_rows[0].node_count, 2);
+    assert_eq!(network_rows.len(), 1);
+    assert_eq!(network_rows[0].network_type, "ipv4");
+    assert_eq!(network_rows[0].node_count, 2);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn analytics_reader_lists_last_run_node_rows_for_dashboard_table() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+    let run_id = run_id(12);
+    let base_time = Utc::now();
+
+    repository
+        .insert_observations_stream(vec![sample_verified_observation(
+            &run_id,
+            "1.1.1.7",
+            701,
+            base_time,
+            Some(64512),
+            Some("Example ASN"),
+            Some("US"),
+        )])
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Finished,
+            base_time + Duration::seconds(1),
+            1,
+            Some("idle timeout".to_string()),
+        ))
+        .await?;
+
+    let rows = CrawlerAnalyticsReader::list_last_run_nodes(&repository, 10).await?;
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].endpoint, "1.1.1.7:8333");
+    assert_eq!(rows[0].network_type, "ipv4");
+    assert_eq!(rows[0].protocol_version, 70016);
+    assert_eq!(rows[0].user_agent, "/Satoshi:27.0.0/");
+    assert_eq!(rows[0].services, "1");
+    assert_eq!(rows[0].start_height, 900_000);
+    assert_eq!(rows[0].country.as_deref(), Some("US"));
+    assert_eq!(rows[0].asn, Some(64512));
+    assert_eq!(rows[0].asn_organization.as_deref(), Some("Example ASN"));
+
+    Ok(())
+}
+
 fn unique_database_name() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

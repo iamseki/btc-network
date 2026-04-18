@@ -186,6 +186,7 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Network Analytics" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Network Analytics" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Network Analytics Views" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Risk" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Verification" })).toBeTruthy();
     expect(screen.queryByText("Session Log")).toBeNull();
@@ -358,6 +359,7 @@ describe("App sidebar shell", () => {
 
     expect(screen.getAllByRole("button", { name: "Network Analytics" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Crawler Runs" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Risk" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
@@ -375,6 +377,9 @@ describe("App sidebar shell", () => {
     render(<App />);
 
     expect(screen.getByTestId("page-subview-label").textContent).toBe("Overview");
+
+    fireEvent.click(screen.getByRole("button", { name: "Risk" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk");
 
     fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
     expect(screen.getByTestId("page-subview-label").textContent).toBe("Top ASNs");

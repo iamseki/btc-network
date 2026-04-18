@@ -1,5 +1,18 @@
 import type { BtcAppClient } from "./client";
-import { countNodesByAsn, getCrawlRun, listCrawlRuns } from "./analytics-http";
+import {
+  countNodesByAsn,
+  getCrawlRun,
+  listCrawlRuns,
+  listLastRunAsnOrganizations,
+  listLastRunAsns,
+  listLastRunCountries,
+  listLastRunNetworkTypes,
+  listLastRunNodes,
+  listLastRunProtocolVersions,
+  listLastRunServices,
+  listLastRunStartHeights,
+  listLastRunUserAgents,
+} from "./analytics-http";
 import type {
   AddrResult,
   AsnNodeCountItem,
@@ -12,6 +25,15 @@ import type {
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
+  LastRunAsnCountItem,
+  LastRunAsnOrganizationCountItem,
+  LastRunCountryCountItem,
+  LastRunNetworkTypeCountItem,
+  LastRunNodeSummaryItem,
+  LastRunProtocolVersionCountItem,
+  LastRunServicesCountItem,
+  LastRunStartHeightCountItem,
+  LastRunUserAgentCountItem,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -490,6 +512,140 @@ const DEMO_ASN_ROWS: AsnNodeCountItem[] = [
   { asn: 9009, asnOrganization: "M247 Europe SRL", verifiedNodes: 624 },
 ];
 
+const DEMO_LAST_RUN_SERVICES: LastRunServicesCountItem[] = [
+  { services: "1", nodeCount: 3520 },
+  { services: "1033", nodeCount: 2894 },
+  { services: "9", nodeCount: 2142 },
+  { services: "1025", nodeCount: 711 },
+];
+
+const DEMO_LAST_RUN_PROTOCOL_VERSIONS: LastRunProtocolVersionCountItem[] = [
+  { protocolVersion: 70016, nodeCount: 7624 },
+  { protocolVersion: 70015, nodeCount: 1488 },
+  { protocolVersion: 70014, nodeCount: 526 },
+  { protocolVersion: 70013, nodeCount: 209 },
+];
+
+const DEMO_LAST_RUN_USER_AGENTS: LastRunUserAgentCountItem[] = [
+  { userAgent: "/Satoshi:27.0.0/", nodeCount: 2396 },
+  { userAgent: "/Satoshi:26.1.0/", nodeCount: 1842 },
+  { userAgent: "/Satoshi:25.1.0/", nodeCount: 1204 },
+  { userAgent: "/Knots:27.1.knots20250305/", nodeCount: 746 },
+  { userAgent: "/btcd:0.24.2/", nodeCount: 392 },
+  { userAgent: "/libbitcoin:4.0.0/", nodeCount: 188 },
+];
+
+const DEMO_LAST_RUN_NETWORK_TYPES: LastRunNetworkTypeCountItem[] = [
+  { networkType: "ipv4", nodeCount: 7821 },
+  { networkType: "ipv6", nodeCount: 1215 },
+  { networkType: "torv3", nodeCount: 694 },
+  { networkType: "i2p", nodeCount: 73 },
+  { networkType: "cjdns", nodeCount: 44 },
+];
+
+const DEMO_LAST_RUN_COUNTRIES: LastRunCountryCountItem[] = [
+  { country: "US", nodeCount: 2116 },
+  { country: "DE", nodeCount: 1268 },
+  { country: "FR", nodeCount: 740 },
+  { country: "NL", nodeCount: 688 },
+  { country: "CA", nodeCount: 612 },
+  { country: "GB", nodeCount: 578 },
+  { country: "FI", nodeCount: 431 },
+  { country: "JP", nodeCount: 412 },
+  { country: "SG", nodeCount: 341 },
+  { country: "AU", nodeCount: 305 },
+];
+
+const DEMO_LAST_RUN_ASNS: LastRunAsnCountItem[] = DEMO_ASN_ROWS.map((row) => ({
+  asn: row.asn ?? 0,
+  asnOrganization: row.asnOrganization,
+  nodeCount: row.verifiedNodes,
+})).filter((row) => row.asn > 0);
+
+const DEMO_LAST_RUN_START_HEIGHTS: LastRunStartHeightCountItem[] = [
+  { startHeight: 900000, nodeCount: 3288 },
+  { startHeight: 899999, nodeCount: 2466 },
+  { startHeight: 900001, nodeCount: 1914 },
+  { startHeight: 899998, nodeCount: 1180 },
+  { startHeight: 900002, nodeCount: 999 },
+];
+
+const DEMO_LAST_RUN_ASN_ORGANIZATIONS: LastRunAsnOrganizationCountItem[] = DEMO_LAST_RUN_ASNS.map(
+  (row) => ({
+    asnOrganization: row.asnOrganization ?? `AS${row.asn}`,
+    nodeCount: row.nodeCount,
+  }),
+);
+
+const DEMO_LAST_RUN_NODES: LastRunNodeSummaryItem[] = [
+  {
+    endpoint: "1.1.1.7:8333",
+    networkType: "ipv4",
+    protocolVersion: 70016,
+    userAgent: "/Satoshi:27.0.0/",
+    services: "1033",
+    startHeight: 900000,
+    country: "US",
+    asn: 13335,
+    asnOrganization: "Cloudflare, Inc.",
+  },
+  {
+    endpoint: "8.8.8.8:8333",
+    networkType: "ipv4",
+    protocolVersion: 70016,
+    userAgent: "/Satoshi:26.1.0/",
+    services: "9",
+    startHeight: 900001,
+    country: "US",
+    asn: 15169,
+    asnOrganization: "Google LLC",
+  },
+  {
+    endpoint: "45.76.12.44:8333",
+    networkType: "ipv4",
+    protocolVersion: 70015,
+    userAgent: "/Knots:27.1.knots20250305/",
+    services: "1033",
+    startHeight: 899999,
+    country: "DE",
+    asn: 24940,
+    asnOrganization: "Hetzner Online GmbH",
+  },
+  {
+    endpoint: "[2604:a880:cad:d0::19d:5001]:8333",
+    networkType: "ipv6",
+    protocolVersion: 70016,
+    userAgent: "/Satoshi:27.0.0/",
+    services: "1",
+    startHeight: 900000,
+    country: "NL",
+    asn: 14061,
+    asnOrganization: "DigitalOcean, LLC",
+  },
+  {
+    endpoint: "q3tqu3sxuo5x6w3y.onion:8333",
+    networkType: "torv3",
+    protocolVersion: 70016,
+    userAgent: "/btcd:0.24.2/",
+    services: "1025",
+    startHeight: 899998,
+    country: null,
+    asn: null,
+    asnOrganization: null,
+  },
+  {
+    endpoint: "139.162.12.90:8333",
+    networkType: "ipv4",
+    protocolVersion: 70014,
+    userAgent: "/libbitcoin:4.0.0/",
+    services: "1",
+    startHeight: 900002,
+    country: "SG",
+    asn: 63949,
+    asnOrganization: "Linode, LLC",
+  },
+];
+
 function cloneRun(run: CrawlRunListItem): CrawlRunListItem {
   return { ...run };
 }
@@ -526,6 +682,68 @@ async function countDemoNodesByAsn(limit = 10): Promise<AsnNodeCountItem[]> {
   return delay(result);
 }
 
+async function listDemoLastRunServices(limit = 100): Promise<LastRunServicesCountItem[]> {
+  const result = DEMO_LAST_RUN_SERVICES.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run services buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunProtocolVersions(
+  limit = 100,
+): Promise<LastRunProtocolVersionCountItem[]> {
+  const result = DEMO_LAST_RUN_PROTOCOL_VERSIONS.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run protocol version buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunUserAgents(limit = 100): Promise<LastRunUserAgentCountItem[]> {
+  const result = DEMO_LAST_RUN_USER_AGENTS.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run user agent buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunNetworkTypes(
+  limit = 100,
+): Promise<LastRunNetworkTypeCountItem[]> {
+  const result = DEMO_LAST_RUN_NETWORK_TYPES.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run network type buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunCountries(limit = 100): Promise<LastRunCountryCountItem[]> {
+  const result = DEMO_LAST_RUN_COUNTRIES.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run country buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunAsns(limit = 100): Promise<LastRunAsnCountItem[]> {
+  const result = DEMO_LAST_RUN_ASNS.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run ASN buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunStartHeights(
+  limit = 100,
+): Promise<LastRunStartHeightCountItem[]> {
+  const result = DEMO_LAST_RUN_START_HEIGHTS.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run start-height buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunAsnOrganizations(
+  limit = 100,
+): Promise<LastRunAsnOrganizationCountItem[]> {
+  const result = DEMO_LAST_RUN_ASN_ORGANIZATIONS.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run ASN organization buckets.`);
+  return delay(result);
+}
+
+async function listDemoLastRunNodes(limit = 500): Promise<LastRunNodeSummaryItem[]> {
+  const result = DEMO_LAST_RUN_NODES.slice(0, limit).map((row) => ({ ...row }));
+  pushEvent("info", `Demo mode served ${result.length} last-run node rows.`);
+  return delay(result);
+}
+
 export const webClient: BtcAppClient = {
   listCrawlRuns(limit) {
     if (isDemoModeEnabled()) {
@@ -547,6 +765,69 @@ export const webClient: BtcAppClient = {
     }
 
     return countNodesByAsn(limit);
+  },
+  listLastRunServices(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunServices(limit);
+    }
+
+    return listLastRunServices(limit);
+  },
+  listLastRunProtocolVersions(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunProtocolVersions(limit);
+    }
+
+    return listLastRunProtocolVersions(limit);
+  },
+  listLastRunUserAgents(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunUserAgents(limit);
+    }
+
+    return listLastRunUserAgents(limit);
+  },
+  listLastRunNetworkTypes(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunNetworkTypes(limit);
+    }
+
+    return listLastRunNetworkTypes(limit);
+  },
+  listLastRunCountries(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunCountries(limit);
+    }
+
+    return listLastRunCountries(limit);
+  },
+  listLastRunAsns(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunAsns(limit);
+    }
+
+    return listLastRunAsns(limit);
+  },
+  listLastRunStartHeights(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunStartHeights(limit);
+    }
+
+    return listLastRunStartHeights(limit);
+  },
+  listLastRunAsnOrganizations(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunAsnOrganizations(limit);
+    }
+
+    return listLastRunAsnOrganizations(limit);
+  },
+  listLastRunNodes(limit) {
+    if (isDemoModeEnabled()) {
+      return listDemoLastRunNodes(limit);
+    }
+
+    return listLastRunNodes(limit);
   },
   async handshake(request: ConnectionRequest): Promise<HandshakeResult> {
     const seed = seedFromText(request.node);

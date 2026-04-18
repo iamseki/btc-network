@@ -2,7 +2,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { countNodesByAsn, getCrawlRun, listCrawlRuns } from "./analytics-http";
+import {
+  countNodesByAsn,
+  getCrawlRun,
+  listCrawlRuns,
+  listLastRunNetworkTypes,
+} from "./analytics-http";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -89,5 +94,28 @@ describe("analytics-http", () => {
     );
 
     await expect(countNodesByAsn()).rejects.toThrow("crawler analytics backend failed");
+  });
+
+  it("loads last-run network type rows from the explicit last-run endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          {
+            networkType: "ipv4",
+            nodeCount: 42,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rows = await listLastRunNetworkTypes(5);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8080/api/v1/crawler/last-run/network-types?limit=5",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(rows).toEqual([{ networkType: "ipv4", nodeCount: 42 }]);
   });
 });
