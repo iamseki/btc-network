@@ -140,6 +140,30 @@ impl CrawlNetwork {
     }
 }
 
+/// Transport path used by the crawler to attempt one observation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ReachabilityLayer {
+    Direct,
+    TorSocks5,
+}
+
+impl ReachabilityLayer {
+    pub fn as_storage_str(self) -> &'static str {
+        match self {
+            Self::Direct => "direct",
+            Self::TorSocks5 => "tor_socks5",
+        }
+    }
+
+    pub fn from_storage_str(value: &str) -> Option<Self> {
+        match value {
+            "direct" => Some(Self::Direct),
+            "tor_socks5" => Some(Self::TorSocks5),
+            _ => None,
+        }
+    }
+}
+
 /// Canonical crawler endpoint representation used across discovery, storage,
 /// and recovery flows.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -205,6 +229,29 @@ impl CrawlEndpoint {
     pub fn socket_addr(&self) -> Option<SocketAddr> {
         self.ip_addr
             .map(|ip_addr| SocketAddr::new(ip_addr, self.port))
+    }
+
+    /// Returns the reachability layer this endpoint requires when the crawler
+    /// is configured to attempt it.
+    pub fn configured_reachability_layer(
+        &self,
+        config: &CrawlerConfig,
+    ) -> Option<ReachabilityLayer> {
+        match self.network {
+            CrawlNetwork::TorV2 | CrawlNetwork::TorV3 => config
+                .tor_socks5_addr
+                .as_ref()
+                .map(|_| ReachabilityLayer::TorSocks5),
+            _ => self.socket_addr().map(|_| ReachabilityLayer::Direct),
+        }
+    }
+
+    /// Returns the default reachability layer classification for this endpoint.
+    pub fn reachability_layer(&self) -> Option<ReachabilityLayer> {
+        match self.network {
+            CrawlNetwork::TorV2 | CrawlNetwork::TorV3 => Some(ReachabilityLayer::TorSocks5),
+            _ => self.socket_addr().map(|_| ReachabilityLayer::Direct),
+        }
     }
 
     pub fn from_stored(
@@ -373,6 +420,7 @@ pub struct RawNodeObservation {
     pub observed_at: DateTime<Utc>,
     pub crawl_run_id: CrawlRunId,
     pub endpoint: CrawlEndpoint,
+    pub reachability_layer: ReachabilityLayer,
     pub protocol_version: Option<i32>,
     pub services: Option<u64>,
     pub user_agent: Option<String>,
@@ -388,6 +436,7 @@ impl RawNodeObservation {
         observed_at: DateTime<Utc>,
         crawl_run_id: CrawlRunId,
         endpoint: CrawlEndpoint,
+        reachability_layer: ReachabilityLayer,
         state: &NodeState,
         discovered_peer_addresses_count: usize,
         latency: Duration,
@@ -396,6 +445,7 @@ impl RawNodeObservation {
             observed_at,
             crawl_run_id,
             endpoint,
+            reachability_layer,
             protocol_version: Some(state.version),
             services: Some(state.services),
             user_agent: Some(state.user_agent.clone()),
@@ -411,6 +461,7 @@ impl RawNodeObservation {
         observed_at: DateTime<Utc>,
         crawl_run_id: CrawlRunId,
         endpoint: CrawlEndpoint,
+        reachability_layer: ReachabilityLayer,
         classification: FailureClassification,
         latency: Duration,
     ) -> Self {
@@ -418,6 +469,7 @@ impl RawNodeObservation {
             observed_at,
             crawl_run_id,
             endpoint,
+            reachability_layer,
             protocol_version: None,
             services: None,
             user_agent: None,
@@ -513,6 +565,9 @@ mod tests {
         RawNodeObservation {
             observed_at: Utc::now(),
             crawl_run_id: CrawlRunId::from_u128(1),
+            reachability_layer: endpoint
+                .reachability_layer()
+                .unwrap_or(ReachabilityLayer::Direct),
             endpoint,
             protocol_version: Some(70016),
             services: Some(1),
@@ -561,6 +616,20 @@ mod tests {
         let observation = sample_raw_observation(endpoint);
 
         assert!(!observation.supports_ip_enrichment());
+    }
+
+    #[test]
+    fn configured_reachability_layer_requires_tor_proxy_for_onion_endpoints() {
+        let endpoint = CrawlEndpoint::new("example.onion", 8333, CrawlNetwork::TorV3, None);
+        let mut config = CrawlerConfig::default();
+
+        assert_eq!(endpoint.configured_reachability_layer(&config), None);
+
+        config.tor_socks5_addr = Some("tor:9050".to_string());
+        assert_eq!(
+            endpoint.configured_reachability_layer(&config),
+            Some(ReachabilityLayer::TorSocks5)
+        );
     }
 
     #[test]

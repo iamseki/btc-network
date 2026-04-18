@@ -3,6 +3,8 @@ include:
     project_directory: .
   - path: ./compose/postgres-migrate.yml
     project_directory: .
+  - path: ./compose/tor.yml
+    project_directory: .
   - path: ./compose/crawler.yml
     project_directory: .
   - path: ./compose/api.yml
@@ -16,3 +18,4 @@ volumes:
   cargo-git:
   cargo-registry:
   cargo-target:
+  tor-data:

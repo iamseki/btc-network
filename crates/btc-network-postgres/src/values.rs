@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use btc_network::crawler::{CrawlNetwork, CrawlPhase, FailureClassification, IpEnrichmentStatus};
+use btc_network::crawler::{
+    CrawlNetwork, CrawlPhase, FailureClassification, IpEnrichmentStatus, ReachabilityLayer,
+};
 
 pub(crate) fn crawl_phase_to_str(value: CrawlPhase) -> &'static str {
     match value {
@@ -32,6 +34,10 @@ pub(crate) fn crawl_network_to_str(value: CrawlNetwork) -> &'static str {
         CrawlNetwork::Yggdrasil => "yggdrasil",
         CrawlNetwork::Unknown => "unknown",
     }
+}
+
+pub(crate) fn reachability_layer_to_str(value: ReachabilityLayer) -> &'static str {
+    value.as_storage_str()
 }
 
 pub(crate) fn enrichment_status_to_str(value: IpEnrichmentStatus) -> &'static str {

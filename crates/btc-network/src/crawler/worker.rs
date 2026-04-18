@@ -89,7 +89,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         }
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
-        if endpoint.socket_addr().is_some() {
+        if endpoint.configured_reachability_layer(&config).is_some() {
             stats
                 .connectable_tasks_started
                 .fetch_add(1, Ordering::Relaxed);
@@ -98,7 +98,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         let _in_flight_guard = InFlightGuard::new(stats.as_ref());
 
         let process_started = Instant::now();
-        let visit_result = processor.process(endpoint.clone(), config).await;
+        let visit_result = processor.process(endpoint.clone(), config.clone()).await;
         let process_elapsed = process_started.elapsed();
 
         match visit_result {
@@ -110,6 +110,10 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     Utc::now(),
                     run_id.clone(),
                     visit.node.clone(),
+                    visit
+                        .node
+                        .reachability_layer()
+                        .expect("successful visit should have a reachability layer"),
                     &visit.state,
                     discovered_peer_addresses_count,
                     visit.latency,
@@ -133,7 +137,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 let state_lock_wait = state_lock_wait_started.elapsed();
                 let state_lock_hold_started = Instant::now();
                 guard.in_flight_nodes.remove(&endpoint);
-                let discovered = apply_visit_to_state(&mut guard, visit, config.max_tracked_nodes);
+                let discovered = apply_visit_to_state(&mut guard, visit, &config);
                 let state_lock_hold = state_lock_hold_started.elapsed();
                 drop(guard);
                 let queued_count = discovered.len();
@@ -171,6 +175,9 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     Utc::now(),
                     run_id.clone(),
                     err.node.clone(),
+                    err.node
+                        .reachability_layer()
+                        .expect("failed visit should have a reachability layer"),
                     err.classification.clone(),
                     err.latency,
                 );
@@ -298,7 +305,7 @@ pub(crate) async fn seed_initial_nodes(
 pub(crate) fn apply_visit_to_state(
     state: &mut CrawlState,
     visit: NodeVisit,
-    max_tracked_nodes: usize,
+    config: &CrawlerConfig,
 ) -> Vec<CrawlEndpoint> {
     let NodeVisit {
         node,
@@ -310,11 +317,11 @@ pub(crate) fn apply_visit_to_state(
 
     let mut new_nodes = Vec::new();
     for endpoint in discovered {
-        if endpoint.socket_addr().is_none() {
+        if endpoint.configured_reachability_layer(config).is_none() {
             continue;
         }
 
-        if try_track_endpoint(state, endpoint.clone(), max_tracked_nodes) {
+        if try_track_endpoint(state, endpoint.clone(), config.max_tracked_nodes) {
             state.pending_nodes.insert(endpoint.clone());
             new_nodes.push(endpoint);
         }
@@ -546,6 +553,7 @@ mod tests {
             connect_max_attempts: 1,
             connect_retry_backoff: Duration::ZERO,
             io_timeout: Duration::from_millis(50),
+            tor_socks5_addr: None,
             shutdown_grace_period: Duration::from_secs(1),
             verbose: false,
         }
@@ -616,7 +624,7 @@ mod tests {
             node.clone(),
             vec![already_known, new_node.clone(), overlay_endpoint()],
         );
-        let inserted = apply_visit_to_state(&mut state, visit, test_config().max_tracked_nodes);
+        let inserted = apply_visit_to_state(&mut state, visit, &test_config());
 
         assert_eq!(inserted, vec![new_node.clone()]);
         assert!(state.seen_nodes.contains(&node));
@@ -630,11 +638,7 @@ mod tests {
         let mut state = CrawlState::new();
         let before = state.last_new_node_at;
 
-        let inserted = apply_visit_to_state(
-            &mut state,
-            visit_for(node, vec![]),
-            test_config().max_tracked_nodes,
-        );
+        let inserted = apply_visit_to_state(&mut state, visit_for(node, vec![]), &test_config());
 
         assert!(inserted.is_empty());
         assert_eq!(state.last_new_node_at, before);
@@ -646,11 +650,7 @@ mod tests {
         let mut state = CrawlState::new();
         state.seen_nodes.insert(node.clone());
 
-        apply_visit_to_state(
-            &mut state,
-            visit_for(node.clone(), vec![]),
-            test_config().max_tracked_nodes,
-        );
+        apply_visit_to_state(&mut state, visit_for(node.clone(), vec![]), &test_config());
 
         assert!(state.seen_nodes.contains(&node));
     }
@@ -749,6 +749,10 @@ mod tests {
         );
         assert!(out_rx.try_recv().is_err());
         assert_eq!(persisted.raw.failure_classification, None);
+        assert_eq!(
+            persisted.raw.reachability_layer,
+            crate::crawler::ReachabilityLayer::Direct
+        );
         assert_eq!(persisted.enrichment.asn, Some(64512));
 
         let guard = state.lock().await;
@@ -814,9 +818,31 @@ mod tests {
             Some(crate::crawler::FailureClassification::Connect)
         );
         assert_eq!(
+            persisted.raw.reachability_layer,
+            crate::crawler::ReachabilityLayer::TorSocks5
+        );
+        assert_eq!(
             persisted.enrichment.status,
             crate::crawler::IpEnrichmentStatus::NotApplicable
         );
+    }
+
+    #[test]
+    fn apply_visit_tracks_tor_nodes_when_proxy_is_configured() {
+        let node = test_endpoint(2);
+        let tor_endpoint = overlay_endpoint();
+        let mut state = CrawlState::new();
+        let mut config = test_config();
+        config.tor_socks5_addr = Some("tor:9050".to_string());
+
+        let inserted = apply_visit_to_state(
+            &mut state,
+            visit_for(node, vec![tor_endpoint.clone()]),
+            &config,
+        );
+
+        assert_eq!(inserted, vec![tor_endpoint.clone()]);
+        assert!(state.pending_nodes.contains(&tor_endpoint));
     }
 
     #[tokio::test]
@@ -854,6 +880,7 @@ mod tests {
                 CrawlNetwork::Ipv4,
                 Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))),
             ),
+            crate::crawler::ReachabilityLayer::Direct,
             crate::crawler::FailureClassification::Connect,
             Duration::from_millis(1),
         );
@@ -1143,7 +1170,10 @@ mod tests {
         let inserted = apply_visit_to_state(
             &mut state,
             visit_for(test_endpoint(4), vec![test_endpoint(5)]),
-            2,
+            &CrawlerConfig {
+                max_tracked_nodes: 2,
+                ..test_config()
+            },
         );
 
         assert!(inserted.is_empty());

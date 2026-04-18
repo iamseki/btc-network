@@ -1,0 +1,23 @@
+services:
+  tor:
+    image: btc-network-tor-local:dev
+    build:
+      context: .
+      dockerfile: apps/tor/Dockerfile
+    container_name: btc-network-tor
+    profiles: ["crawler"]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "printf 'AUTHENTICATE\\r\\nGETINFO status/bootstrap-phase\\r\\nQUIT\\r\\n' | nc 127.0.0.1 9051 | grep -q 'PROGRESS=100'",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+    expose:
+      - "9050"
+    volumes:
+      - tor-data:/var/lib/tor

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::domain::{CrawlEndpoint, FailureClassification};
 
 /// Runtime configuration for the crawler orchestration loop.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrawlerConfig {
     /// Maximum number of worker tasks polling and processing nodes concurrently.
     pub max_concurrency: usize,
@@ -31,6 +31,8 @@ pub struct CrawlerConfig {
     pub connect_retry_backoff: Duration,
     /// Per-connection read/write timeout used by session I/O.
     pub io_timeout: Duration,
+    /// Optional SOCKS5 proxy target used for onion reachability.
+    pub tor_socks5_addr: Option<String>,
     /// Maximum time to wait for worker tasks to drain after shutdown starts.
     pub shutdown_grace_period: Duration,
     /// Enables extra per-node logs.
@@ -51,6 +53,7 @@ impl Default for CrawlerConfig {
             connect_max_attempts: 3,
             connect_retry_backoff: Duration::from_millis(250),
             io_timeout: Duration::from_secs(10),
+            tor_socks5_addr: None,
             shutdown_grace_period: Duration::from_secs(15),
             verbose: false,
         }

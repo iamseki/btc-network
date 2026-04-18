@@ -44,3 +44,4 @@ Use only the canonical status values below.
 | `BNDD-0007` | `PostgreSQL as the default crawler persistence backend` | `implemented` | [BNDD-0007/BNDD-0007.md](./BNDD-0007/BNDD-0007.md) |
 | `BNDD-0008` | `Minimal durable crawler recovery state` | `deprecated` | [BNDD-0008/BNDD-0008.md](./BNDD-0008/BNDD-0008.md) |
 | `BNDD-0009` | `Outbound connection admission control and runtime pressure telemetry` | `implemented` | [BNDD-0009/BNDD-0009.md](./BNDD-0009/BNDD-0009.md) |
+| `BNDD-0010` | `Optional Tor reachability layer for crawler observations` | `implemented` | [BNDD-0010/BNDD-0010.md](./BNDD-0010/BNDD-0010.md) |

@@ -120,6 +120,10 @@ struct CrawlArgs {
     )]
     io_timeout_secs: u64,
 
+    /// Optional SOCKS5 proxy target used for onion reachability, such as `127.0.0.1:9050` or `tor:9050`.
+    #[arg(long, env = "BTC_NETWORK_CRAWLER_TOR_SOCKS5_ADDR")]
+    tor_socks5_addr: Option<String>,
+
     /// Maximum number of seconds to wait for worker tasks to drain during shutdown.
     ///
     /// If the grace period expires, remaining worker tasks are aborted so the
@@ -243,6 +247,7 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
         connect_max_attempts: args.connect_max_attempts,
         connect_retry_backoff: Duration::from_millis(args.connect_retry_backoff_ms),
         io_timeout: Duration::from_secs(args.io_timeout_secs),
+        tor_socks5_addr: args.tor_socks5_addr.clone(),
         shutdown_grace_period: Duration::from_secs(args.shutdown_grace_period_secs),
         verbose: args.verbose,
         ..CrawlerConfig::default()
@@ -289,6 +294,7 @@ mod tests {
             connect_max_attempts: 4,
             connect_retry_backoff_ms: 500,
             io_timeout_secs: 10,
+            tor_socks5_addr: Some("tor:9050".to_string()),
             shutdown_grace_period_secs: 20,
             verbose: false,
             postgres: PostgresArgs {
@@ -309,6 +315,7 @@ mod tests {
         assert_eq!(config.max_tracked_nodes, 250_000);
         assert_eq!(config.connect_max_attempts, 4);
         assert_eq!(config.connect_retry_backoff, Duration::from_millis(500));
+        assert_eq!(config.tor_socks5_addr.as_deref(), Some("tor:9050"));
         assert_eq!(config.shutdown_grace_period, Duration::from_secs(20));
     }
 

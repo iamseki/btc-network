@@ -9,7 +9,7 @@ use std::{env, fs};
 use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
     CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, IpEnrichment, IpEnrichmentProvider,
-    ObservationId, PersistedNodeObservation, RawNodeObservation,
+    ObservationId, PersistedNodeObservation, RawNodeObservation, ReachabilityLayer,
 };
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_postgres::{
@@ -777,6 +777,7 @@ fn sample_verified_observation(
             CrawlNetwork::Ipv4,
             Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
         ),
+        reachability_layer: ReachabilityLayer::Direct,
         protocol_version: Some(70016),
         services: Some(1),
         user_agent: Some("/Satoshi:27.0.0/".to_string()),
@@ -808,6 +809,9 @@ fn sample_verified_observation_for_endpoint(
         observed_at,
         crawl_run_id: run_id.clone(),
         endpoint: endpoint.clone(),
+        reachability_layer: endpoint
+            .reachability_layer()
+            .expect("test endpoint should be reachable"),
         protocol_version: Some(70016),
         services: Some(1),
         user_agent: Some("/Satoshi:27.0.0/".to_string()),
@@ -835,6 +839,7 @@ fn sample_failed_observation(
             CrawlNetwork::Ipv4,
             Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
         ),
+        reachability_layer: ReachabilityLayer::Direct,
         protocol_version: None,
         services: None,
         user_agent: None,
