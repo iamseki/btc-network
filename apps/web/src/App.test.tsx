@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
+const { mockGetDocsUiConfig } = vi.hoisted(() => ({
+  mockGetDocsUiConfig: vi.fn(),
+}));
 const mockHandshake = vi.fn();
 const mockPing = vi.fn();
 const mockGetAddr = vi.fn();
@@ -52,6 +55,10 @@ vi.mock("./lib/api", () => ({
   }),
 }));
 
+vi.mock("./lib/api/docs-http", () => ({
+  getDocsUiConfig: mockGetDocsUiConfig,
+}));
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -75,6 +82,7 @@ afterEach(() => {
   mockListLastRunNodes.mockReset();
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
+  mockGetDocsUiConfig.mockReset();
   mockListCrawlRuns.mockResolvedValue([]);
   mockGetCrawlRun.mockResolvedValue({
     run: {
@@ -110,6 +118,16 @@ afterEach(() => {
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
+  mockGetDocsUiConfig.mockResolvedValue({
+    title: "btc-network API",
+    version: "0.1.0",
+    description: "Generated docs",
+    introduction: "Start with runs.",
+    openapiUrl: "http://127.0.0.1:8080/api/openapi.json",
+    openapiPath: "/api/openapi.json",
+    scalarPath: "http://127.0.0.1:8080/docs",
+    baseServerUrl: "http://127.0.0.1:8080",
+  });
 });
 
 beforeEach(() => {
@@ -154,6 +172,16 @@ beforeEach(() => {
   mockListLastRunStartHeights.mockResolvedValue([]);
   mockListLastRunAsnOrganizations.mockResolvedValue([]);
   mockListLastRunNodes.mockResolvedValue([]);
+  mockGetDocsUiConfig.mockResolvedValue({
+    title: "btc-network API",
+    version: "0.1.0",
+    description: "Generated docs",
+    introduction: "Start with runs.",
+    openapiUrl: "http://127.0.0.1:8080/api/openapi.json",
+    openapiPath: "/api/openapi.json",
+    scalarPath: "http://127.0.0.1:8080/docs",
+    baseServerUrl: "http://127.0.0.1:8080",
+  });
 });
 
 function setViewportWidth(width: number) {
@@ -310,8 +338,9 @@ describe("App sidebar shell", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "API" })).toBeTruthy();
     });
-    expect(screen.getByText("Why teams buy this")).toBeTruthy();
+    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "API Views" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
   });

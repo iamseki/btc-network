@@ -127,10 +127,21 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
 }
 
 describe("ApiPage", () => {
-  it("renders a compact commercial overview driven by current analytics inputs", async () => {
+  it("opens on docs first and loads the embedded reference config", async () => {
     render(<ApiPage client={makeClient()} />);
 
     expect(await screen.findByText("API")).toBeTruthy();
+    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
+    expect(screen.getByText("Embedded Scalar")).toBeTruthy();
+    expect(screen.getByText("Live API Reference")).toBeTruthy();
+    await waitFor(() => {
+      expect(getDocsUiConfig).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("renders a compact commercial overview driven by current analytics inputs", async () => {
+    render(<ApiPage client={makeClient()} activePanel="overview" />);
+
     expect(
       screen.getByText(
         /Resilient Bitcoin network analytics for teams that need faster answers on concentration/i,
@@ -144,23 +155,18 @@ describe("ApiPage", () => {
     expect(screen.queryByText("Example Snapshot Contract")).toBeNull();
   });
 
-  it("switches between overview, access, and docs panels", async () => {
+  it("switches between docs, overview, and access panels", async () => {
     render(<ApiPage client={makeClient()} />);
 
+    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(await screen.findByText("Why teams buy this")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Access" }));
     expect(await screen.findByText("Access Flow")).toBeTruthy();
     expect(screen.getByText("Subscription Shape")).toBeTruthy();
     expect(screen.getByText("Get an API key")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Docs" }));
-    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
-    expect(screen.getByText("Embedded Scalar")).toBeTruthy();
-    expect(screen.getByText("Live API Reference")).toBeTruthy();
-    await waitFor(() => {
-      expect(getDocsUiConfig).toHaveBeenCalledTimes(1);
-    });
   });
 
   it("falls back to commercial framing when live analytics loading fails", async () => {
@@ -172,6 +178,5 @@ describe("ApiPage", () => {
 
     expect(await screen.findByText("Live analytics are temporarily unavailable")).toBeTruthy();
     expect(screen.getByText("early-access")).toBeTruthy();
-    expect(screen.getByText("Early access")).toBeTruthy();
   });
 });

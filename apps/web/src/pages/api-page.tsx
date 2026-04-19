@@ -34,7 +34,7 @@ export function ApiPage({
 }: ApiPageProps) {
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
-  const [internalActivePanel, setInternalActivePanel] = useState<ApiPanel>("overview");
+  const [internalActivePanel, setInternalActivePanel] = useState<ApiPanel>("docs");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [docsUiConfig, setDocsUiConfig] = useState<DocsUiConfig | null>(null);
@@ -258,6 +258,11 @@ export function ApiPage({
       {showPanelNav ? (
         <div className="flex flex-wrap gap-2">
           <AnalyticsPanelButton
+            label="Docs"
+            selected={activePanel === "docs"}
+            onClick={() => selectPanel("docs")}
+          />
+          <AnalyticsPanelButton
             label="Overview"
             selected={activePanel === "overview"}
             onClick={() => selectPanel("overview")}
@@ -266,11 +271,6 @@ export function ApiPage({
             label="Access"
             selected={activePanel === "access"}
             onClick={() => selectPanel("access")}
-          />
-          <AnalyticsPanelButton
-            label="Docs"
-            selected={activePanel === "docs"}
-            onClick={() => selectPanel("docs")}
           />
         </div>
       ) : null}

@@ -62,7 +62,7 @@ export function App() {
   const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
   const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
     useState<NetworkAnalyticsPanel>("overview");
-  const [apiPanel, setApiPanel] = useState<ApiPanel>("overview");
+  const [apiPanel, setApiPanel] = useState<ApiPanel>("docs");
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
@@ -147,9 +147,9 @@ export function App() {
           ? {
               label: "API Views",
               items: [
+                { id: "docs", title: "Docs" },
                 { id: "overview", title: "Overview" },
                 { id: "access", title: "Access" },
-                { id: "docs", title: "Docs" },
               ] satisfies { id: ApiPanel; title: string }[],
               activeItem: apiPanel,
               onSelect: (panel: string) => setApiPanel(panel as ApiPanel),
@@ -172,7 +172,7 @@ export function App() {
     }
 
     if (nextPage === "api") {
-      setApiPanel("overview");
+      setApiPanel("docs");
     }
 
     if (window.innerWidth < 768) {
