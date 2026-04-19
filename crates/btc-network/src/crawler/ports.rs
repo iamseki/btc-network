@@ -183,7 +183,7 @@ mod tests {
     use crate::crawler::{
         AsnNodeCountItem, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem, CrawlRunDetail,
         CrawlRunListItem, CrawlRunMetrics, FailureClassificationCount, NetworkOutcomeCount,
-        ObservationId, RawNodeObservation, ReachabilityLayer,
+        ObservationId, RawNodeObservation,
     };
     use chrono::Utc;
     use std::net::{IpAddr, Ipv4Addr};
@@ -406,7 +406,6 @@ mod tests {
                 CrawlNetwork::Ipv4,
                 Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 7))),
             ),
-            reachability_layer: ReachabilityLayer::Direct,
             protocol_version: Some(70016),
             services: Some(1),
             user_agent: Some("/Satoshi:27.0.0/".to_string()),

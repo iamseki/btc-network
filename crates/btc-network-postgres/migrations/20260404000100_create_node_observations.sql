@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS node_observations (
     observation_id UUID NOT NULL,
     endpoint TEXT NOT NULL,
     network_type TEXT NOT NULL,
-    reachability_layer TEXT NOT NULL,
     protocol_version INTEGER,
     services TEXT,
     user_agent TEXT,

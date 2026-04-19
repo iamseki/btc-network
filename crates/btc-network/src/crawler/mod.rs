@@ -28,8 +28,7 @@ pub use analytics::{
 pub use domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
     CrawlRunMetrics, FailureClassification, IpEnrichment, IpEnrichmentStatus, ObservationId,
-    PersistedNodeObservation, RawNodeObservation, ReachabilityLayer, StartCrawlRequest,
-    StopCrawlRequest,
+    PersistedNodeObservation, RawNodeObservation, StartCrawlRequest, StopCrawlRequest,
 };
 use lifecycle::{
     CheckpointEmitterContext, SharedStopReason, capture_snapshot, checkpoint_from_capture,

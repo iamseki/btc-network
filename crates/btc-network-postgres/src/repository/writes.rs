@@ -4,7 +4,7 @@ use sqlx_postgres::{PgPool, Postgres};
 
 use crate::values::{
     crawl_network_to_str, crawl_phase_to_str, duration_to_millis, enrichment_status_to_str,
-    failure_classification_to_str, reachability_layer_to_str, usize_to_i64,
+    failure_classification_to_str, usize_to_i64,
 };
 
 use super::map_postgres_err;
@@ -19,7 +19,6 @@ INSERT INTO node_observations (
     observation_id,
     endpoint,
     network_type,
-    reachability_layer,
     protocol_version,
     services,
     user_agent,
@@ -70,9 +69,6 @@ fn observation_insert_builder<'a>(
             .push_bind(observation.observation_id.as_uuid())
             .push_bind(observation.raw.endpoint.canonical.as_str())
             .push_bind(crawl_network_to_str(observation.raw.endpoint.network))
-            .push_bind(reachability_layer_to_str(
-                observation.raw.reachability_layer,
-            ))
             .push_bind(observation.raw.protocol_version)
             .push_bind(observation.raw.services.map(|value| value.to_string()))
             .push_bind(observation.raw.user_agent.as_deref())

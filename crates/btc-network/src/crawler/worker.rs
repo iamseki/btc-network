@@ -89,7 +89,7 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         }
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
-        if endpoint.configured_reachability_layer(&config).is_some() {
+        if endpoint.is_reachable_with_config(&config) {
             stats
                 .connectable_tasks_started
                 .fetch_add(1, Ordering::Relaxed);
@@ -110,10 +110,6 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     Utc::now(),
                     run_id.clone(),
                     visit.node.clone(),
-                    visit
-                        .node
-                        .reachability_layer()
-                        .expect("successful visit should have a reachability layer"),
                     &visit.state,
                     discovered_peer_addresses_count,
                     visit.latency,
@@ -175,9 +171,6 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     Utc::now(),
                     run_id.clone(),
                     err.node.clone(),
-                    err.node
-                        .reachability_layer()
-                        .expect("failed visit should have a reachability layer"),
                     err.classification.clone(),
                     err.latency,
                 );
@@ -317,7 +310,7 @@ pub(crate) fn apply_visit_to_state(
 
     let mut new_nodes = Vec::new();
     for endpoint in discovered {
-        if endpoint.configured_reachability_layer(config).is_none() {
+        if !endpoint.is_reachable_with_config(config) {
             continue;
         }
 
@@ -749,10 +742,6 @@ mod tests {
         );
         assert!(out_rx.try_recv().is_err());
         assert_eq!(persisted.raw.failure_classification, None);
-        assert_eq!(
-            persisted.raw.reachability_layer,
-            crate::crawler::ReachabilityLayer::Direct
-        );
         assert_eq!(persisted.enrichment.asn, Some(64512));
 
         let guard = state.lock().await;
@@ -818,10 +807,6 @@ mod tests {
             Some(crate::crawler::FailureClassification::Connect)
         );
         assert_eq!(
-            persisted.raw.reachability_layer,
-            crate::crawler::ReachabilityLayer::TorSocks5
-        );
-        assert_eq!(
             persisted.enrichment.status,
             crate::crawler::IpEnrichmentStatus::NotApplicable
         );
@@ -880,7 +865,6 @@ mod tests {
                 CrawlNetwork::Ipv4,
                 Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2))),
             ),
-            crate::crawler::ReachabilityLayer::Direct,
             crate::crawler::FailureClassification::Connect,
             Duration::from_millis(1),
         );

@@ -124,10 +124,10 @@ infra-crawler-api-up-build: ## Start postgres, migrations, tor, crawler, and API
 	@$(MAKE) infra-crawler-api-up BUILD=1
 
 infra-compose-down: ## Stop and remove all local Compose services in this repository stack
-	@$(DOCKER_COMPOSE) down --remove-orphans
+	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans
 
 infra-compose-reset: ## Force-remove local Compose containers and network metadata when Docker state is stale
-	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans >/dev/null 2>&1 || true
 	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-tor btc-network-crawler btc-network-api >/dev/null 2>&1 || true
 	@docker network rm btc-network_default >/dev/null 2>&1 || true
 

@@ -188,8 +188,8 @@ Behavior:
 - IPv4 and IPv6 peers still use direct TCP as before
 - discovered `.onion` peers are only queued for follow-up when a Tor SOCKS5
   proxy is configured
-- Tor observations are persisted separately from clearnet observations through
-  `network_type` and `reachability_layer`
+- Tor observations stay distinct from clearnet observations through
+  `network_type`
 
 Recommended operator path:
 
