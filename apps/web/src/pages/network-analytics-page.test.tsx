@@ -215,6 +215,44 @@ describe("NetworkAnalyticsPage", () => {
       await screen.findByText("Network analytics failed to load: api unavailable"),
     ).toBeTruthy();
   });
+
+  it("routes the home-page API call to action through the provided callback", async () => {
+    const client = makeClient({
+      listCrawlRuns: vi.fn().mockResolvedValue([
+        {
+          runId: "crawl-7",
+          phase: "completed",
+          startedAt: "2026-03-30T12:00:00Z",
+          lastCheckpointedAt: "2026-03-30T12:10:00Z",
+          stopReason: "idle timeout",
+          failureReason: null,
+          scheduledTasks: 100,
+          successfulHandshakes: 30,
+          failedTasks: 70,
+          uniqueNodes: 130,
+          persistedObservationRows: 100,
+          successPct: 30,
+          scheduledPct: 76.92,
+          unscheduledGap: 30,
+        },
+      ]),
+      listLastRunAsns: vi.fn().mockResolvedValue([{ asn: 64512, asnOrganization: "Example ASN", nodeCount: 18 }]),
+      listLastRunServices: vi.fn().mockResolvedValue([{ services: "1033", nodeCount: 18 }]),
+      listLastRunNetworkTypes: vi.fn().mockResolvedValue([{ networkType: "ipv4", nodeCount: 24 }]),
+      listLastRunCountries: vi.fn().mockResolvedValue([{ country: "US", nodeCount: 14 }]),
+      listLastRunStartHeights: vi.fn().mockResolvedValue([{ startHeight: 900000, nodeCount: 15 }]),
+      listLastRunNodes: vi.fn().mockResolvedValue([]),
+    });
+    const onOpenApiPage = vi.fn();
+
+    render(<NetworkAnalyticsPage client={client} onOpenApiPage={onOpenApiPage} />);
+
+    expect(await screen.findByText("Build on the snapshot")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explore API" }));
+
+    expect(onOpenApiPage).toHaveBeenCalledTimes(1);
+  });
 });
 
 function scoreCardValue(label: string): string {

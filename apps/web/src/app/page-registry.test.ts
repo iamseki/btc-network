@@ -6,7 +6,7 @@ describe("appPages", () => {
   it("lists analytics-first pages before the existing peer tools", () => {
     expect(appPages.map((page) => page.id)).toEqual([
       "network-analytics",
-      "risk-api",
+      "api",
       "crawler-runs",
       "connection",
       "peer-tools",

@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod docs;
+
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -22,6 +24,7 @@ use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::timeout::TimeoutLayer;
 use tracing::error;
+use utoipa::ToSchema;
 
 const DEFAULT_BIND_ADDR: &str = "127.0.0.1:8080";
 const DEFAULT_RUN_LIMIT: usize = 10;
@@ -66,23 +69,36 @@ impl Default for ApiRuntimeConfig {
 #[derive(Clone)]
 pub struct AppState {
     analytics_reader: Arc<dyn CrawlerAnalyticsReader>,
+    docs_config: docs::DocsConfig,
 }
 
 impl AppState {
-    pub fn new(analytics_reader: Arc<dyn CrawlerAnalyticsReader>) -> Self {
-        Self { analytics_reader }
+    pub fn new(
+        analytics_reader: Arc<dyn CrawlerAnalyticsReader>,
+        docs_config: docs::DocsConfig,
+    ) -> Self {
+        Self {
+            analytics_reader,
+            docs_config,
+        }
     }
 }
 
 pub fn build_router(analytics_reader: Arc<dyn CrawlerAnalyticsReader>) -> Router {
-    build_router_with_config(analytics_reader, ApiRuntimeConfig::default())
+    build_router_with_config(
+        analytics_reader,
+        ApiRuntimeConfig::default(),
+        docs::DocsConfig::default(),
+    )
 }
 
 fn build_router_with_config(
     analytics_reader: Arc<dyn CrawlerAnalyticsReader>,
     config: ApiRuntimeConfig,
+    docs_config: docs::DocsConfig,
 ) -> Router {
     Router::new()
+        .merge(docs::router(docs_config.clone()))
         .route("/api/v1/crawler/runs", get(list_crawl_runs))
         .route("/api/v1/crawler/runs/{run_id}", get(get_crawl_run))
         .route("/api/v1/crawler/asn", get(count_nodes_by_asn))
@@ -130,16 +146,17 @@ fn build_router_with_config(
                         .allow_headers([header::ACCEPT]),
                 ),
         )
-        .with_state(AppState::new(analytics_reader))
+        .with_state(AppState::new(analytics_reader, docs_config))
 }
 
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let bind_addr = parse_bind_addr()?;
     let postgres_config = parse_postgres_config()?;
     let runtime_config = parse_runtime_config()?;
+    let docs_config = docs::DocsConfig::from_env()?;
     let analytics_reader: Arc<dyn CrawlerAnalyticsReader> =
         Arc::new(PostgresCrawlerRepository::new(&postgres_config)?);
-    let app = build_router_with_config(analytics_reader, runtime_config);
+    let app = build_router_with_config(analytics_reader, runtime_config, docs_config);
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
 
     tracing::info!(%bind_addr, "[api] listening for crawler analytics requests");
@@ -152,18 +169,34 @@ struct PaginationQuery {
     limit: Option<usize>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct CrawlRunsResponse {
     runs: Vec<CrawlRunListItem>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
+#[schema(bound = "T: utoipa::ToSchema")]
 #[serde(rename_all = "camelCase")]
 struct RowsResponse<T> {
     rows: Vec<T>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/runs",
+    summary = "List crawl runs",
+    description = "Return the latest crawl-run snapshots that clients can use to discover recent analytics windows and select a run for deeper inspection.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of crawl runs to return. Default 10. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest crawl runs.", body = CrawlRunsResponse),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_crawl_runs(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -178,6 +211,22 @@ async fn list_crawl_runs(
     Ok(Json(CrawlRunsResponse { runs }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/runs/{run_id}",
+    summary = "Get crawl run detail",
+    description = "Return the detailed analytics payload for one crawl run, including checkpoints, failure counts, and network outcomes.",
+    params(
+        ("run_id" = String, Path, description = "Crawl run identifier.")
+    ),
+    responses(
+        (status = 200, description = "Detailed crawl run analytics.", body = CrawlRunDetail),
+        (status = 400, description = "Invalid crawl run identifier.", body = ErrorResponse),
+        (status = 404, description = "Crawl run not found.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn get_crawl_run(
     State(state): State<AppState>,
     Path(run_id): Path<String>,
@@ -196,6 +245,21 @@ async fn get_crawl_run(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/asn",
+    summary = "List verified-node counts by ASN",
+    description = "Return a concentration-oriented view of verified nodes grouped by ASN across the stored crawl analytics dataset.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of ASN buckets to return. Default 10. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Verified node counts grouped by ASN.", body = RowsResponse<AsnNodeCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn count_nodes_by_asn(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -210,6 +274,21 @@ async fn count_nodes_by_asn(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/services",
+    summary = "List latest-run services distribution",
+    description = "Return the latest finished-run distribution of advertised Bitcoin service flags.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of service buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run services distribution.", body = RowsResponse<LastRunServicesCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_services(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -223,6 +302,21 @@ async fn list_last_run_services(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/protocol-versions",
+    summary = "List latest-run protocol versions",
+    description = "Return the latest finished-run protocol-version distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of protocol-version buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run protocol-version distribution.", body = RowsResponse<LastRunProtocolVersionCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_protocol_versions(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -236,6 +330,21 @@ async fn list_last_run_protocol_versions(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/user-agents",
+    summary = "List latest-run user agents",
+    description = "Return the latest finished-run user-agent distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of user-agent buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run user-agent distribution.", body = RowsResponse<LastRunUserAgentCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_user_agents(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -249,6 +358,21 @@ async fn list_last_run_user_agents(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/network-types",
+    summary = "List latest-run network types",
+    description = "Return the latest finished-run network-type distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of network-type buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run network-type distribution.", body = RowsResponse<LastRunNetworkTypeCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_network_types(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -262,6 +386,21 @@ async fn list_last_run_network_types(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/countries",
+    summary = "List latest-run countries",
+    description = "Return the latest finished-run country distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of country buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run country distribution.", body = RowsResponse<LastRunCountryCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_countries(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -275,6 +414,21 @@ async fn list_last_run_countries(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/asns",
+    summary = "List latest-run ASN distribution",
+    description = "Return the latest finished-run ASN distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of ASN buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run ASN distribution.", body = RowsResponse<LastRunAsnCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_asns(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -288,6 +442,21 @@ async fn list_last_run_asns(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/start-heights",
+    summary = "List latest-run start heights",
+    description = "Return the latest finished-run start-height distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of start-height buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run start-height distribution.", body = RowsResponse<LastRunStartHeightCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_start_heights(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -301,6 +470,21 @@ async fn list_last_run_start_heights(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/asn-organizations",
+    summary = "List latest-run ASN organizations",
+    description = "Return the latest finished-run ASN-organization distribution for verified nodes.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of ASN-organization buckets to return. Default 100. Maximum 100.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run ASN-organization distribution.", body = RowsResponse<LastRunAsnOrganizationCountItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_asn_organizations(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -314,6 +498,21 @@ async fn list_last_run_asn_organizations(
     Ok(Json(RowsResponse { rows }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawler/last-run/nodes",
+    summary = "List latest-run verified nodes",
+    description = "Return the latest finished-run verified node table with endpoint, network, protocol, geography, and ASN context.",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of verified node rows to return. Default 500. Maximum 1000.")
+    ),
+    responses(
+        (status = 200, description = "Latest finished-run verified nodes.", body = RowsResponse<LastRunNodeSummaryItem>),
+        (status = 400, description = "Invalid pagination limit.", body = ErrorResponse),
+        (status = 500, description = "Crawler analytics backend failed.", body = ErrorResponse)
+    ),
+    tag = "Crawler Analytics"
+)]
 async fn list_last_run_nodes(
     State(state): State<AppState>,
     Query(query): Query<PaginationQuery>,
@@ -508,12 +707,12 @@ impl IntoResponse for ApiError {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 struct ErrorResponse {
     error: ErrorBody,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 struct ErrorBody {
     code: &'static str,
     message: String,
@@ -992,6 +1191,91 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[tokio::test]
+    async fn openapi_route_returns_generated_spec() {
+        let app = build_router(Arc::new(StubAnalyticsReader::default()));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(docs::OPENAPI_PATH)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: Value = serde_json::from_slice(&body).expect("json body");
+
+        assert_eq!(json["openapi"], "3.1.0");
+        assert_eq!(
+            json["paths"]["/api/v1/crawler/runs"]["get"]["tags"][0],
+            "Crawler Analytics"
+        );
+        assert_eq!(json["info"]["version"], env!("CARGO_PKG_VERSION"));
+    }
+
+    #[tokio::test]
+    async fn scalar_docs_route_returns_html() {
+        let app = build_router(Arc::new(StubAnalyticsReader::default()));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(docs::SCALAR_PATH)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE),
+            Some(&HeaderValue::from_static("text/html; charset=utf-8"))
+        );
+    }
+
+    #[tokio::test]
+    async fn docs_config_route_returns_scalar_ui_config() {
+        let app = build_router(Arc::new(StubAnalyticsReader::default()));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(docs::DOCS_CONFIG_PATH)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: Value = serde_json::from_slice(&body).expect("json body");
+
+        assert_eq!(json["title"], "btc-network API");
+        assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(
+            json["description"],
+            "Read-only Bitcoin network analytics API for crawl-run snapshots, concentration analysis, protocol distributions, and verified node summaries. The OpenAPI specification is generated from the live Rust handlers so hosted Scalar docs, web-embedded API reference views, and downstream tooling stay aligned with the real contract."
+        );
+        assert_eq!(
+            json["introduction"],
+            "Start with crawl runs to discover snapshot windows, inspect a specific run for evidence and outcomes, then drill into the latest finished-run analytics for ASN concentration, transport mix, services, user agents, countries, and verified nodes."
+        );
+        assert_eq!(json["openapiUrl"], docs::OPENAPI_PATH);
+        assert_eq!(json["scalarPath"], docs::SCALAR_PATH);
+    }
+
     #[test]
     fn parse_postgres_config_uses_defaults_and_max_connections_override() {
         unsafe {
@@ -1023,6 +1307,7 @@ mod tests {
                 allowed_origins: vec![HeaderValue::from_static("https://btcnetwork.info")],
                 ..ApiRuntimeConfig::default()
             },
+            docs::DocsConfig::default(),
         );
 
         let allowed = app

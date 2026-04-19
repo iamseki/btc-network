@@ -1,11 +1,31 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BtcAppClient } from "@/lib/api/client";
+import { getDocsUiConfig } from "@/lib/api/docs-http";
 
-import { RiskApiPage } from "./risk-api-page";
+import { ApiPage } from "./api-page";
+
+vi.mock("@/lib/api/docs-http", () => ({
+  getDocsUiConfig: vi.fn().mockResolvedValue({
+    title: "btc-network API",
+    version: "0.1.0",
+    description: "Generated docs",
+    introduction: "Start with runs.",
+    openapiUrl: "/api/openapi.json",
+    openapiPath: "/api/openapi.json",
+    scalarPath: "/docs",
+    baseServerUrl: null,
+  }),
+}));
+
+vi.mock("@scalar/api-reference-react", () => ({
+  ApiReferenceReact: ({ configuration }: { configuration: { url: string } }) => (
+    <div data-testid="scalar-api-reference">{configuration.url}</div>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -106,11 +126,11 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
   };
 }
 
-describe("RiskApiPage", () => {
+describe("ApiPage", () => {
   it("renders a compact commercial overview driven by current analytics inputs", async () => {
-    render(<RiskApiPage client={makeClient()} />);
+    render(<ApiPage client={makeClient()} />);
 
-    expect(await screen.findByText("Network Risk API")).toBeTruthy();
+    expect(await screen.findByText("API")).toBeTruthy();
     expect(
       screen.getByText(
         /Resilient Bitcoin network analytics for teams that need faster answers on concentration/i,
@@ -125,7 +145,7 @@ describe("RiskApiPage", () => {
   });
 
   it("switches between overview, access, and docs panels", async () => {
-    render(<RiskApiPage client={makeClient()} />);
+    render(<ApiPage client={makeClient()} />);
 
     expect(await screen.findByText("Why teams buy this")).toBeTruthy();
 
@@ -136,8 +156,11 @@ describe("RiskApiPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Docs" }));
     expect(await screen.findByText("Documentation Direction")).toBeTruthy();
-    expect(screen.getByText("Scalar-style docs")).toBeTruthy();
-    expect(screen.getByText("Authentication")).toBeTruthy();
+    expect(screen.getByText("Embedded Scalar")).toBeTruthy();
+    expect(screen.getByText("Live API Reference")).toBeTruthy();
+    await waitFor(() => {
+      expect(getDocsUiConfig).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("falls back to commercial framing when live analytics loading fails", async () => {
@@ -145,7 +168,7 @@ describe("RiskApiPage", () => {
       listCrawlRuns: vi.fn().mockRejectedValue(new Error("api unavailable")),
     });
 
-    render(<RiskApiPage client={client} />);
+    render(<ApiPage client={client} />);
 
     expect(await screen.findByText("Live analytics are temporarily unavailable")).toBeTruthy();
     expect(screen.getByText("early-access")).toBeTruthy();

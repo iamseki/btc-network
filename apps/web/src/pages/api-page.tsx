@@ -1,5 +1,5 @@
-import { ChartColumn, Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck, Waypoints } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, ChartColumn, Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck, Waypoints } from "lucide-react";
+import { Suspense, lazy, useEffect, useState } from "react";
 
 import {
   AnalyticsHeaderStat,
@@ -9,28 +9,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import type { BtcAppClient } from "@/lib/api/client";
-import type { AsnNodeCountItem, CrawlRunListItem } from "@/lib/api/types";
+import { getDocsUiConfig } from "@/lib/api/docs-http";
+import type { AsnNodeCountItem, CrawlRunListItem, DocsUiConfig } from "@/lib/api/types";
 
-export type RiskApiPanel = "overview" | "access" | "docs";
+export type ApiPanel = "overview" | "access" | "docs";
 
-type RiskApiPageProps = {
+const ScalarApiReference = lazy(async () => {
+  const module = await import("@scalar/api-reference-react");
+  return { default: module.ApiReferenceReact };
+});
+
+type ApiPageProps = {
   client: BtcAppClient;
-  activePanel?: RiskApiPanel;
-  onPanelChange?: (panel: RiskApiPanel) => void;
+  activePanel?: ApiPanel;
+  onPanelChange?: (panel: ApiPanel) => void;
   showPanelNav?: boolean;
 };
 
-export function RiskApiPage({
+export function ApiPage({
   client,
   activePanel: controlledActivePanel,
   onPanelChange,
   showPanelNav = true,
-}: RiskApiPageProps) {
+}: ApiPageProps) {
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
-  const [internalActivePanel, setInternalActivePanel] = useState<RiskApiPanel>("overview");
+  const [internalActivePanel, setInternalActivePanel] = useState<ApiPanel>("overview");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [docsUiConfig, setDocsUiConfig] = useState<DocsUiConfig | null>(null);
+  const [isDocsLoading, setIsDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
 
   const activePanel = controlledActivePanel ?? internalActivePanel;
 
@@ -38,7 +47,38 @@ export function RiskApiPage({
     void refreshPreview();
   }, []);
 
-  function selectPanel(panel: RiskApiPanel) {
+  useEffect(() => {
+    if (activePanel !== "docs" || docsUiConfig !== null || isDocsLoading || docsError !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsDocsLoading(true);
+    setDocsError(null);
+
+    void getDocsUiConfig()
+      .then((nextDocsUiConfig) => {
+        if (!cancelled) {
+          setDocsUiConfig(nextDocsUiConfig);
+        }
+      })
+      .catch((nextError) => {
+        if (!cancelled) {
+          setDocsError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsDocsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePanel, docsError, docsUiConfig, isDocsLoading]);
+
+  function selectPanel(panel: ApiPanel) {
     onPanelChange?.(panel);
     if (controlledActivePanel === undefined) {
       setInternalActivePanel(panel);
@@ -74,7 +114,7 @@ export function RiskApiPage({
       ? "Operational Bitcoin network intelligence for resilience, concentration, and verification analysis."
       : activePanel === "access"
         ? "Project access, API keys, and subscription controls for production teams."
-        : "Reference structure for the public API documentation and developer onboarding surface.";
+        : "Generated OpenAPI reference, hosted Scalar docs, and reusable docs config for a first-class API product surface.";
   const headerStats = [
     {
       label: "Surface",
@@ -165,17 +205,17 @@ export function RiskApiPage({
     {
       icon: ChartColumn,
       title: "Reference docs",
-      detail: "The future docs surface should read like Scalar: clean endpoint navigation, auth examples, rate limits, and example responses.",
+      detail: "Generated OpenAPI and hosted Scalar docs now come from the same live contract instead of duplicated web copy.",
     },
     {
       icon: Waypoints,
-      title: "Core endpoints",
-      detail: "Start with `/snapshots/latest`, `/snapshots/{run_id}`, `/asns/top`, and `/network/outcomes` before expanding to custom analytics.",
+      title: "Generated spec",
+      detail: "Use `/api/openapi.json` as the canonical machine-readable source for web rendering, SDK generation, and API contract review.",
     },
     {
       icon: ShieldCheck,
-      title: "Authentication docs",
-      detail: "Keep docs explicit about bearer keys, quota headers, 429 behavior, and commercial support expectations.",
+      title: "Shared docs config",
+      detail: "Use `/api/docs/config.json` to share title, intro copy, and the spec URL across the hosted API docs and future web-embedded docs.",
     },
   ];
 
@@ -183,7 +223,7 @@ export function RiskApiPage({
     <div className="space-y-8 rounded-[20px] border border-border/80 bg-card/82 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.22)] sm:p-6">
       <SectionHeading
         eyebrow="Commercial API"
-        title="Network Risk API"
+        title="API"
         description={panelDescription}
         actions={
           <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
@@ -200,8 +240,8 @@ export function RiskApiPage({
               variant="ghost"
               size="sm"
               className="h-8 w-8 rounded-md px-0"
-              aria-label="Refresh risk API metrics"
-              title="Refresh risk API metrics"
+              aria-label="Refresh API metrics"
+              title="Refresh API metrics"
               onClick={() => void refreshPreview()}
               disabled={isLoading}
             >
@@ -249,7 +289,7 @@ export function RiskApiPage({
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="muted">Early access</Badge>
                 <Badge variant="muted">Founding teams</Badge>
-                <Badge variant="muted">Docs in progress</Badge>
+                <Badge variant="muted">Docs live</Badge>
               </div>
               <div className="mt-4">
                 <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -289,8 +329,8 @@ export function RiskApiPage({
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <CommercialMetric
                     label="API surface"
-                    value="4 core endpoints first"
-                    detail="Start with latest snapshot, run detail, ASN concentration, and network outcomes before adding custom slices."
+                    value="Analytics-first"
+                    detail="Lead with crawl runs, run detail, latest-run distributions, and verified node inventory before expanding the contract."
                   />
                   <CommercialMetric
                     label="SLA posture"
@@ -383,10 +423,10 @@ export function RiskApiPage({
                     Documentation Direction
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Public reference docs should live in a clean Scalar-style experience with fast onboarding.
+                    One generated OpenAPI document now powers hosted Scalar docs, DX tooling, and this embedded web reference.
                   </p>
                 </div>
-                <Badge variant="muted">Scalar-style docs</Badge>
+                <Badge variant="muted">Embedded Scalar</Badge>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {docsRows.map((item) => (
@@ -400,6 +440,33 @@ export function RiskApiPage({
               </div>
             </section>
 
+            <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                    Live API Reference
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Same generated spec, same product copy, same docs contract across hosted API docs and the web app.
+                  </p>
+                </div>
+                {docsUiConfig ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="muted">{docsUiConfig.version}</Badge>
+                    <Badge variant="muted">OpenAPI source</Badge>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4">
+                <EmbeddedApiReference
+                  docsUiConfig={docsUiConfig}
+                  isLoading={isDocsLoading}
+                  error={docsError}
+                />
+              </div>
+            </section>
+
             <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
                 <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -408,15 +475,15 @@ export function RiskApiPage({
                 <div className="mt-4 grid gap-3">
                   <DocSection
                     title="Authentication"
-                    detail="Bearer token quickstart, example headers, quota headers, and 401/429 behavior."
+                    detail="Launch auth quickstart, example bearer headers, quota response headers, and clear 401/429 behavior."
                   />
                   <DocSection
-                    title="Snapshots"
-                    detail="Latest snapshot and run detail endpoints with examples that show concentration and verification evidence."
+                    title="Runs"
+                    detail="Crawl runs and run detail endpoints with examples that show concentration and verification evidence."
                   />
                   <DocSection
-                    title="Analytics"
-                    detail="ASN concentration, network outcomes, and future historical replay endpoints."
+                    title="Latest-run analytics"
+                    detail="ASN, network type, country, protocol, services, and verified node views for the latest finished run."
                   />
                 </div>
               </div>
@@ -428,13 +495,13 @@ export function RiskApiPage({
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <CommercialMetric
                     label="Reference shell"
-                    value="Scalar-style"
-                    detail="One clean nav, live examples, and copyable requests."
+                    value="Shared"
+                    detail="One generated contract feeds both the hosted docs page and the embedded product reference."
                   />
                   <CommercialMetric
                     label="Code samples"
-                    value="curl + JS first"
-                    detail="Lead with the fastest paths to first value before deeper SDK work."
+                    value="Spec-first"
+                    detail="Keep the OpenAPI document strong enough to support code samples, SDK generation, and contract review."
                   />
                   <CommercialMetric
                     label="Change logs"
@@ -442,15 +509,95 @@ export function RiskApiPage({
                     detail="Commercial APIs need predictable change notes and deprecation guidance."
                   />
                   <CommercialMetric
-                    label="Status links"
-                    value="Docs + status"
-                    detail="Documentation should link directly to SLA and status expectations."
+                    label="Web reuse"
+                    value="Config-driven"
+                    detail="The web app reads docs config and spec URLs from the API instead of re-encoding them in frontend copy."
                   />
                 </div>
               </div>
             </section>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function EmbeddedApiReference({
+  docsUiConfig,
+  isLoading,
+  error,
+}: {
+  docsUiConfig: DocsUiConfig | null;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  if (isLoading) {
+    return (
+      <div className="rounded-[16px] border border-border/75 bg-background/68 p-5">
+        <p className="text-sm text-muted-foreground">Loading generated API reference.</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-[16px] border border-red-500/30 bg-background/68 p-5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-red-300">
+          Docs unavailable
+        </p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Could not load the embedded API reference: {error}
+        </p>
+      </div>
+    );
+  }
+
+  if (!docsUiConfig) {
+    return null;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[16px] border border-border/75 bg-background/60">
+      <div className="border-b border-border/75 bg-background/80 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+              {docsUiConfig.title}
+            </p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {docsUiConfig.introduction}
+            </p>
+          </div>
+          <a
+            href={docsUiConfig.openapiUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-[10px] border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary transition hover:bg-primary/14"
+          >
+            Open raw spec
+            <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+      <div className="[&_.scalar-app]:min-h-[820px] [&_.scalar-app]:bg-transparent">
+        <Suspense
+          fallback={<p className="p-5 text-sm text-muted-foreground">Loading interactive reference shell.</p>}
+        >
+          <ScalarApiReference
+            configuration={{
+              _integration: "react",
+              title: docsUiConfig.title,
+              url: docsUiConfig.openapiUrl,
+              baseServerURL: docsUiConfig.baseServerUrl ?? undefined,
+              theme: "none",
+              layout: "modern",
+              withDefaultFonts: false,
+              showSidebar: true,
+              darkMode: true,
+            }}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }

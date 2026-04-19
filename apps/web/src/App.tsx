@@ -35,7 +35,7 @@ import {
   type NetworkAnalyticsPanel,
 } from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
-import { RiskApiPage, type RiskApiPanel } from "./pages/risk-api-page";
+import { ApiPage, type ApiPanel } from "./pages/api-page";
 import { getAppClient } from "./lib/api";
 import type {
   AddrResult,
@@ -62,11 +62,11 @@ export function App() {
   const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
   const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
     useState<NetworkAnalyticsPanel>("overview");
-  const [riskApiPanel, setRiskApiPanel] = useState<RiskApiPanel>("overview");
+  const [apiPanel, setApiPanel] = useState<ApiPanel>("overview");
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
-    "risk-api": ShieldCheck,
+    api: ShieldCheck,
     "crawler-runs": Activity,
     "network-analytics": ChartColumn,
     connection: Radio,
@@ -143,16 +143,16 @@ export function App() {
             activeItem: crawlerRunsPanel,
             onSelect: (panel: string) => setCrawlerRunsPanel(panel as CrawlerRunsPanel),
           }
-        : selectedPage === "risk-api"
+        : selectedPage === "api"
           ? {
-              label: "Network Risk API Views",
+              label: "API Views",
               items: [
                 { id: "overview", title: "Overview" },
                 { id: "access", title: "Access" },
                 { id: "docs", title: "Docs" },
-              ] satisfies { id: RiskApiPanel; title: string }[],
-              activeItem: riskApiPanel,
-              onSelect: (panel: string) => setRiskApiPanel(panel as RiskApiPanel),
+              ] satisfies { id: ApiPanel; title: string }[],
+              activeItem: apiPanel,
+              onSelect: (panel: string) => setApiPanel(panel as ApiPanel),
             }
         : null;
   const currentSubnavItemTitle =
@@ -171,8 +171,8 @@ export function App() {
       setCrawlerRunsPanel("overview");
     }
 
-    if (nextPage === "risk-api") {
-      setRiskApiPanel("overview");
+    if (nextPage === "api") {
+      setApiPanel("overview");
     }
 
     if (window.innerWidth < 768) {
@@ -627,15 +627,16 @@ export function App() {
                   client={client}
                   activePanel={networkAnalyticsPanel}
                   onPanelChange={setNetworkAnalyticsPanel}
+                  onOpenApiPage={() => selectPage("api")}
                   showPanelNav={false}
                 />
               ) : null}
 
-              {selectedPage === "risk-api" ? (
-                <RiskApiPage
+              {selectedPage === "api" ? (
+                <ApiPage
                   client={client}
-                  activePanel={riskApiPanel}
-                  onPanelChange={setRiskApiPanel}
+                  activePanel={apiPanel}
+                  onPanelChange={setApiPanel}
                   showPanelNav={false}
                 />
               ) : null}

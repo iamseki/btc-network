@@ -14,6 +14,15 @@ const mockDownloadBlock = vi.fn();
 const mockListCrawlRuns = vi.fn();
 const mockGetCrawlRun = vi.fn();
 const mockCountNodesByAsn = vi.fn();
+const mockListLastRunServices = vi.fn();
+const mockListLastRunProtocolVersions = vi.fn();
+const mockListLastRunUserAgents = vi.fn();
+const mockListLastRunNetworkTypes = vi.fn();
+const mockListLastRunCountries = vi.fn();
+const mockListLastRunAsns = vi.fn();
+const mockListLastRunStartHeights = vi.fn();
+const mockListLastRunAsnOrganizations = vi.fn();
+const mockListLastRunNodes = vi.fn();
 const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
 const originalInnerWidth = window.innerWidth;
@@ -23,6 +32,15 @@ vi.mock("./lib/api", () => ({
     listCrawlRuns: mockListCrawlRuns,
     getCrawlRun: mockGetCrawlRun,
     countNodesByAsn: mockCountNodesByAsn,
+    listLastRunServices: mockListLastRunServices,
+    listLastRunProtocolVersions: mockListLastRunProtocolVersions,
+    listLastRunUserAgents: mockListLastRunUserAgents,
+    listLastRunNetworkTypes: mockListLastRunNetworkTypes,
+    listLastRunCountries: mockListLastRunCountries,
+    listLastRunAsns: mockListLastRunAsns,
+    listLastRunStartHeights: mockListLastRunStartHeights,
+    listLastRunAsnOrganizations: mockListLastRunAsnOrganizations,
+    listLastRunNodes: mockListLastRunNodes,
     handshake: mockHandshake,
     ping: mockPing,
     getAddr: mockGetAddr,
@@ -46,6 +64,15 @@ afterEach(() => {
   mockListCrawlRuns.mockReset();
   mockGetCrawlRun.mockReset();
   mockCountNodesByAsn.mockReset();
+  mockListLastRunServices.mockReset();
+  mockListLastRunProtocolVersions.mockReset();
+  mockListLastRunUserAgents.mockReset();
+  mockListLastRunNetworkTypes.mockReset();
+  mockListLastRunCountries.mockReset();
+  mockListLastRunAsns.mockReset();
+  mockListLastRunStartHeights.mockReset();
+  mockListLastRunAsnOrganizations.mockReset();
+  mockListLastRunNodes.mockReset();
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
   mockListCrawlRuns.mockResolvedValue([]);
@@ -71,6 +98,15 @@ afterEach(() => {
     networkOutcomes: [],
   });
   mockCountNodesByAsn.mockResolvedValue([]);
+  mockListLastRunServices.mockResolvedValue([]);
+  mockListLastRunProtocolVersions.mockResolvedValue([]);
+  mockListLastRunUserAgents.mockResolvedValue([]);
+  mockListLastRunNetworkTypes.mockResolvedValue([]);
+  mockListLastRunCountries.mockResolvedValue([]);
+  mockListLastRunAsns.mockResolvedValue([]);
+  mockListLastRunStartHeights.mockResolvedValue([]);
+  mockListLastRunAsnOrganizations.mockResolvedValue([]);
+  mockListLastRunNodes.mockResolvedValue([]);
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
@@ -109,6 +145,15 @@ beforeEach(() => {
     networkOutcomes: [],
   });
   mockCountNodesByAsn.mockResolvedValue([]);
+  mockListLastRunServices.mockResolvedValue([]);
+  mockListLastRunProtocolVersions.mockResolvedValue([]);
+  mockListLastRunUserAgents.mockResolvedValue([]);
+  mockListLastRunNetworkTypes.mockResolvedValue([]);
+  mockListLastRunCountries.mockResolvedValue([]);
+  mockListLastRunAsns.mockResolvedValue([]);
+  mockListLastRunStartHeights.mockResolvedValue([]);
+  mockListLastRunAsnOrganizations.mockResolvedValue([]);
+  mockListLastRunNodes.mockResolvedValue([]);
 });
 
 function setViewportWidth(width: number) {
@@ -260,13 +305,13 @@ describe("App sidebar shell", () => {
   it("renders the commercial API page from the analytics navigation", async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));
+    fireEvent.click(screen.getByRole("button", { name: "API" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Network Risk API" })).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "API" })).toBeTruthy();
     });
     expect(screen.getByText("Why teams buy this")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Network Risk API Views" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "API Views" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
   });
@@ -367,7 +412,7 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Checkpoints" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Failures" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));
+    fireEvent.click(screen.getByRole("button", { name: "API" }));
 
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();

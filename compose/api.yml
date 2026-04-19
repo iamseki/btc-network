@@ -1,7 +1,10 @@
 services:
   api:
-    image: rust:1.93.1-bookworm
-    working_dir: /workspace
+    image: btc-network-api-local:dev
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runtime
     container_name: btc-network-api
     profiles: ["api"]
     cpus: ${BTC_NETWORK_API_CPUS:-2.0}
@@ -10,17 +13,9 @@ services:
       postgres-migrate:
         condition: service_completed_successfully
     environment:
-      CARGO_HOME: /cargo
-      CARGO_TARGET_DIR: /cargo-target
       BTC_NETWORK_API_BIND_ADDR: 0.0.0.0:8080
       BTC_NETWORK_POSTGRES_URL: postgresql://btc_network_dev:btc_network_dev@postgres:5432/btc_network
       BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: 100
-    command: cargo run -p btc-network-api --locked --
     ports:
       - "8080:8080"
     restart: unless-stopped
-    volumes:
-      - .:/workspace
-      - cargo-registry:/cargo/registry
-      - cargo-git:/cargo/git
-      - cargo-target:/cargo-target

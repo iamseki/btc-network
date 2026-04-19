@@ -1,9 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
 use super::domain::{CountNodesByAsnRow, CrawlPhase, CrawlRunCheckpoint};
 
 /// Summary row returned by crawl-run listing APIs.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRunListItem {
@@ -50,6 +53,7 @@ impl CrawlRunListItem {
 }
 
 /// Serializable checkpoint summary exposed to analytics clients.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRunCheckpointItem {
@@ -90,6 +94,7 @@ impl CrawlRunCheckpointItem {
 }
 
 /// Count of observations grouped by failure classification.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FailureClassificationCount {
@@ -99,6 +104,7 @@ pub struct FailureClassificationCount {
 
 /// Count of observations grouped by network family with derived verification
 /// rate for UI consumers.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkOutcomeCount {
@@ -110,6 +116,7 @@ pub struct NetworkOutcomeCount {
 }
 
 /// Verified-node count grouped by ASN for analytics views.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AsnNodeCountItem {
@@ -129,6 +136,7 @@ impl From<CountNodesByAsnRow> for AsnNodeCountItem {
 }
 
 /// Latest finished-run services distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunServicesCountItem {
@@ -137,6 +145,7 @@ pub struct LastRunServicesCountItem {
 }
 
 /// Latest finished-run protocol version distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunProtocolVersionCountItem {
@@ -145,6 +154,7 @@ pub struct LastRunProtocolVersionCountItem {
 }
 
 /// Latest finished-run user agent distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunUserAgentCountItem {
@@ -153,6 +163,7 @@ pub struct LastRunUserAgentCountItem {
 }
 
 /// Latest finished-run network type distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunNetworkTypeCountItem {
@@ -161,6 +172,7 @@ pub struct LastRunNetworkTypeCountItem {
 }
 
 /// Latest finished-run country distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunCountryCountItem {
@@ -169,6 +181,7 @@ pub struct LastRunCountryCountItem {
 }
 
 /// Latest finished-run ASN distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunAsnCountItem {
@@ -178,6 +191,7 @@ pub struct LastRunAsnCountItem {
 }
 
 /// Latest finished-run start-height distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunStartHeightCountItem {
@@ -186,6 +200,7 @@ pub struct LastRunStartHeightCountItem {
 }
 
 /// Latest finished-run ASN organization distribution bucket.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunAsnOrganizationCountItem {
@@ -194,6 +209,7 @@ pub struct LastRunAsnOrganizationCountItem {
 }
 
 /// Latest finished-run verified node row for table-oriented UI views.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastRunNodeSummaryItem {
@@ -209,6 +225,7 @@ pub struct LastRunNodeSummaryItem {
 }
 
 /// Full crawl-run payload returned by analytics detail APIs.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CrawlRunDetail {
