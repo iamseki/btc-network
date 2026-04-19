@@ -89,7 +89,7 @@ impl Crawler {
             .map(CrawlEndpoint::from_socket_addr)
             .collect::<Vec<_>>();
         let request = StartCrawlRequest {
-            config: self.config,
+            config: self.config.clone(),
             seed_nodes,
         };
         let connect_limiter =
@@ -235,7 +235,7 @@ impl Crawler {
         for _ in 0..worker_count {
             workers.push(AbortOnDropHandle::new(tokio::spawn(run_worker(
                 worker::WorkerContext {
-                    config,
+                    config: config.clone(),
                     run_id: run_id.clone(),
                     state: Arc::clone(&state),
                     stats: Arc::clone(&stats),
@@ -932,6 +932,7 @@ mod tests {
                 connect_max_attempts: 1,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
+                tor_socks5_addr: None,
                 shutdown_grace_period: Duration::from_secs(1),
                 verbose: false,
             },
@@ -946,7 +947,7 @@ mod tests {
         let err = crawler
             .run_with_request(
                 StartCrawlRequest {
-                    config: crawler.config,
+                    config: crawler.config.clone(),
                     seed_nodes: vec![seed],
                 },
                 processor,
@@ -974,6 +975,7 @@ mod tests {
                 connect_max_attempts: 1,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
+                tor_socks5_addr: None,
                 shutdown_grace_period: Duration::from_millis(20),
                 verbose: false,
             },
@@ -986,7 +988,7 @@ mod tests {
             delay: Duration::from_millis(100),
         });
         let request = StartCrawlRequest {
-            config: crawler.config,
+            config: crawler.config.clone(),
             seed_nodes: vec![seed],
         };
 
@@ -1058,6 +1060,7 @@ mod tests {
                 connect_max_attempts: 1,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
+                tor_socks5_addr: None,
                 shutdown_grace_period: Duration::from_secs(1),
                 verbose: false,
             },
@@ -1073,7 +1076,7 @@ mod tests {
         let summary = crawler
             .run_with_request(
                 StartCrawlRequest {
-                    config: crawler.config,
+                    config: crawler.config.clone(),
                     seed_nodes: vec![seed],
                 },
                 processor,

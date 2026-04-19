@@ -73,9 +73,9 @@ The repository root `docker-compose.yml` keeps `postgres` unprofiled so it can
 act as the shared base service, then layers app services behind Docker
 profiles:
 
-- `crawler` profile: `postgres` + `postgres-migrate` + `crawler`
+- `crawler` profile: `postgres` + `postgres-migrate` + `tor` + `crawler`
 - `api` profile: `postgres` + `postgres-migrate` + `api`
-- both profiles together: `postgres` + `postgres-migrate` + `crawler` + `api`
+- both profiles together: `postgres` + `postgres-migrate` + `tor` + `crawler` + `api`
 
 Useful commands from the repository root:
 
@@ -93,6 +93,13 @@ make infra-postgres-up
 make infra-crawler-up
 make infra-crawler-api-up
 make infra-compose-down
+```
+
+To force local image rebuilds for the profiled services, set `BUILD=1`:
+
+```bash
+make infra-crawler-up BUILD=1
+make infra-crawler-api-up BUILD=1
 ```
 
 The profiled crawler services now build a local multi-stage Docker image from
@@ -163,6 +170,82 @@ Worker concurrency and connect concurrency are now separate controls:
 
 That means you can keep a high worker count for overall crawl throughput while
 holding active connect pressure to a lower, environment-specific budget.
+
+## Optional Tor Reachability
+
+The crawler can treat Tor as an extra reachability layer for discovered onion
+peers without changing the default clearnet flow.
+
+Operational requirements:
+
+- a reachable SOCKS5 proxy backed by Tor
+- explicit crawler configuration through
+  `--tor-socks5-addr 127.0.0.1:9050` or
+  `BTC_NETWORK_CRAWLER_TOR_SOCKS5_ADDR=127.0.0.1:9050`
+
+Behavior:
+
+- IPv4 and IPv6 peers still use direct TCP as before
+- discovered `.onion` peers are only queued for follow-up when a Tor SOCKS5
+  proxy is configured
+- Tor observations stay distinct from clearnet observations through
+  `network_type`
+
+Recommended operator path:
+
+- use the repository's `tor` Compose service for local containerized crawler
+  runs
+- let the crawler depend on that service through
+  `BTC_NETWORK_CRAWLER_TOR_SOCKS5_ADDR=tor:9050`
+
+Example Compose shape:
+
+```yaml
+services:
+  tor:
+    build:
+      context: .
+      dockerfile: apps/tor/Dockerfile
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "printf 'AUTHENTICATE\\r\\nGETINFO status/bootstrap-phase\\r\\nQUIT\\r\\n' | nc 127.0.0.1 9051 | grep -q 'PROGRESS=100'",
+        ]
+
+  crawler:
+    depends_on:
+      tor:
+        condition: service_healthy
+    environment:
+      BTC_NETWORK_CRAWLER_TOR_SOCKS5_ADDR: tor:9050
+```
+
+Important nuances:
+
+- use a Tor-backed SOCKS5 client you control; a generic public SOCKS5 proxy is
+  not enough for `.onion` routing
+- if the crawler runs inside Compose, `127.0.0.1:9050` is wrong because that
+  would point back at the crawler container itself; use the Tor service name
+  such as `tor:9050`
+- the repository Tor service healthcheck waits for Tor bootstrap progress to
+  reach `100%` via the local control port, which is stronger than only checking
+  whether the SOCKS listener opened
+- if the crawler runs on the host while Tor runs in Docker, publish the Tor
+  SOCKS port only on loopback and keep the crawler config at
+  `127.0.0.1:9050`
+- do not expose the Tor SOCKS port broadly on `0.0.0.0` unless you have an
+  explicit reason and network controls around it
+- even with that healthcheck, first usable onion traffic can still lag slightly
+  behind the readiness transition on slow networks
+- the crawler currently expects unauthenticated SOCKS5; if your proxy requires
+  SOCKS authentication, this slice does not support it yet
+
+Host-run example:
+
+```bash
+make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb --tor-socks5-addr 127.0.0.1:9050"
+```
 
 ## Troubleshooting Network Pressure
 

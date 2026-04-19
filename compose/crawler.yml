@@ -12,9 +12,12 @@ services:
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully
+      tor:
+        condition: service_healthy
     environment:
       BTC_NETWORK_POSTGRES_URL: postgresql://btc_network_dev:btc_network_dev@postgres:5432/btc_network
       BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: ${BTC_NETWORK_POSTGRES_MAX_CONNECTIONS:-16}
+      BTC_NETWORK_CRAWLER_TOR_SOCKS5_ADDR: ${BTC_NETWORK_CRAWLER_TOR_SOCKS5_ADDR:-tor:9050}
       BTC_NETWORK_CRAWLER_MAX_CONCURRENCY: ${BTC_NETWORK_CRAWLER_MAX_CONCURRENCY:-10000}
       BTC_NETWORK_CRAWLER_MAX_IN_FLIGHT_CONNECTS: ${BTC_NETWORK_CRAWLER_MAX_IN_FLIGHT_CONNECTS:-512}
       BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES: ${BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES:-500000}

@@ -207,6 +207,15 @@ impl CrawlEndpoint {
             .map(|ip_addr| SocketAddr::new(ip_addr, self.port))
     }
 
+    /// Returns whether this endpoint is reachable in the current crawler
+    /// configuration.
+    pub fn is_reachable_with_config(&self, config: &CrawlerConfig) -> bool {
+        match self.network {
+            CrawlNetwork::TorV2 | CrawlNetwork::TorV3 => config.tor_socks5_addr.is_some(),
+            _ => self.socket_addr().is_some(),
+        }
+    }
+
     pub fn from_stored(
         canonical: impl Into<String>,
         network: CrawlNetwork,
@@ -561,6 +570,17 @@ mod tests {
         let observation = sample_raw_observation(endpoint);
 
         assert!(!observation.supports_ip_enrichment());
+    }
+
+    #[test]
+    fn tor_endpoints_require_proxy_configuration() {
+        let endpoint = CrawlEndpoint::new("example.onion", 8333, CrawlNetwork::TorV3, None);
+        let mut config = CrawlerConfig::default();
+
+        assert!(!endpoint.is_reachable_with_config(&config));
+
+        config.tor_socks5_addr = Some("tor:9050".to_string());
+        assert!(endpoint.is_reachable_with_config(&config));
     }
 
     #[test]

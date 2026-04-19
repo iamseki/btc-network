@@ -3,11 +3,13 @@ use crate::wire;
 use crate::wire::message::AddrV2Addr;
 #[cfg(test)]
 use crate::wire::message::VersionMessage;
+use sha3::{Digest, Sha3_256};
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
 use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as AsyncTcpStream;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{info, warn};
@@ -57,24 +59,8 @@ pub(crate) async fn process_node(
     );
 
     let total_started = Instant::now();
-    let connect_addr = endpoint.socket_addr().ok_or_else(|| {
-        Box::new(NodeVisitFailure {
-            node: endpoint.clone(),
-            latency: total_started.elapsed(),
-            classification: FailureClassification::Connect,
-            message: format!("endpoint {} is not connectable", endpoint.canonical),
-            connect_error_kind: None,
-        })
-    })?;
     let connect_started = Instant::now();
-    let stream = connect_once(
-        &endpoint,
-        connect_addr,
-        config,
-        total_started,
-        connect_limiter,
-    )
-    .await?;
+    let stream = connect_once(&endpoint, &config, total_started, connect_limiter).await?;
     let connect_elapsed = connect_started.elapsed();
     let mut session = AsyncSession::new(stream, config.io_timeout);
 
@@ -135,38 +121,82 @@ pub(crate) async fn process_node(
 
 async fn connect_once(
     endpoint: &CrawlEndpoint,
-    connect_addr: SocketAddr,
-    config: CrawlerConfig,
+    config: &CrawlerConfig,
     total_started: Instant,
     connect_limiter: Arc<Semaphore>,
 ) -> Result<AsyncTcpStream, Box<NodeVisitFailure>> {
-    connect_once_using(
-        endpoint,
-        connect_addr,
-        config,
-        total_started,
-        acquire_connect_permit(connect_limiter, endpoint.clone(), total_started).await?,
-        || async move {
-            tokio::time::timeout(
-                config.connect_timeout,
-                AsyncTcpStream::connect(connect_addr),
+    let permit = acquire_connect_permit(connect_limiter, endpoint.clone(), total_started).await?;
+
+    match endpoint.network {
+        CrawlNetwork::TorV2 | CrawlNetwork::TorV3 => {
+            let Some(proxy_target) = config.tor_socks5_addr.as_deref() else {
+                return Err(Box::new(NodeVisitFailure {
+                    node: endpoint.clone(),
+                    latency: total_started.elapsed(),
+                    classification: FailureClassification::Connect,
+                    message: format!("tor proxy is not configured for {}", endpoint.canonical),
+                    connect_error_kind: None,
+                }));
+            };
+            let onion_host = endpoint.host.clone();
+            let connect_target = format!("{onion_host}:{}", endpoint.port);
+
+            let connect_timeout = config.connect_timeout;
+
+            connect_once_using(
+                endpoint,
+                connect_target,
+                total_started,
+                permit,
+                || async move {
+                    connect_via_tor_socks5(
+                        proxy_target,
+                        onion_host.as_str(),
+                        endpoint.port,
+                        connect_timeout,
+                    )
+                    .await
+                },
             )
             .await
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    format!("connect timed out after {:?}", config.connect_timeout),
-                )
-            })?
-        },
-    )
-    .await
+        }
+        _ => {
+            let connect_addr = endpoint.socket_addr().ok_or_else(|| {
+                Box::new(NodeVisitFailure {
+                    node: endpoint.clone(),
+                    latency: total_started.elapsed(),
+                    classification: FailureClassification::Connect,
+                    message: format!("endpoint {} is not connectable", endpoint.canonical),
+                    connect_error_kind: None,
+                })
+            })?;
+
+            let connect_timeout = config.connect_timeout;
+
+            connect_once_using(
+                endpoint,
+                connect_addr,
+                total_started,
+                permit,
+                || async move {
+                    tokio::time::timeout(connect_timeout, AsyncTcpStream::connect(connect_addr))
+                        .await
+                        .map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::TimedOut,
+                                format!("connect timed out after {:?}", connect_timeout),
+                            )
+                        })?
+                },
+            )
+            .await
+        }
+    }
 }
 
 async fn connect_once_using<T, Connect, ConnectFuture>(
     endpoint: &CrawlEndpoint,
     connect_target: impl ToString,
-    _config: CrawlerConfig,
     total_started: Instant,
     _permit: OwnedSemaphorePermit,
     connect: Connect,
@@ -332,12 +362,18 @@ fn endpoint_from_addrv2(addr: &AddrV2Addr, port: u16) -> CrawlEndpoint {
             CrawlNetwork::Yggdrasil,
             Some(IpAddr::V6(*ip)),
         ),
-        AddrV2Addr::TorV2(bytes) => {
-            CrawlEndpoint::new(hex::encode(bytes), port, CrawlNetwork::TorV2, None)
-        }
-        AddrV2Addr::TorV3(bytes) => {
-            CrawlEndpoint::new(hex::encode(bytes), port, CrawlNetwork::TorV3, None)
-        }
+        AddrV2Addr::TorV2(bytes) => CrawlEndpoint::new(
+            tor_v2_onion_hostname(bytes),
+            port,
+            CrawlNetwork::TorV2,
+            None,
+        ),
+        AddrV2Addr::TorV3(bytes) => CrawlEndpoint::new(
+            tor_v3_onion_hostname(bytes),
+            port,
+            CrawlNetwork::TorV3,
+            None,
+        ),
         AddrV2Addr::I2P(bytes) => {
             CrawlEndpoint::new(hex::encode(bytes), port, CrawlNetwork::I2p, None)
         }
@@ -363,6 +399,134 @@ pub(crate) fn resolve_seed_nodes() -> Vec<SocketAddr> {
     out
 }
 
+async fn connect_via_tor_socks5(
+    proxy_target: &str,
+    onion_host: &str,
+    port: u16,
+    timeout: Duration,
+) -> io::Result<AsyncTcpStream> {
+    tokio::time::timeout(timeout, async move {
+        let mut stream = AsyncTcpStream::connect(proxy_target).await?;
+
+        stream.write_all(&[0x05, 0x01, 0x00]).await?;
+        let mut greeting = [0u8; 2];
+        stream.read_exact(&mut greeting).await?;
+        if greeting != [0x05, 0x00] {
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionRefused,
+                format!("SOCKS5 greeting rejected with method {:02x}", greeting[1]),
+            ));
+        }
+
+        let host_bytes = onion_host.as_bytes();
+        if host_bytes.len() > u8::MAX as usize {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "SOCKS5 target hostname exceeds 255 bytes",
+            ));
+        }
+
+        let mut request = Vec::with_capacity(7 + host_bytes.len());
+        request.extend_from_slice(&[0x05, 0x01, 0x00, 0x03, host_bytes.len() as u8]);
+        request.extend_from_slice(host_bytes);
+        request.extend_from_slice(&port.to_be_bytes());
+        stream.write_all(&request).await?;
+
+        let mut response = [0u8; 4];
+        stream.read_exact(&mut response).await?;
+        if response[0] != 0x05 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unexpected SOCKS version {}", response[0]),
+            ));
+        }
+        if response[1] != 0x00 {
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionRefused,
+                format!("SOCKS5 connect rejected with reply {:02x}", response[1]),
+            ));
+        }
+        consume_socks5_bind_address(&mut stream, response[3]).await?;
+
+        Ok(stream)
+    })
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!("connect timed out after {:?}", timeout),
+        )
+    })?
+}
+
+async fn consume_socks5_bind_address(stream: &mut AsyncTcpStream, atyp: u8) -> io::Result<()> {
+    match atyp {
+        0x01 => {
+            let mut buf = [0u8; 6];
+            stream.read_exact(&mut buf).await.map(|_| ())
+        }
+        0x03 => {
+            let mut len = [0u8; 1];
+            stream.read_exact(&mut len).await?;
+            let mut buf = vec![0u8; len[0] as usize + 2];
+            stream.read_exact(&mut buf).await.map(|_| ())
+        }
+        0x04 => {
+            let mut buf = [0u8; 18];
+            stream.read_exact(&mut buf).await.map(|_| ())
+        }
+        other => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported SOCKS5 ATYP {other:02x}"),
+        )),
+    }
+}
+
+fn tor_v2_onion_hostname(bytes: &[u8; 10]) -> String {
+    format!("{}.onion", base32_nopad_lower(bytes))
+}
+
+fn tor_v3_onion_hostname(bytes: &[u8; 32]) -> String {
+    let version = 0x03u8;
+    let mut checksum_input = Vec::with_capacity(15 + bytes.len() + 1);
+    checksum_input.extend_from_slice(b".onion checksum");
+    checksum_input.extend_from_slice(bytes);
+    checksum_input.push(version);
+
+    let digest = Sha3_256::digest(&checksum_input);
+    let mut onion = Vec::with_capacity(35);
+    onion.extend_from_slice(bytes);
+    onion.extend_from_slice(&digest[..2]);
+    onion.push(version);
+
+    format!("{}.onion", base32_nopad_lower(&onion))
+}
+
+fn base32_nopad_lower(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
+    let mut out = String::with_capacity((bytes.len() * 8).div_ceil(5));
+    let mut buffer = 0u16;
+    let mut bits = 0u8;
+
+    for byte in bytes {
+        buffer = (buffer << 8) | u16::from(*byte);
+        bits += 8;
+
+        while bits >= 5 {
+            let index = ((buffer >> (bits - 5)) & 0x1f) as usize;
+            out.push(ALPHABET[index] as char);
+            bits -= 5;
+        }
+    }
+
+    if bits > 0 {
+        let index = ((buffer << (5 - bits)) & 0x1f) as usize;
+        out.push(ALPHABET[index] as char);
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,6 +534,7 @@ mod tests {
     use std::net::{Ipv4Addr, SocketAddrV4};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::net::TcpListener;
 
     struct MockClient {
         calls: Vec<&'static str>,
@@ -465,7 +630,6 @@ mod tests {
         let result = connect_once_using(
             &node,
             "1.1.1.7:8333",
-            CrawlerConfig::default(),
             Instant::now(),
             limiter.acquire_owned().await.expect("permit"),
             || {
@@ -498,7 +662,6 @@ mod tests {
         let err = connect_once_using(
             &node,
             "1.1.1.8:8333",
-            CrawlerConfig::default(),
             Instant::now(),
             limiter.acquire_owned().await.expect("permit"),
             || {
@@ -553,6 +716,72 @@ mod tests {
         assert!(second.is_ok(), "second permit should acquire after release");
     }
 
+    #[tokio::test]
+    async fn connect_via_tor_socks5_accepts_hostname_proxy_target() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .expect("bind mock socks5 listener");
+        let proxy_target = format!(
+            "localhost:{}",
+            listener.local_addr().expect("listener addr").port()
+        );
+        let expected_host = "exampletorproxytestabcdefghijklmnop.onion";
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept socks5 client");
+
+            let mut greeting = [0u8; 3];
+            stream
+                .read_exact(&mut greeting)
+                .await
+                .expect("read greeting");
+            assert_eq!(greeting, [0x05, 0x01, 0x00]);
+            stream
+                .write_all(&[0x05, 0x00])
+                .await
+                .expect("write greeting response");
+
+            let mut header = [0u8; 5];
+            stream
+                .read_exact(&mut header)
+                .await
+                .expect("read request header");
+            assert_eq!(header[0], 0x05);
+            assert_eq!(header[1], 0x01);
+            assert_eq!(header[2], 0x00);
+            assert_eq!(header[3], 0x03);
+
+            let mut host_bytes = vec![0u8; header[4] as usize];
+            stream
+                .read_exact(&mut host_bytes)
+                .await
+                .expect("read onion host");
+            assert_eq!(
+                std::str::from_utf8(&host_bytes).expect("utf8 onion host"),
+                expected_host
+            );
+
+            let mut port = [0u8; 2];
+            stream.read_exact(&mut port).await.expect("read port");
+            assert_eq!(u16::from_be_bytes(port), 8333);
+
+            stream
+                .write_all(&[0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0x20, 0x8d])
+                .await
+                .expect("write connect response");
+        });
+
+        let _stream = connect_via_tor_socks5(
+            proxy_target.as_str(),
+            expected_host,
+            8333,
+            Duration::from_secs(1),
+        )
+        .await
+        .expect("socks5 connect should succeed");
+
+        server.await.expect("mock socks5 join");
+    }
+
     #[test]
     fn endpoint_from_addrv2_preserves_overlay_and_special_network_types() {
         let cjdns = endpoint_from_addrv2(
@@ -565,6 +794,8 @@ mod tests {
         assert!(!cjdns.supports_ip_enrichment());
         assert_eq!(tor.network, CrawlNetwork::TorV3);
         assert!(tor.socket_addr().is_none());
+        assert!(tor.host.ends_with(".onion"));
+        assert_eq!(tor.host.len(), 62);
     }
 
     fn mock_version() -> VersionMessage {

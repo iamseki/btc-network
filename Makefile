@@ -27,8 +27,11 @@ MAKEFLAGS += --no-print-directory
 	infra-postgres-down \
 	infra-postgres-reset \
 	infra-crawler-up \
+	infra-crawler-up-build \
 	infra-api-up \
+	infra-api-up-build \
 	infra-crawler-api-up \
+	infra-crawler-api-up-build \
 	infra-compose-down \
 	infra-compose-reset \
 	crawler-mmdb-update \
@@ -67,6 +70,7 @@ LOCAL_DENY_ADVISORY_DB := $(firstword $(wildcard $(LOCAL_CARGO_HOME)/advisory-db
 LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 LOCAL_GIT_HOOKS_PATH := .githooks
 DOCKER_COMPOSE := docker compose -f docker-compose.yml
+COMPOSE_BUILD_FLAG := $(if $(filter 1 true yes,$(BUILD)),--build,)
 
 # Shared local PostgreSQL defaults used by the crawler, API, and migration
 # targets. Override per command via ARGS when a non-default local setup is
@@ -98,24 +102,33 @@ infra-postgres-reset: ## Reset local PostgreSQL data under .dev-data/postgres
 	@mkdir -p .dev-data/postgres
 	@docker run --rm -v "$(CURDIR)/.dev-data/postgres:/data" alpine:3.21 sh -c 'rm -rf /data/* /data/.[!.]* /data/..?* 2>/dev/null || true'
 
-infra-crawler-up: ## Start postgres, migrations, and the crawler via the crawler Compose profile
+infra-crawler-up: ## Start postgres, migrations, tor, and the crawler via the crawler Compose profile; set BUILD=1 to force image rebuilds
 	@mkdir -p .dev-data/postgres
-	@$(DOCKER_COMPOSE) --profile crawler up
+	@$(DOCKER_COMPOSE) --profile crawler up $(COMPOSE_BUILD_FLAG)
 
-infra-api-up: ## Start postgres, migrations, and the API via the api Compose profile
+infra-api-up: ## Start postgres, migrations, and the API via the api Compose profile; set BUILD=1 to force image rebuilds
 	@mkdir -p .dev-data/postgres
-	@$(DOCKER_COMPOSE) --profile api up
+	@$(DOCKER_COMPOSE) --profile api up $(COMPOSE_BUILD_FLAG)
 
-infra-crawler-api-up: ## Start postgres, migrations, crawler, and API via both Compose profiles
+infra-crawler-api-up: ## Start postgres, migrations, tor, crawler, and API via both Compose profiles; set BUILD=1 to force image rebuilds
 	@mkdir -p .dev-data/postgres
-	@$(DOCKER_COMPOSE) --profile crawler --profile api up
+	@$(DOCKER_COMPOSE) --profile crawler --profile api up $(COMPOSE_BUILD_FLAG)
+
+infra-crawler-up-build: ## Start postgres, migrations, tor, and crawler with forced image rebuilds
+	@$(MAKE) infra-crawler-up BUILD=1
+
+infra-api-up-build: ## Start postgres, migrations, and API with forced image rebuilds
+	@$(MAKE) infra-api-up BUILD=1
+
+infra-crawler-api-up-build: ## Start postgres, migrations, tor, crawler, and API with forced image rebuilds
+	@$(MAKE) infra-crawler-api-up BUILD=1
 
 infra-compose-down: ## Stop and remove all local Compose services in this repository stack
-	@$(DOCKER_COMPOSE) down --remove-orphans
+	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans
 
 infra-compose-reset: ## Force-remove local Compose containers and network metadata when Docker state is stale
-	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
-	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-crawler btc-network-api >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans >/dev/null 2>&1 || true
+	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-tor btc-network-crawler btc-network-api >/dev/null 2>&1 || true
 	@docker network rm btc-network_default >/dev/null 2>&1 || true
 
 crawler-mmdb-update: ## Download or refresh local MMDB files for crawler development
