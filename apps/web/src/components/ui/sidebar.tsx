@@ -7,7 +7,7 @@ export function Sidebar({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return (
     <aside
       className={cn(
-        "relative z-20 flex h-full flex-col overflow-visible border-r border-border bg-card/70 backdrop-blur-sm",
+        "relative z-20 flex h-full flex-col overflow-hidden border-r border-border bg-card/70 backdrop-blur-sm",
         className,
       )}
       {...props}
@@ -46,7 +46,7 @@ export function SidebarHeader({ className, ...props }: HTMLAttributes<HTMLDivEle
 }
 
 export function SidebarContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex-1 overflow-visible px-2 py-3", className)} {...props} />;
+  return <div className={cn("panel-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-visible px-2 py-3", className)} {...props} />;
 }
 
 export function SidebarGroup({
@@ -70,7 +70,7 @@ export function SidebarGroup({
 export function SidebarFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("border-t border-border px-3 py-3", className)}
+      className={cn("shrink-0 border-t border-border px-3 py-3", className)}
       {...props}
     />
   );

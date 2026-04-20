@@ -442,7 +442,7 @@ export function App() {
         <Sidebar
           className={`fixed inset-y-0 left-0 z-20 w-[252px] transition-transform duration-200 ease-out ${
             isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } shadow-[0_24px_48px_rgba(10,10,10,0.45)] md:relative md:w-auto md:translate-x-0 md:shadow-none`}
+          } shadow-[0_24px_48px_rgba(10,10,10,0.45)] md:sticky md:top-0 md:h-screen md:w-auto md:translate-x-0 md:shadow-none`}
         >
           <SidebarContent className="space-y-3 py-2">
             <SidebarGroup label={undefined}>
