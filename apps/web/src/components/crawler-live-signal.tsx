@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Activity } from "lucide-react";
+import { Activity, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
@@ -205,6 +205,32 @@ export function CrawlerPulseButton({
         ) : null}
       </span>
     </button>
+  );
+}
+
+function CrawlerSourceBeacon({
+  cx,
+  cy,
+  pulseOpacity = 0.12,
+}: {
+  cx: number;
+  cy: number;
+  pulseOpacity?: number;
+}) {
+  return (
+    <g aria-hidden="true">
+      <circle cx={cx} cy={cy} r="12" className="fx-node-pulse" fill={`rgba(245,179,1,${pulseOpacity})`} />
+      <circle cx={cx} cy={cy} r="8.8" fill="rgba(245,179,1,0.12)" stroke="rgba(255,240,197,0.22)" strokeWidth="0.8" />
+      <Eye
+        x={cx - 8.5}
+        y={cy - 8.5}
+        width={17}
+        height={17}
+        color="rgba(245,179,1,0.96)"
+        strokeWidth={1.95}
+      />
+      <circle cx={cx} cy={cy} r="1.5" fill="rgba(255,240,197,0.92)" />
+    </g>
   );
 }
 
@@ -569,10 +595,7 @@ export function CrawlerLiveSignal({
 
                 <rect x={scanX} y="18" width="22" height="192" fill="url(#map-scan-compact)" opacity="0.9" />
 
-                <g>
-                  <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.9)" />
-                  <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.12)" />
-                </g>
+                <CrawlerSourceBeacon cx={18} cy={114} pulseOpacity={0.12} />
 
                 {activeFlowNodes.map((node, index) => (
                   <g key={`compact-flow-${node.key}`}>
@@ -847,10 +870,7 @@ export function CrawlerLiveSignal({
 
                   <rect x={scanX} y="18" width="28" height="192" fill="url(#map-scan)" opacity="0.95" />
 
-                  <g>
-                    <circle cx="18" cy="114" r="5.5" fill="rgba(245,179,1,0.92)" />
-                    <circle cx="18" cy="114" r="12" className="fx-node-pulse" fill="rgba(245,179,1,0.14)" />
-                  </g>
+                  <CrawlerSourceBeacon cx={18} cy={114} pulseOpacity={0.14} />
 
                   {activeFlowNodes.map((node, index) => (
                     <g key={`flow-${node.key}`}>
