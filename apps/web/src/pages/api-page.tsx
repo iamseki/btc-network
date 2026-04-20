@@ -1,4 +1,4 @@
-import { ArrowRight, ChartColumn, Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck, Waypoints } from "lucide-react";
+import { Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck } from "lucide-react";
 import { Suspense, lazy, useEffect, useState } from "react";
 
 import {
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import type { BtcAppClient } from "@/lib/api/client";
-import { getDocsUiConfig } from "@/lib/api/docs-http";
+import { getDocsUiConfig, getOpenApiDocument } from "@/lib/api/docs-http";
 import type { AsnNodeCountItem, CrawlRunListItem, DocsUiConfig } from "@/lib/api/types";
 
 export type ApiPanel = "overview" | "access" | "docs";
@@ -38,6 +38,7 @@ export function ApiPage({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [docsUiConfig, setDocsUiConfig] = useState<DocsUiConfig | null>(null);
+  const [openApiDocument, setOpenApiDocument] = useState<Record<string, unknown> | null>(null);
   const [isDocsLoading, setIsDocsLoading] = useState(false);
   const [docsError, setDocsError] = useState<string | null>(null);
 
@@ -48,35 +49,40 @@ export function ApiPage({
   }, []);
 
   useEffect(() => {
-    if (activePanel !== "docs" || docsUiConfig !== null || isDocsLoading || docsError !== null) {
+    if (activePanel !== "docs" || openApiDocument !== null) {
       return;
     }
 
     let cancelled = false;
-    setIsDocsLoading(true);
-    setDocsError(null);
+    async function loadDocs() {
+      setIsDocsLoading(true);
+      setDocsError(null);
 
-    void getDocsUiConfig()
-      .then((nextDocsUiConfig) => {
+      try {
+        const nextDocsUiConfig = await getDocsUiConfig();
+        const nextOpenApiDocument = await getOpenApiDocument(nextDocsUiConfig.openapiPath);
+
         if (!cancelled) {
           setDocsUiConfig(nextDocsUiConfig);
+          setOpenApiDocument(nextOpenApiDocument);
         }
-      })
-      .catch((nextError) => {
+      } catch (nextError) {
         if (!cancelled) {
           setDocsError(nextError instanceof Error ? nextError.message : String(nextError));
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setIsDocsLoading(false);
         }
-      });
+      }
+    }
+
+    void loadDocs();
 
     return () => {
       cancelled = true;
     };
-  }, [activePanel, docsError, docsUiConfig, isDocsLoading]);
+  }, [activePanel, openApiDocument]);
 
   function selectPanel(panel: ApiPanel) {
     onPanelChange?.(panel);
@@ -112,9 +118,7 @@ export function ApiPage({
   const panelDescription =
     activePanel === "overview"
       ? "Operational Bitcoin network intelligence for resilience, concentration, and verification analysis."
-      : activePanel === "access"
-        ? "Project access, API keys, and subscription controls for production teams."
-        : "Generated OpenAPI reference, hosted Scalar docs, and reusable docs config for a first-class API product surface.";
+      : "Project access, API keys, and subscription controls for production teams.";
   const headerStats = [
     {
       label: "Surface",
@@ -201,23 +205,17 @@ export function ApiPage({
       detail: "Commercial SLA, private support, and tailored retention or export posture.",
     },
   ];
-  const docsRows = [
-    {
-      icon: ChartColumn,
-      title: "Reference docs",
-      detail: "Generated OpenAPI and hosted Scalar docs now come from the same live contract instead of duplicated web copy.",
-    },
-    {
-      icon: Waypoints,
-      title: "Generated spec",
-      detail: "Use `/api/openapi.json` as the canonical machine-readable source for web rendering, SDK generation, and API contract review.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Shared docs config",
-      detail: "Use `/api/docs/config.json` to share title, intro copy, and the spec URL across the hosted API docs and future web-embedded docs.",
-    },
-  ];
+
+  if (activePanel === "docs") {
+    return (
+      <EmbeddedApiReference
+        docsUiConfig={docsUiConfig}
+        openApiDocument={openApiDocument}
+        isLoading={isDocsLoading}
+        error={docsError}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8 rounded-[20px] border border-border/80 bg-card/82 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.22)] sm:p-6">
@@ -259,7 +257,7 @@ export function ApiPage({
         <div className="flex flex-wrap gap-2">
           <AnalyticsPanelButton
             label="Docs"
-            selected={activePanel === "docs"}
+            selected={false}
             onClick={() => selectPanel("docs")}
           />
           <AnalyticsPanelButton
@@ -414,120 +412,18 @@ export function ApiPage({
         </div>
       ) : null}
 
-      {activePanel === "docs" ? (
-        <div className="space-y-6">
-            <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    Documentation Direction
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    One generated OpenAPI document now powers hosted Scalar docs, DX tooling, and this embedded web reference.
-                  </p>
-                </div>
-                <Badge variant="muted">Embedded Scalar</Badge>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {docsRows.map((item) => (
-                  <FeatureCard
-                    key={item.title}
-                    icon={item.icon}
-                    title={item.title}
-                    detail={item.detail}
-                  />
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    Live API Reference
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Same generated spec, same product copy, same docs contract across hosted API docs and the web app.
-                  </p>
-                </div>
-                {docsUiConfig ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="muted">{docsUiConfig.version}</Badge>
-                    <Badge variant="muted">OpenAPI source</Badge>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="mt-4">
-                <EmbeddedApiReference
-                  docsUiConfig={docsUiConfig}
-                  isLoading={isDocsLoading}
-                  error={docsError}
-                />
-              </div>
-            </section>
-
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  First Reference Sections
-                </p>
-                <div className="mt-4 grid gap-3">
-                  <DocSection
-                    title="Authentication"
-                    detail="Launch auth quickstart, example bearer headers, quota response headers, and clear 401/429 behavior."
-                  />
-                  <DocSection
-                    title="Runs"
-                    detail="Crawl runs and run detail endpoints with examples that show concentration and verification evidence."
-                  />
-                  <DocSection
-                    title="Latest-run analytics"
-                    detail="ASN, network type, country, protocol, services, and verified node views for the latest finished run."
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  Future Docs UX
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <CommercialMetric
-                    label="Reference shell"
-                    value="Shared"
-                    detail="One generated contract feeds both the hosted docs page and the embedded product reference."
-                  />
-                  <CommercialMetric
-                    label="Code samples"
-                    value="Spec-first"
-                    detail="Keep the OpenAPI document strong enough to support code samples, SDK generation, and contract review."
-                  />
-                  <CommercialMetric
-                    label="Change logs"
-                    value="Versioned"
-                    detail="Commercial APIs need predictable change notes and deprecation guidance."
-                  />
-                  <CommercialMetric
-                    label="Web reuse"
-                    value="Config-driven"
-                    detail="The web app reads docs config and spec URLs from the API instead of re-encoding them in frontend copy."
-                  />
-                </div>
-              </div>
-            </section>
-        </div>
-      ) : null}
     </div>
   );
 }
 
 function EmbeddedApiReference({
   docsUiConfig,
+  openApiDocument,
   isLoading,
   error,
 }: {
   docsUiConfig: DocsUiConfig | null;
+  openApiDocument: Record<string, unknown> | null;
   isLoading: boolean;
   error: string | null;
 }) {
@@ -552,7 +448,7 @@ function EmbeddedApiReference({
     );
   }
 
-  if (!docsUiConfig) {
+  if (!docsUiConfig || !openApiDocument) {
     return null;
   }
 
@@ -562,24 +458,19 @@ function EmbeddedApiReference({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-              {docsUiConfig.title}
+              Live API Reference
             </p>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
               {docsUiConfig.introduction}
             </p>
           </div>
-          <a
-            href={docsUiConfig.openapiUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-[10px] border border-primary/20 bg-primary/10 px-3 py-2 text-sm text-primary transition hover:bg-primary/14"
-          >
-            Open raw spec
-            <ArrowRight className="h-4 w-4" />
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="muted">{docsUiConfig.version}</Badge>
+            <Badge variant="muted">OpenAPI source</Badge>
+          </div>
         </div>
       </div>
-      <div className="[&_.scalar-app]:min-h-[820px] [&_.scalar-app]:bg-transparent">
+      <div className="panel-scrollbar h-[calc(100vh-9rem)] min-h-[820px] overflow-y-auto overscroll-contain [&_.scalar-app]:h-full [&_.scalar-app]:min-h-full [&_.scalar-app]:bg-transparent">
         <Suspense
           fallback={<p className="p-5 text-sm text-muted-foreground">Loading interactive reference shell.</p>}
         >
@@ -587,7 +478,7 @@ function EmbeddedApiReference({
             configuration={{
               _integration: "react",
               title: docsUiConfig.title,
-              url: docsUiConfig.openapiUrl,
+              content: openApiDocument,
               baseServerURL: docsUiConfig.baseServerUrl ?? undefined,
               theme: "none",
               layout: "modern",
@@ -676,17 +567,6 @@ function PricingRow({
         </p>
         <p className="font-mono text-sm text-foreground">{value}</p>
       </div>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
-function DocSection({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="rounded-[12px] border border-border/75 bg-background/68 p-3">
-      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-        {title}
-      </p>
       <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{detail}</p>
     </div>
   );

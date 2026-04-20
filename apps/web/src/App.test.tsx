@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
-const { mockGetDocsUiConfig } = vi.hoisted(() => ({
+const { mockGetDocsUiConfig, mockGetOpenApiDocument } = vi.hoisted(() => ({
   mockGetDocsUiConfig: vi.fn(),
+  mockGetOpenApiDocument: vi.fn(),
 }));
 const mockHandshake = vi.fn();
 const mockPing = vi.fn();
@@ -57,6 +58,7 @@ vi.mock("./lib/api", () => ({
 
 vi.mock("./lib/api/docs-http", () => ({
   getDocsUiConfig: mockGetDocsUiConfig,
+  getOpenApiDocument: mockGetOpenApiDocument,
 }));
 
 afterEach(() => {
@@ -83,6 +85,7 @@ afterEach(() => {
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
   mockGetDocsUiConfig.mockReset();
+  mockGetOpenApiDocument.mockReset();
   mockListCrawlRuns.mockResolvedValue([]);
   mockGetCrawlRun.mockResolvedValue({
     run: {
@@ -127,6 +130,11 @@ afterEach(() => {
     openapiPath: "/api/openapi.json",
     scalarPath: "http://127.0.0.1:8080/docs",
     baseServerUrl: "http://127.0.0.1:8080",
+  });
+  mockGetOpenApiDocument.mockResolvedValue({
+    openapi: "3.1.0",
+    info: { title: "btc-network API", version: "0.1.0" },
+    paths: {},
   });
 });
 
@@ -181,6 +189,11 @@ beforeEach(() => {
     openapiPath: "/api/openapi.json",
     scalarPath: "http://127.0.0.1:8080/docs",
     baseServerUrl: "http://127.0.0.1:8080",
+  });
+  mockGetOpenApiDocument.mockResolvedValue({
+    openapi: "3.1.0",
+    info: { title: "btc-network API", version: "0.1.0" },
+    paths: {},
   });
 });
 
@@ -336,13 +349,20 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "API" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "API" })).toBeTruthy();
+      expect(mockGetDocsUiConfig).toHaveBeenCalledTimes(1);
+      expect(mockGetOpenApiDocument).toHaveBeenCalledWith("/api/openapi.json");
     });
-    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "API Views" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
+  });
+
+  it("shows the default Buy Me a Coffee link in the sidebar footer", () => {
+    render(<App />);
+
+    const supportLink = screen.getByRole("link", { name: "Buy Me a Coffee" });
+    expect(supportLink.getAttribute("href")).toBe("https://buymeacoffee.com/chseki");
   });
 
   it("opens and closes the header crawl preview from the pulse in the header rail", async () => {

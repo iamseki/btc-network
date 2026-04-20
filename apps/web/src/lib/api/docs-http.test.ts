@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getDocsUiConfig } from "./docs-http";
+import { getDocsUiConfig, getOpenApiDocument } from "./docs-http";
 import { apiBaseUrl, fetchJson } from "./http";
 
 vi.mock("./http", () => ({
@@ -28,5 +28,20 @@ describe("getDocsUiConfig", () => {
     expect(docsUiConfig.openapiUrl).toBe("http://127.0.0.1:8080/api/openapi.json");
     expect(docsUiConfig.scalarPath).toBe("http://127.0.0.1:8080/docs");
     expect(docsUiConfig.baseServerUrl).toBe("http://127.0.0.1:8080");
+  });
+});
+
+describe("getOpenApiDocument", () => {
+  it("fetches the generated OpenAPI document through the shared API helper", async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({
+      openapi: "3.1.0",
+      info: { title: "btc-network API", version: "0.1.0" },
+      paths: {},
+    });
+
+    const document = await getOpenApiDocument("/api/openapi.json");
+
+    expect(fetchJson).toHaveBeenCalledWith("/api/openapi.json");
+    expect(document).toMatchObject({ openapi: "3.1.0" });
   });
 });

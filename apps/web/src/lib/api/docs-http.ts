@@ -12,6 +12,10 @@ export async function getDocsUiConfig(): Promise<DocsUiConfig> {
   };
 }
 
+export async function getOpenApiDocument(path = "/api/openapi.json"): Promise<Record<string, unknown>> {
+  return fetchJson<Record<string, unknown>>(path);
+}
+
 function resolveApiAssetUrl(pathOrUrl: string): string {
   return new URL(pathOrUrl, `${apiBaseUrl()}/`).toString();
 }

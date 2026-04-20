@@ -36,7 +36,7 @@ async fn docs_ui_config(State(state): State<AppState>) -> Json<DocsUiConfigRespo
     Json(state.docs_config.scalar_ui_config())
 }
 
-fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
+pub fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
     let mut openapi = ApiDoc::openapi();
     docs_config.modify(&mut openapi);
     openapi
