@@ -14,6 +14,9 @@ Default backend:
 
 ## Endpoints
 
+- `GET /api/openapi.json`
+- `GET /api/docs/config.json`
+- `GET /docs`
 - `GET /api/v1/crawler/runs?limit=<n>`
 - `GET /api/v1/crawler/runs/:run_id`
 - `GET /api/v1/crawler/asn?limit=<n>`
@@ -35,6 +38,11 @@ Default backend:
 - `BTC_NETWORK_API_ALLOWED_ORIGINS` — optional comma-separated CORS allowlist
 - `BTC_NETWORK_API_REQUEST_TIMEOUT_SECS` — optional per-request timeout; defaults to `10`
 - `BTC_NETWORK_API_CONCURRENCY_LIMIT` — optional in-flight request cap; defaults to `64`
+- `BTC_NETWORK_API_DOCS_TITLE` — optional OpenAPI and docs UI title; defaults to `btc-network API`
+- `BTC_NETWORK_API_DOCS_VERSION` — optional OpenAPI and docs UI version; defaults to the crate version
+- `BTC_NETWORK_API_DOCS_DESCRIPTION` — optional shared OpenAPI and docs UI description used by hosted docs and embedded web API reference
+- `BTC_NETWORK_API_DOCS_INTRODUCTION` — optional shared introduction copy exposed by `/api/docs/config.json` for embedded docs surfaces
+- `BTC_NETWORK_API_PUBLIC_BASE_URL` — optional absolute public API base URL used in the OpenAPI `servers` list and docs UI config
 
 ## Local Commands
 
@@ -52,8 +60,13 @@ Default backend:
 ## Notes
 
 - this app is intentionally read-only in the current slice
+- OpenAPI is generated from Rust handlers and shared response models via `utoipa`; Scalar UI is served from the same app via `utoipa-scalar`
+- `/api/docs/config.json` exposes shared docs metadata, intro copy, and the canonical OpenAPI URL so the web app can render the same API reference without duplicating config
+- docs title, version, description, introduction, and public base URL can all be configured at runtime so hosted docs and embedded docs surfaces stay in sync without frontend copy drift
+- the intended web integration path is to fetch `/api/docs/config.json`, then pass `openapiUrl` into a Scalar React reference component or another OpenAPI viewer using the generated spec as the single source of truth
 - last-run analytics endpoints read from the latest finished crawl run only
 - local development uses the shared PostgreSQL service defined in the repository root `docker-compose.yml`
+- the `api` Compose profile now builds `apps/api/Dockerfile` into a slim runtime image instead of compiling on every container start
 - the shared local PostgreSQL container uses PostgreSQL 18 with `PGDATA=/var/lib/postgresql/18/btc-network`
 - enabling the `api` profile also runs the one-shot `postgres-migrate` service before the API process starts
 - the profiled API service defaults to `BTC_NETWORK_API_CPUS=2.0` and `BTC_NETWORK_API_MEM_LIMIT=2g`; override them in your shell or a repository-root `.env` file before running `docker compose`

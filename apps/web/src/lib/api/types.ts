@@ -190,3 +190,14 @@ export type CrawlRunDetail = {
   failureCounts: FailureClassificationCount[];
   networkOutcomes: NetworkOutcomeCount[];
 };
+
+export type DocsUiConfig = {
+  title: string;
+  version: string;
+  description: string;
+  introduction: string;
+  openapiUrl: string;
+  openapiPath: string;
+  scalarPath: string;
+  baseServerUrl: string | null;
+};

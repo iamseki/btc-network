@@ -1,4 +1,6 @@
+@layer scalar-base, scalar-theme, scalar-config, theme, base, components, utilities;
 @import "tailwindcss";
+@import "@scalar/api-reference-react/style.css";
 
 @theme {
   --font-sans:
@@ -36,6 +38,30 @@
 @layer base {
   * {
     @apply border-border;
+  }
+
+  :root {
+    --scalar-font: var(--font-sans);
+    --scalar-font-code: var(--font-mono);
+    --scalar-background-1: #080808;
+    --scalar-background-2: #0d0d0d;
+    --scalar-background-3: #141414;
+    --scalar-color-1: #f5efe2;
+    --scalar-color-2: #b9b1a6;
+    --scalar-color-3: #8d857b;
+    --scalar-color-accent: #f5b301;
+    --scalar-link-color: #ffd04f;
+    --scalar-border-color: rgba(245, 239, 226, 0.12);
+    --scalar-sidebar-background-1: #080808;
+    --scalar-sidebar-background-2: #0d0d0d;
+    --scalar-sidebar-color-1: #f5efe2;
+    --scalar-sidebar-color-2: #b9b1a6;
+    --scalar-sidebar-color-active: #14110a;
+    --scalar-sidebar-item-hover-background: rgba(245, 179, 1, 0.08);
+    --scalar-sidebar-item-active-background: #f5b301;
+    --scalar-radius: 12px;
+    --scalar-radius-lg: 16px;
+    --scalar-radius-xl: 20px;
   }
 
   html {

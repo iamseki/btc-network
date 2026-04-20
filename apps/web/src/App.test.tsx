@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
+const { mockGetDocsUiConfig, mockGetOpenApiDocument } = vi.hoisted(() => ({
+  mockGetDocsUiConfig: vi.fn(),
+  mockGetOpenApiDocument: vi.fn(),
+}));
 const mockHandshake = vi.fn();
 const mockPing = vi.fn();
 const mockGetAddr = vi.fn();
@@ -14,6 +18,15 @@ const mockDownloadBlock = vi.fn();
 const mockListCrawlRuns = vi.fn();
 const mockGetCrawlRun = vi.fn();
 const mockCountNodesByAsn = vi.fn();
+const mockListLastRunServices = vi.fn();
+const mockListLastRunProtocolVersions = vi.fn();
+const mockListLastRunUserAgents = vi.fn();
+const mockListLastRunNetworkTypes = vi.fn();
+const mockListLastRunCountries = vi.fn();
+const mockListLastRunAsns = vi.fn();
+const mockListLastRunStartHeights = vi.fn();
+const mockListLastRunAsnOrganizations = vi.fn();
+const mockListLastRunNodes = vi.fn();
 const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
 const originalInnerWidth = window.innerWidth;
@@ -23,6 +36,15 @@ vi.mock("./lib/api", () => ({
     listCrawlRuns: mockListCrawlRuns,
     getCrawlRun: mockGetCrawlRun,
     countNodesByAsn: mockCountNodesByAsn,
+    listLastRunServices: mockListLastRunServices,
+    listLastRunProtocolVersions: mockListLastRunProtocolVersions,
+    listLastRunUserAgents: mockListLastRunUserAgents,
+    listLastRunNetworkTypes: mockListLastRunNetworkTypes,
+    listLastRunCountries: mockListLastRunCountries,
+    listLastRunAsns: mockListLastRunAsns,
+    listLastRunStartHeights: mockListLastRunStartHeights,
+    listLastRunAsnOrganizations: mockListLastRunAsnOrganizations,
+    listLastRunNodes: mockListLastRunNodes,
     handshake: mockHandshake,
     ping: mockPing,
     getAddr: mockGetAddr,
@@ -32,6 +54,11 @@ vi.mock("./lib/api", () => ({
     getSuggestedBlockDownloadPath: mockGetSuggestedBlockDownloadPath,
     getRecentEvents: mockGetRecentEvents,
   }),
+}));
+
+vi.mock("./lib/api/docs-http", () => ({
+  getDocsUiConfig: mockGetDocsUiConfig,
+  getOpenApiDocument: mockGetOpenApiDocument,
 }));
 
 afterEach(() => {
@@ -46,8 +73,19 @@ afterEach(() => {
   mockListCrawlRuns.mockReset();
   mockGetCrawlRun.mockReset();
   mockCountNodesByAsn.mockReset();
+  mockListLastRunServices.mockReset();
+  mockListLastRunProtocolVersions.mockReset();
+  mockListLastRunUserAgents.mockReset();
+  mockListLastRunNetworkTypes.mockReset();
+  mockListLastRunCountries.mockReset();
+  mockListLastRunAsns.mockReset();
+  mockListLastRunStartHeights.mockReset();
+  mockListLastRunAsnOrganizations.mockReset();
+  mockListLastRunNodes.mockReset();
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
+  mockGetDocsUiConfig.mockReset();
+  mockGetOpenApiDocument.mockReset();
   mockListCrawlRuns.mockResolvedValue([]);
   mockGetCrawlRun.mockResolvedValue({
     run: {
@@ -71,9 +109,33 @@ afterEach(() => {
     networkOutcomes: [],
   });
   mockCountNodesByAsn.mockResolvedValue([]);
+  mockListLastRunServices.mockResolvedValue([]);
+  mockListLastRunProtocolVersions.mockResolvedValue([]);
+  mockListLastRunUserAgents.mockResolvedValue([]);
+  mockListLastRunNetworkTypes.mockResolvedValue([]);
+  mockListLastRunCountries.mockResolvedValue([]);
+  mockListLastRunAsns.mockResolvedValue([]);
+  mockListLastRunStartHeights.mockResolvedValue([]);
+  mockListLastRunAsnOrganizations.mockResolvedValue([]);
+  mockListLastRunNodes.mockResolvedValue([]);
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
+  mockGetDocsUiConfig.mockResolvedValue({
+    title: "btc-network API",
+    version: "0.1.0",
+    description: "Generated docs",
+    introduction: "Start with runs.",
+    openapiUrl: "http://127.0.0.1:8080/api/openapi.json",
+    openapiPath: "/api/openapi.json",
+    scalarPath: "http://127.0.0.1:8080/docs",
+    baseServerUrl: "http://127.0.0.1:8080",
+  });
+  mockGetOpenApiDocument.mockResolvedValue({
+    openapi: "3.1.0",
+    info: { title: "btc-network API", version: "0.1.0" },
+    paths: {},
+  });
 });
 
 beforeEach(() => {
@@ -109,6 +171,30 @@ beforeEach(() => {
     networkOutcomes: [],
   });
   mockCountNodesByAsn.mockResolvedValue([]);
+  mockListLastRunServices.mockResolvedValue([]);
+  mockListLastRunProtocolVersions.mockResolvedValue([]);
+  mockListLastRunUserAgents.mockResolvedValue([]);
+  mockListLastRunNetworkTypes.mockResolvedValue([]);
+  mockListLastRunCountries.mockResolvedValue([]);
+  mockListLastRunAsns.mockResolvedValue([]);
+  mockListLastRunStartHeights.mockResolvedValue([]);
+  mockListLastRunAsnOrganizations.mockResolvedValue([]);
+  mockListLastRunNodes.mockResolvedValue([]);
+  mockGetDocsUiConfig.mockResolvedValue({
+    title: "btc-network API",
+    version: "0.1.0",
+    description: "Generated docs",
+    introduction: "Start with runs.",
+    openapiUrl: "http://127.0.0.1:8080/api/openapi.json",
+    openapiPath: "/api/openapi.json",
+    scalarPath: "http://127.0.0.1:8080/docs",
+    baseServerUrl: "http://127.0.0.1:8080",
+  });
+  mockGetOpenApiDocument.mockResolvedValue({
+    openapi: "3.1.0",
+    info: { title: "btc-network API", version: "0.1.0" },
+    paths: {},
+  });
 });
 
 function setViewportWidth(width: number) {
@@ -260,15 +346,23 @@ describe("App sidebar shell", () => {
   it("renders the commercial API page from the analytics navigation", async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));
+    fireEvent.click(screen.getByRole("button", { name: "API" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Network Risk API" })).toBeTruthy();
+      expect(mockGetDocsUiConfig).toHaveBeenCalledTimes(1);
+      expect(mockGetOpenApiDocument).toHaveBeenCalledWith("/api/openapi.json");
     });
-    expect(screen.getByText("Why teams buy this")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Network Risk API Views" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "API Views" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
+  });
+
+  it("shows the default Buy Me a Coffee link in the sidebar footer", () => {
+    render(<App />);
+
+    const supportLink = screen.getByRole("link", { name: "Buy Me a Coffee" });
+    expect(supportLink.getAttribute("href")).toBe("https://buymeacoffee.com/chseki");
   });
 
   it("opens and closes the header crawl preview from the pulse in the header rail", async () => {
@@ -367,7 +461,7 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Checkpoints" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Failures" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Network Risk API" }));
+    fireEvent.click(screen.getByRole("button", { name: "API" }));
 
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();

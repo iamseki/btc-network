@@ -35,7 +35,7 @@ import {
   type NetworkAnalyticsPanel,
 } from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
-import { RiskApiPage, type RiskApiPanel } from "./pages/risk-api-page";
+import { ApiPage, type ApiPanel } from "./pages/api-page";
 import { getAppClient } from "./lib/api";
 import type {
   AddrResult,
@@ -53,7 +53,8 @@ import { analyticsModeLabel } from "./lib/runtime-config";
 const defaultNode = "seed.bitnodes.io:8333";
 const sampleBlockHash =
   "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
-const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim();
+const DEFAULT_SUPPORT_URL = "https://buymeacoffee.com/chseki";
+const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim() || DEFAULT_SUPPORT_URL;
 const analyticsLabel = analyticsModeLabel();
 
 export function App() {
@@ -62,11 +63,11 @@ export function App() {
   const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
   const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
     useState<NetworkAnalyticsPanel>("overview");
-  const [riskApiPanel, setRiskApiPanel] = useState<RiskApiPanel>("overview");
+  const [apiPanel, setApiPanel] = useState<ApiPanel>("docs");
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
-    "risk-api": ShieldCheck,
+    api: ShieldCheck,
     "crawler-runs": Activity,
     "network-analytics": ChartColumn,
     connection: Radio,
@@ -143,16 +144,16 @@ export function App() {
             activeItem: crawlerRunsPanel,
             onSelect: (panel: string) => setCrawlerRunsPanel(panel as CrawlerRunsPanel),
           }
-        : selectedPage === "risk-api"
+        : selectedPage === "api"
           ? {
-              label: "Network Risk API Views",
+              label: "API Views",
               items: [
+                { id: "docs", title: "Docs" },
                 { id: "overview", title: "Overview" },
                 { id: "access", title: "Access" },
-                { id: "docs", title: "Docs" },
-              ] satisfies { id: RiskApiPanel; title: string }[],
-              activeItem: riskApiPanel,
-              onSelect: (panel: string) => setRiskApiPanel(panel as RiskApiPanel),
+              ] satisfies { id: ApiPanel; title: string }[],
+              activeItem: apiPanel,
+              onSelect: (panel: string) => setApiPanel(panel as ApiPanel),
             }
         : null;
   const currentSubnavItemTitle =
@@ -171,8 +172,8 @@ export function App() {
       setCrawlerRunsPanel("overview");
     }
 
-    if (nextPage === "risk-api") {
-      setRiskApiPanel("overview");
+    if (nextPage === "api") {
+      setApiPanel("docs");
     }
 
     if (window.innerWidth < 768) {
@@ -505,8 +506,8 @@ export function App() {
                     ? "flex h-10 items-center justify-center rounded-lg border border-border/80 bg-background/40 text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted hover:text-foreground"
                     : "flex items-center gap-3 rounded-lg border border-border/80 bg-background/40 px-3 py-3 text-left text-muted-foreground transition-colors hover:border-primary/30 hover:bg-muted hover:text-foreground"
                 }
-                aria-label="Support Project"
-                title="Support ongoing work on Bitcoin P2P analytics, network health, decentralization, and attack risk research."
+                aria-label="Buy Me a Coffee"
+                title="Buy Me a Coffee and help fund analytics, research, and public infrastructure."
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/60 text-primary">
                   <Coffee className="h-4 w-4" />
@@ -514,7 +515,7 @@ export function App() {
                 {sidebarCollapsed ? null : (
                   <span className="min-w-0">
                     <span className="block font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
-                      Support Project
+                      Buy Me a Coffee
                     </span>
                     <span className="block text-xs leading-5 text-muted-foreground">
                       Help fund analytics, research, and public infrastructure.
@@ -627,15 +628,16 @@ export function App() {
                   client={client}
                   activePanel={networkAnalyticsPanel}
                   onPanelChange={setNetworkAnalyticsPanel}
+                  onOpenApiPage={() => selectPage("api")}
                   showPanelNav={false}
                 />
               ) : null}
 
-              {selectedPage === "risk-api" ? (
-                <RiskApiPage
+              {selectedPage === "api" ? (
+                <ApiPage
                   client={client}
-                  activePanel={riskApiPanel}
-                  onPanelChange={setRiskApiPanel}
+                  activePanel={apiPanel}
+                  onPanelChange={setApiPanel}
                   showPanelNav={false}
                 />
               ) : null}

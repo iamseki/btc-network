@@ -1,11 +1,36 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BtcAppClient } from "@/lib/api/client";
+import { getDocsUiConfig, getOpenApiDocument } from "@/lib/api/docs-http";
 
-import { RiskApiPage } from "./risk-api-page";
+import { ApiPage } from "./api-page";
+
+vi.mock("@/lib/api/docs-http", () => ({
+  getDocsUiConfig: vi.fn().mockResolvedValue({
+    title: "btc-network API",
+    version: "0.1.0",
+    description: "Generated docs",
+    introduction: "Start with runs.",
+    openapiUrl: "/api/openapi.json",
+    openapiPath: "/api/openapi.json",
+    scalarPath: "/docs",
+    baseServerUrl: null,
+  }),
+  getOpenApiDocument: vi.fn().mockResolvedValue({
+    openapi: "3.1.0",
+    info: { title: "btc-network API", version: "0.1.0" },
+    paths: {},
+  }),
+}));
+
+vi.mock("@scalar/api-reference-react", () => ({
+  ApiReferenceReact: ({ configuration }: { configuration: { content?: { openapi?: string } } }) => (
+    <div data-testid="scalar-api-reference">{configuration.content?.openapi}</div>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -106,11 +131,21 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
   };
 }
 
-describe("RiskApiPage", () => {
-  it("renders a compact commercial overview driven by current analytics inputs", async () => {
-    render(<RiskApiPage client={makeClient()} />);
+describe("ApiPage", () => {
+  it("opens on docs first and loads the embedded reference config", async () => {
+    render(<ApiPage client={makeClient()} />);
 
-    expect(await screen.findByText("Network Risk API")).toBeTruthy();
+    await waitFor(() => {
+      expect(getDocsUiConfig).toHaveBeenCalledTimes(1);
+      expect(getOpenApiDocument).toHaveBeenCalledWith("/api/openapi.json");
+    });
+    expect((await screen.findByTestId("scalar-api-reference")).textContent).toContain("3.1.0");
+    expect(screen.queryByText("Loading generated API reference.")).toBeNull();
+  });
+
+  it("renders a compact commercial overview driven by current analytics inputs", async () => {
+    render(<ApiPage client={makeClient()} activePanel="overview" />);
+
     expect(
       screen.getByText(
         /Resilient Bitcoin network analytics for teams that need faster answers on concentration/i,
@@ -124,20 +159,20 @@ describe("RiskApiPage", () => {
     expect(screen.queryByText("Example Snapshot Contract")).toBeNull();
   });
 
-  it("switches between overview, access, and docs panels", async () => {
-    render(<RiskApiPage client={makeClient()} />);
+  it("renders overview and access panels outside the docs-only surface", async () => {
+    render(<ApiPage client={makeClient()} activePanel="overview" />);
 
     expect(await screen.findByText("Why teams buy this")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Access" }));
+    cleanup();
+    render(<ApiPage client={makeClient()} activePanel="access" />);
+
     expect(await screen.findByText("Access Flow")).toBeTruthy();
     expect(screen.getByText("Subscription Shape")).toBeTruthy();
     expect(screen.getByText("Get an API key")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Docs" }));
-    expect(await screen.findByText("Documentation Direction")).toBeTruthy();
-    expect(screen.getByText("Scalar-style docs")).toBeTruthy();
-    expect(screen.getByText("Authentication")).toBeTruthy();
   });
 
   it("falls back to commercial framing when live analytics loading fails", async () => {
@@ -145,10 +180,9 @@ describe("RiskApiPage", () => {
       listCrawlRuns: vi.fn().mockRejectedValue(new Error("api unavailable")),
     });
 
-    render(<RiskApiPage client={client} />);
+    render(<ApiPage client={client} activePanel="overview" />);
 
     expect(await screen.findByText("Live analytics are temporarily unavailable")).toBeTruthy();
     expect(screen.getByText("early-access")).toBeTruthy();
-    expect(screen.getByText("Early access")).toBeTruthy();
   });
 });

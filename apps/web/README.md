@@ -33,7 +33,7 @@ Current state:
 - desktop-backed handshake, ping, peer address lookup, chain height, block summary, and block download are wired through Tauri
 - both web and desktop analytics reads now use the browser-safe HTTP helper
 - plain web mode still uses placeholder/mock responses only for the single-peer flows that do not yet have a browser-safe backend
-- optional demo mode can mock analytics pages too for hosted browser-only deploys that are not ready to expose the API yet
+- optional demo mode can mock analytics pages too for hosted demo deploys that do not need live analytics reads
 
 ## Local commands
 
@@ -53,15 +53,16 @@ Makefile shortcuts:
 Optional environment:
 
 - `VITE_API_BASE_URL` — base URL for crawler analytics reads; defaults to `http://127.0.0.1:8080` in local development and `https://api.btcnetwork.info` in production
-- `VITE_DEMO_MODE` — when set to `true`, `1`, `yes`, or `on`, the hosted web app serves deterministic mock data for `Crawler Runs` and `Network Analytics` instead of calling the HTTP API
-- `VITE_SUPPORT_URL` — Buy Me a Coffee or other support link shown in the sidebar footer
+- `VITE_DEMO_MODE` — when set to `true`, `1`, `yes`, or `on`, the hosted web app serves deterministic mock data for `Crawler Runs` and `Network Analytics`
+- `VITE_SUPPORT_URL` — override the default Buy Me a Coffee link shown in the sidebar footer
 
 Important:
 
 - Vite reads `VITE_*` values at build time, not after the page has already loaded
-- local development: set `VITE_SUPPORT_URL` in your shell or a local Vite env file before `npm run dev`
-- local mocked analytics: `make web-dev-demo` is the quickest path when you want `Crawler Runs`, `Network Analytics`, and `Network Risk API` to stay browser-only
-- demo deploys: set `VITE_DEMO_MODE=true` in the build environment when you want the public site to stay fully browser-only
+- local development: set `VITE_SUPPORT_URL` in your shell or a local Vite env file if you want to override the default support link before `npm run dev`
+- local mocked analytics: `make web-dev-demo` is the quickest path when you want `Crawler Runs` and `Network Analytics` to use deterministic browser-side demo data
+- the API docs page still fetches `/api/docs/config.json` and `/api/openapi.json` from the API service in both normal and demo web modes
+- demo deploys: set `VITE_DEMO_MODE=true` in the build environment when you want analytics pages mocked while still pointing API docs at a live API
 - production deploys: set `VITE_SUPPORT_URL` as a GitHub repository variable so the GitHub Actions build injects it into the static site
 
 ## Production deploy

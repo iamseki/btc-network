@@ -1,5 +1,5 @@
-import { ChartColumn, Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck, Waypoints } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Database, KeyRound, LoaderCircle, RotateCw, ShieldCheck } from "lucide-react";
+import { Suspense, lazy, useEffect, useState } from "react";
 
 import {
   AnalyticsHeaderStat,
@@ -9,28 +9,38 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
 import type { BtcAppClient } from "@/lib/api/client";
-import type { AsnNodeCountItem, CrawlRunListItem } from "@/lib/api/types";
+import { getDocsUiConfig, getOpenApiDocument } from "@/lib/api/docs-http";
+import type { AsnNodeCountItem, CrawlRunListItem, DocsUiConfig } from "@/lib/api/types";
 
-export type RiskApiPanel = "overview" | "access" | "docs";
+export type ApiPanel = "overview" | "access" | "docs";
 
-type RiskApiPageProps = {
+const ScalarApiReference = lazy(async () => {
+  const module = await import("@scalar/api-reference-react");
+  return { default: module.ApiReferenceReact };
+});
+
+type ApiPageProps = {
   client: BtcAppClient;
-  activePanel?: RiskApiPanel;
-  onPanelChange?: (panel: RiskApiPanel) => void;
+  activePanel?: ApiPanel;
+  onPanelChange?: (panel: ApiPanel) => void;
   showPanelNav?: boolean;
 };
 
-export function RiskApiPage({
+export function ApiPage({
   client,
   activePanel: controlledActivePanel,
   onPanelChange,
   showPanelNav = true,
-}: RiskApiPageProps) {
+}: ApiPageProps) {
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [asnRows, setAsnRows] = useState<AsnNodeCountItem[]>([]);
-  const [internalActivePanel, setInternalActivePanel] = useState<RiskApiPanel>("overview");
+  const [internalActivePanel, setInternalActivePanel] = useState<ApiPanel>("docs");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [docsUiConfig, setDocsUiConfig] = useState<DocsUiConfig | null>(null);
+  const [openApiDocument, setOpenApiDocument] = useState<Record<string, unknown> | null>(null);
+  const [isDocsLoading, setIsDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState<string | null>(null);
 
   const activePanel = controlledActivePanel ?? internalActivePanel;
 
@@ -38,7 +48,43 @@ export function RiskApiPage({
     void refreshPreview();
   }, []);
 
-  function selectPanel(panel: RiskApiPanel) {
+  useEffect(() => {
+    if (activePanel !== "docs" || openApiDocument !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    async function loadDocs() {
+      setIsDocsLoading(true);
+      setDocsError(null);
+
+      try {
+        const nextDocsUiConfig = await getDocsUiConfig();
+        const nextOpenApiDocument = await getOpenApiDocument(nextDocsUiConfig.openapiPath);
+
+        if (!cancelled) {
+          setDocsUiConfig(nextDocsUiConfig);
+          setOpenApiDocument(nextOpenApiDocument);
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setDocsError(nextError instanceof Error ? nextError.message : String(nextError));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsDocsLoading(false);
+        }
+      }
+    }
+
+    void loadDocs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePanel, openApiDocument]);
+
+  function selectPanel(panel: ApiPanel) {
     onPanelChange?.(panel);
     if (controlledActivePanel === undefined) {
       setInternalActivePanel(panel);
@@ -72,9 +118,7 @@ export function RiskApiPage({
   const panelDescription =
     activePanel === "overview"
       ? "Operational Bitcoin network intelligence for resilience, concentration, and verification analysis."
-      : activePanel === "access"
-        ? "Project access, API keys, and subscription controls for production teams."
-        : "Reference structure for the public API documentation and developer onboarding surface.";
+      : "Project access, API keys, and subscription controls for production teams.";
   const headerStats = [
     {
       label: "Surface",
@@ -161,29 +205,23 @@ export function RiskApiPage({
       detail: "Commercial SLA, private support, and tailored retention or export posture.",
     },
   ];
-  const docsRows = [
-    {
-      icon: ChartColumn,
-      title: "Reference docs",
-      detail: "The future docs surface should read like Scalar: clean endpoint navigation, auth examples, rate limits, and example responses.",
-    },
-    {
-      icon: Waypoints,
-      title: "Core endpoints",
-      detail: "Start with `/snapshots/latest`, `/snapshots/{run_id}`, `/asns/top`, and `/network/outcomes` before expanding to custom analytics.",
-    },
-    {
-      icon: ShieldCheck,
-      title: "Authentication docs",
-      detail: "Keep docs explicit about bearer keys, quota headers, 429 behavior, and commercial support expectations.",
-    },
-  ];
+
+  if (activePanel === "docs") {
+    return (
+      <EmbeddedApiReference
+        docsUiConfig={docsUiConfig}
+        openApiDocument={openApiDocument}
+        isLoading={isDocsLoading}
+        error={docsError}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8 rounded-[20px] border border-border/80 bg-card/82 p-4 shadow-[0_24px_48px_rgba(0,0,0,0.22)] sm:p-6">
       <SectionHeading
         eyebrow="Commercial API"
-        title="Network Risk API"
+        title="API"
         description={panelDescription}
         actions={
           <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
@@ -200,8 +238,8 @@ export function RiskApiPage({
               variant="ghost"
               size="sm"
               className="h-8 w-8 rounded-md px-0"
-              aria-label="Refresh risk API metrics"
-              title="Refresh risk API metrics"
+              aria-label="Refresh API metrics"
+              title="Refresh API metrics"
               onClick={() => void refreshPreview()}
               disabled={isLoading}
             >
@@ -218,6 +256,11 @@ export function RiskApiPage({
       {showPanelNav ? (
         <div className="flex flex-wrap gap-2">
           <AnalyticsPanelButton
+            label="Docs"
+            selected={false}
+            onClick={() => selectPanel("docs")}
+          />
+          <AnalyticsPanelButton
             label="Overview"
             selected={activePanel === "overview"}
             onClick={() => selectPanel("overview")}
@@ -226,11 +269,6 @@ export function RiskApiPage({
             label="Access"
             selected={activePanel === "access"}
             onClick={() => selectPanel("access")}
-          />
-          <AnalyticsPanelButton
-            label="Docs"
-            selected={activePanel === "docs"}
-            onClick={() => selectPanel("docs")}
           />
         </div>
       ) : null}
@@ -249,7 +287,7 @@ export function RiskApiPage({
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="muted">Early access</Badge>
                 <Badge variant="muted">Founding teams</Badge>
-                <Badge variant="muted">Docs in progress</Badge>
+                <Badge variant="muted">Docs live</Badge>
               </div>
               <div className="mt-4">
                 <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -289,8 +327,8 @@ export function RiskApiPage({
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <CommercialMetric
                     label="API surface"
-                    value="4 core endpoints first"
-                    detail="Start with latest snapshot, run detail, ASN concentration, and network outcomes before adding custom slices."
+                    value="Analytics-first"
+                    detail="Lead with crawl runs, run detail, latest-run distributions, and verified node inventory before expanding the contract."
                   />
                   <CommercialMetric
                     label="SLA posture"
@@ -374,83 +412,83 @@ export function RiskApiPage({
         </div>
       ) : null}
 
-      {activePanel === "docs" ? (
-        <div className="space-y-6">
-            <section className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    Documentation Direction
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Public reference docs should live in a clean Scalar-style experience with fast onboarding.
-                  </p>
-                </div>
-                <Badge variant="muted">Scalar-style docs</Badge>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {docsRows.map((item) => (
-                  <FeatureCard
-                    key={item.title}
-                    icon={item.icon}
-                    title={item.title}
-                    detail={item.detail}
-                  />
-                ))}
-              </div>
-            </section>
+    </div>
+  );
+}
 
-            <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  First Reference Sections
-                </p>
-                <div className="mt-4 grid gap-3">
-                  <DocSection
-                    title="Authentication"
-                    detail="Bearer token quickstart, example headers, quota headers, and 401/429 behavior."
-                  />
-                  <DocSection
-                    title="Snapshots"
-                    detail="Latest snapshot and run detail endpoints with examples that show concentration and verification evidence."
-                  />
-                  <DocSection
-                    title="Analytics"
-                    detail="ASN concentration, network outcomes, and future historical replay endpoints."
-                  />
-                </div>
-              </div>
+function EmbeddedApiReference({
+  docsUiConfig,
+  openApiDocument,
+  isLoading,
+  error,
+}: {
+  docsUiConfig: DocsUiConfig | null;
+  openApiDocument: Record<string, unknown> | null;
+  isLoading: boolean;
+  error: string | null;
+}) {
+  if (isLoading) {
+    return (
+      <div className="rounded-[16px] border border-border/75 bg-background/68 p-5">
+        <p className="text-sm text-muted-foreground">Loading generated API reference.</p>
+      </div>
+    );
+  }
 
-              <div className="rounded-[16px] border border-border/80 bg-background/74 p-4">
-                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  Future Docs UX
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <CommercialMetric
-                    label="Reference shell"
-                    value="Scalar-style"
-                    detail="One clean nav, live examples, and copyable requests."
-                  />
-                  <CommercialMetric
-                    label="Code samples"
-                    value="curl + JS first"
-                    detail="Lead with the fastest paths to first value before deeper SDK work."
-                  />
-                  <CommercialMetric
-                    label="Change logs"
-                    value="Versioned"
-                    detail="Commercial APIs need predictable change notes and deprecation guidance."
-                  />
-                  <CommercialMetric
-                    label="Status links"
-                    value="Docs + status"
-                    detail="Documentation should link directly to SLA and status expectations."
-                  />
-                </div>
-              </div>
-            </section>
+  if (error) {
+    return (
+      <div className="rounded-[16px] border border-red-500/30 bg-background/68 p-5">
+        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-red-300">
+          Docs unavailable
+        </p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Could not load the embedded API reference: {error}
+        </p>
+      </div>
+    );
+  }
+
+  if (!docsUiConfig || !openApiDocument) {
+    return null;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[16px] border border-border/75 bg-background/60">
+      <div className="border-b border-border/75 bg-background/80 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Live API Reference
+            </p>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {docsUiConfig.introduction}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="muted">{docsUiConfig.version}</Badge>
+            <Badge variant="muted">OpenAPI source</Badge>
+          </div>
         </div>
-      ) : null}
+      </div>
+      <div className="panel-scrollbar h-[calc(100vh-9rem)] min-h-[820px] overflow-y-auto overscroll-contain [&_.scalar-app]:h-full [&_.scalar-app]:min-h-full [&_.scalar-app]:bg-transparent">
+        <Suspense
+          fallback={<p className="p-5 text-sm text-muted-foreground">Loading interactive reference shell.</p>}
+        >
+          <ScalarApiReference
+            configuration={{
+              _integration: "react",
+              title: docsUiConfig.title,
+              content: openApiDocument,
+              baseServerURL: docsUiConfig.baseServerUrl ?? undefined,
+              theme: "none",
+              layout: "modern",
+              withDefaultFonts: false,
+              showSidebar: true,
+              darkMode: true,
+            }}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }
@@ -529,17 +567,6 @@ function PricingRow({
         </p>
         <p className="font-mono text-sm text-foreground">{value}</p>
       </div>
-      <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{detail}</p>
-    </div>
-  );
-}
-
-function DocSection({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="rounded-[12px] border border-border/75 bg-background/68 p-3">
-      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-        {title}
-      </p>
       <p className="mt-2 text-[12px] leading-5 text-muted-foreground">{detail}</p>
     </div>
   );

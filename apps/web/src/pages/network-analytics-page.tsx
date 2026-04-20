@@ -42,6 +42,7 @@ type NetworkAnalyticsPageProps = {
   client: BtcAppClient;
   activePanel?: NetworkAnalyticsPanel;
   onPanelChange?: (panel: NetworkAnalyticsPanel) => void;
+  onOpenApiPage?: () => void;
   showPanelNav?: boolean;
 };
 
@@ -49,6 +50,7 @@ export function NetworkAnalyticsPage({
   client,
   activePanel: controlledActivePanel,
   onPanelChange,
+  onOpenApiPage,
   showPanelNav = true,
 }: NetworkAnalyticsPageProps) {
   const demoMode = isDemoModeEnabled();
@@ -330,6 +332,49 @@ export function NetworkAnalyticsPage({
                   countries={lastRunCountries}
                   runId={latestRun?.runId ?? null}
                 />
+
+                <section className="grid gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
+                  <div className="rounded-[16px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-4 shadow-[0_16px_30px_rgba(0,0,0,0.16)]">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="muted">API product</Badge>
+                      <Badge variant="muted">OpenAPI generated</Badge>
+                      <Badge variant="muted">Scalar reference</Badge>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                        Build on the snapshot
+                      </p>
+                      <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                        Turn the live crawler snapshot into a sellable integration surface with one generated OpenAPI contract,
+                        hosted reference docs, and a cleaner path from analytics preview to production API usage.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        onClick={onOpenApiPage}
+                      >
+                        Explore API docs
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[16px] border border-border/80 bg-background/72 p-4">
+                    <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                      Next step
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                      Open the API page for docs, packaging, and commercial access framing built around the same generated spec.
+                    </p>
+                    <Button
+                      type="button"
+                      className="mt-4 w-full sm:w-auto"
+                      onClick={onOpenApiPage}
+                    >
+                      Explore API
+                    </Button>
+                  </div>
+                </section>
 
               </div>
             ) : null}
