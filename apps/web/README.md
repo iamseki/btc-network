@@ -52,7 +52,7 @@ Makefile shortcuts:
 
 Optional environment:
 
-- `VITE_API_BASE_URL` — base URL for crawler analytics reads; defaults to `http://127.0.0.1:8080` in local development and `https://api.btcnetwork.info` in production
+- `VITE_API_BASE_URL` — base URL for network analytics reads; defaults to `http://127.0.0.1:8080` in local development and `https://api.btcnetwork.info` in production
 - `VITE_DEMO_MODE` — when set to `true`, `1`, `yes`, or `on`, the hosted web app serves deterministic mock data for `Crawler Runs` and `Network Analytics`
 - `VITE_SUPPORT_URL` — override the default Buy Me a Coffee link shown in the sidebar footer
 

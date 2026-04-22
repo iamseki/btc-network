@@ -11,8 +11,8 @@ pub const DOCS_CONFIG_PATH: &str = "/api/docs/config.json";
 pub const SCALAR_PATH: &str = "/docs";
 
 const DEFAULT_DOCS_TITLE: &str = "btc-network API";
-const DEFAULT_DOCS_DESCRIPTION: &str = "Read-only Bitcoin network analytics API for crawl-run snapshots, concentration analysis, protocol distributions, and verified node summaries. The OpenAPI specification is generated from the live Rust handlers so hosted Scalar docs, web-embedded API reference views, and downstream tooling stay aligned with the real contract.";
-const DEFAULT_DOCS_INTRODUCTION: &str = "Start with crawl runs to discover snapshot windows, inspect a specific run for evidence and outcomes, then drill into the latest finished-run analytics for ASN concentration, transport mix, services, user agents, countries, and verified nodes.";
+const DEFAULT_DOCS_DESCRIPTION: &str = "Read-only Bitcoin network analytics API for historical run inspection, historical ASN concentration, last-run snapshot slices, protocol distributions, and verified node summaries. The OpenAPI specification is generated from the live Rust handlers so hosted Scalar docs, web-embedded API reference views, and downstream tooling stay aligned with the real contract.";
+const DEFAULT_DOCS_INTRODUCTION: &str = "Start with historical runs to inspect previous network snapshots and outcomes, compare historical ASN concentration when needed, then drill into last-run analytics for transport mix, services, user agents, countries, and verified nodes.";
 const DOCS_TITLE_ENV: &str = "BTC_NETWORK_API_DOCS_TITLE";
 const DOCS_VERSION_ENV: &str = "BTC_NETWORK_API_DOCS_VERSION";
 const DOCS_DESCRIPTION_ENV: &str = "BTC_NETWORK_API_DOCS_DESCRIPTION";

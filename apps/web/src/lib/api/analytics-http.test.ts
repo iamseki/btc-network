@@ -43,7 +43,7 @@ describe("analytics-http", () => {
     const runs = await listCrawlRuns(5);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8080/api/v1/crawler/runs?limit=5",
+      "http://127.0.0.1:8080/api/v1/network/historical/runs?limit=5",
       expect.objectContaining({ method: "GET" }),
     );
     expect(runs[0]?.runId).toBe("crawl-1");
@@ -113,7 +113,7 @@ describe("analytics-http", () => {
     const rows = await listLastRunNetworkTypes(5);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8080/api/v1/crawler/last-run/network-types?limit=5",
+      "http://127.0.0.1:8080/api/v1/network/last-run/network-types?limit=5",
       expect.objectContaining({ method: "GET" }),
     );
     expect(rows).toEqual([{ networkType: "ipv4", nodeCount: 42 }]);
