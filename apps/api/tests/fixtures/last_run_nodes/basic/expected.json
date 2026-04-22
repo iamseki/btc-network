@@ -1,0 +1,37 @@
+{
+  "rows": [
+    {
+      "endpoint": "2.2.2.3:8333",
+      "networkType": "ipv4",
+      "protocolVersion": 70015,
+      "userAgent": "/Google:1.0.0/",
+      "services": "09",
+      "startHeight": 900100,
+      "country": "US",
+      "asn": 15169,
+      "asnOrganization": "Google LLC"
+    },
+    {
+      "endpoint": "2.2.2.2:8333",
+      "networkType": "ipv4",
+      "protocolVersion": 70016,
+      "userAgent": "/Satoshi:27.0.0/",
+      "services": "01",
+      "startHeight": 900001,
+      "country": "DE",
+      "asn": 64512,
+      "asnOrganization": "Example ASN"
+    },
+    {
+      "endpoint": "2.2.2.1:8333",
+      "networkType": "ipv4",
+      "protocolVersion": 70016,
+      "userAgent": "/Satoshi:27.0.0/",
+      "services": "01",
+      "startHeight": 900000,
+      "country": "US",
+      "asn": 64512,
+      "asnOrganization": "Example ASN"
+    }
+  ]
+}

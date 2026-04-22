@@ -85,175 +85,50 @@ struct ApiDoc;
 mod tests {
     use std::sync::Arc;
 
-    use axum::body::Body;
-    use axum::http::{HeaderValue, Request, StatusCode, header};
-    use btc_network::crawler::{
-        AsnNodeCountItem, CrawlRunDetail, CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader,
-        CrawlerRepositoryError, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
-        LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
-        LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
-        LastRunUserAgentCountItem, RepositoryFuture,
-    };
+    use axum::http::{HeaderValue, StatusCode, header};
+    use btc_network_postgres::PostgresCrawlerRepository;
+    use btc_network_testkit::{FixtureRouterApp, TestkitResult, json_body, request};
     use tower::util::ServiceExt;
 
-    use super::{DOCS_CONFIG_PATH, OPENAPI_PATH, SCALAR_PATH};
+    use super::*;
     use crate::build_router;
 
-    #[derive(Default)]
-    struct EmptyReader;
-
-    impl CrawlerAnalyticsReader for EmptyReader {
-        fn list_crawl_runs<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<CrawlRunListItem>, CrawlerRepositoryError>> {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn get_crawl_run<'a>(
-            &'a self,
-            _run_id: &'a CrawlRunId,
-            _checkpoint_limit: usize,
-        ) -> RepositoryFuture<'a, Result<Option<CrawlRunDetail>, CrawlerRepositoryError>> {
-            Box::pin(async { Ok(None) })
-        }
-
-        fn count_nodes_by_asn<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>> {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_services<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_protocol_versions<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<
-            'a,
-            Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError>,
-        > {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_user_agents<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_network_types<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_countries<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_asns<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_start_heights<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_asn_organizations<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<
-            'a,
-            Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError>,
-        > {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_nodes<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-    }
-
-    fn request(uri: &str) -> Request<Body> {
-        Request::builder().uri(uri).body(Body::empty()).unwrap()
+    fn build_api_router(database: &btc_network_testkit::ScenarioDatabase) -> TestkitResult<Router> {
+        Ok(build_router(Arc::new(PostgresCrawlerRepository::new(
+            database.config(),
+        )?)))
     }
 
     #[tokio::test]
-    async fn openapi_route_returns_generated_spec() {
-        let app = build_router(Arc::new(EmptyReader));
-
-        let response = app.oneshot(request(OPENAPI_PATH)).await.expect("response");
+    async fn openapi_route_returns_generated_spec() -> TestkitResult {
+        let app = FixtureRouterApp::empty("docs_openapi", build_api_router).await?;
+        let response = app.router.clone().oneshot(request(OPENAPI_PATH)).await?;
 
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body bytes");
-        let json: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        let json = json_body(response).await?;
         assert_eq!(json["openapi"], "3.1.0");
         assert_eq!(
             json["paths"]["/api/v1/network/historical/runs"]["get"]["tags"][0],
             "Network Analytics"
         );
         assert_eq!(json["info"]["version"], env!("CARGO_PKG_VERSION"));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn scalar_docs_route_returns_html() {
-        let app = build_router(Arc::new(EmptyReader));
-
-        let response = app.oneshot(request(SCALAR_PATH)).await.expect("response");
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.headers().get(header::CONTENT_TYPE),
-            Some(&HeaderValue::from_static("text/html; charset=utf-8"))
-        );
-    }
-
-    #[tokio::test]
-    async fn docs_config_route_returns_scalar_ui_config() {
-        let app = build_router(Arc::new(EmptyReader));
-
+    async fn docs_config_route_returns_scalar_ui_config() -> TestkitResult {
+        let app = FixtureRouterApp::empty("docs_config", build_api_router).await?;
         let response = app
+            .router
+            .clone()
             .oneshot(request(DOCS_CONFIG_PATH))
-            .await
-            .expect("response");
+            .await?;
 
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body bytes");
-        let json: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        let json = json_body(response).await?;
         assert_eq!(json["title"], "btc-network API");
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(
@@ -266,5 +141,21 @@ mod tests {
         );
         assert_eq!(json["openapiUrl"], OPENAPI_PATH);
         assert_eq!(json["scalarPath"], SCALAR_PATH);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn scalar_docs_route_returns_html() -> TestkitResult {
+        let app = FixtureRouterApp::empty("docs_scalar", build_api_router).await?;
+        let response = app.router.clone().oneshot(request(SCALAR_PATH)).await?;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE),
+            Some(&HeaderValue::from_static("text/html; charset=utf-8"))
+        );
+
+        Ok(())
     }
 }

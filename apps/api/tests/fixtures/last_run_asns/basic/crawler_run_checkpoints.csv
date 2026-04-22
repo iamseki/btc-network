@@ -1,0 +1,3 @@
+run_id,phase,checkpointed_at,checkpoint_sequence,started_at,stop_reason,failure_reason,frontier_size,in_flight_work,scheduled_tasks,successful_handshakes,failed_tasks,unique_nodes,persisted_observation_rows,writer_backlog
+00000000-0000-0000-0000-000000000301,finished,2026-04-04T08:00:00Z,1,2026-04-04T07:50:00Z,idle timeout,,0,0,4,3,1,4,4,0
+00000000-0000-0000-0000-000000000302,finished,2026-04-04T09:00:00Z,1,2026-04-04T08:45:00Z,idle timeout,,0,0,4,3,1,4,4,0

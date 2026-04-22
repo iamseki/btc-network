@@ -77,10 +77,14 @@ COMPOSE_BUILD_FLAG := $(if $(filter 1 true yes,$(BUILD)),--build,)
 # needed.
 CRAWLER_POSTGRES_LOCAL_URL := postgresql://btc_network_dev:btc_network_dev@localhost:5432/btc_network
 CRAWLER_POSTGRES_LOCAL_MAX_CONNECTIONS := 16
+TEST_POSTGRES_ADMIN_URL := postgresql://btc_network_dev:btc_network_dev@localhost:5432/postgres
 
 POSTGRES_LOCAL_ENV = \
 	BTC_NETWORK_POSTGRES_URL="$(CRAWLER_POSTGRES_LOCAL_URL)" \
 	BTC_NETWORK_POSTGRES_MAX_CONNECTIONS="$(CRAWLER_POSTGRES_LOCAL_MAX_CONNECTIONS)"
+
+API_TEST_ENV = \
+	BTC_NETWORK_TEST_POSTGRES_ADMIN_URL="$(TEST_POSTGRES_ADMIN_URL)"
 
 ##@ Runtime
 
@@ -194,8 +198,8 @@ rust-test: ## Run Rust workspace tests
 desktop-test: ## Run desktop Rust tests
 	@cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
-api-test: ## Run API tests
-	@cargo test -p btc-network-api --locked
+api-test: ## Run API tests against shared local PostgreSQL; start it first with make infra-postgres-up
+	@$(API_TEST_ENV) cargo test -p btc-network-api --locked $(ARGS)
 
 test: ## Run the repository test summary flow
 	@bash scripts/test_summary.sh

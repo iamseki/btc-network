@@ -103,8 +103,17 @@ jobs:
       - name: Build
         run: cargo build --workspace --bins --locked
 
+      - name: Start shared PostgreSQL
+        run: make infra-postgres-up
+
       - name: Test
+        env:
+          BTC_NETWORK_TEST_POSTGRES_ADMIN_URL: postgresql://btc_network_dev:btc_network_dev@localhost:5432/postgres
         run: make test
+
+      - name: Stop shared PostgreSQL
+        if: always()
+        run: make infra-postgres-down
 
   dependency-security:
     runs-on: ubuntu-latest
