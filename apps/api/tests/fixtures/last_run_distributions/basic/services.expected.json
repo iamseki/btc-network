@@ -1,0 +1,16 @@
+{
+  "rows": [
+    {
+      "services": "01",
+      "nodeCount": 2
+    },
+    {
+      "services": "09",
+      "nodeCount": 2
+    },
+    {
+      "services": "11",
+      "nodeCount": 1
+    }
+  ]
+}

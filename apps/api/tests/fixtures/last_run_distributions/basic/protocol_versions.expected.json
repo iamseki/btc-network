@@ -1,0 +1,12 @@
+{
+  "rows": [
+    {
+      "protocolVersion": 70016,
+      "nodeCount": 3
+    },
+    {
+      "protocolVersion": 70015,
+      "nodeCount": 2
+    }
+  ]
+}

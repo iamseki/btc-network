@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "startHeight": 900100,
+      "nodeCount": 2
+    },
+    {
+      "startHeight": 900000,
+      "nodeCount": 1
+    },
+    {
+      "startHeight": 900001,
+      "nodeCount": 1
+    },
+    {
+      "startHeight": 900050,
+      "nodeCount": 1
+    }
+  ]
+}

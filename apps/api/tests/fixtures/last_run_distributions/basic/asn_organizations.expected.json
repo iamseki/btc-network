@@ -1,0 +1,16 @@
+{
+  "rows": [
+    {
+      "asnOrganization": "Example ASN",
+      "nodeCount": 2
+    },
+    {
+      "asnOrganization": "Google LLC",
+      "nodeCount": 2
+    },
+    {
+      "asnOrganization": "Example Two",
+      "nodeCount": 1
+    }
+  ]
+}

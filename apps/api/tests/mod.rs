@@ -1,3 +1,4 @@
+mod docs_routes;
 mod handlers;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,10 @@ pub(crate) fn build_api_router(database: &ScenarioDatabase) -> TestResult<Router
 
 pub(crate) async fn fixture_app(scenario_name: &str) -> TestResult<FixtureRouterApp> {
     FixtureRouterApp::from_fixture_root(fixtures_root(), scenario_name, build_api_router).await
+}
+
+pub(crate) async fn empty_app(scenario_name: &str) -> TestResult<FixtureRouterApp> {
+    FixtureRouterApp::empty(scenario_name, build_api_router).await
 }
 
 fn fixtures_root() -> PathBuf {

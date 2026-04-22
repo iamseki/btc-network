@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "country": "US",
+      "nodeCount": 2
+    },
+    {
+      "country": "BR",
+      "nodeCount": 1
+    },
+    {
+      "country": "DE",
+      "nodeCount": 1
+    },
+    {
+      "country": "FR",
+      "nodeCount": 1
+    }
+  ]
+}

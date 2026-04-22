@@ -1,0 +1,16 @@
+{
+  "rows": [
+    {
+      "networkType": "ipv4",
+      "nodeCount": 3
+    },
+    {
+      "networkType": "ipv6",
+      "nodeCount": 1
+    },
+    {
+      "networkType": "tor_v3",
+      "nodeCount": 1
+    }
+  ]
+}

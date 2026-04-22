@@ -1,0 +1,16 @@
+{
+  "rows": [
+    {
+      "userAgent": "/Google:1.0.0/",
+      "nodeCount": 2
+    },
+    {
+      "userAgent": "/Satoshi:27.0.0/",
+      "nodeCount": 2
+    },
+    {
+      "userAgent": "/Knots:28.0/",
+      "nodeCount": 1
+    }
+  ]
+}
