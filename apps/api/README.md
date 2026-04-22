@@ -69,6 +69,7 @@ Default backend:
 - the `api` Compose profile now builds `apps/api/Dockerfile` into a slim runtime image instead of compiling on every container start
 - the shared local PostgreSQL container uses PostgreSQL 18 with `PGDATA=/var/lib/postgresql/18/btc-network`
 - enabling the `api` profile also runs the one-shot `postgres-migrate` service before the API process starts
+- `make api-test` assumes the shared local PostgreSQL service is already running via `make infra-postgres-up`; API test databases use separate names, are dropped by default after each test process, and can be kept for inspection with `BTC_NETWORK_TEST_KEEP_DATABASES=1`
 - the profiled API service defaults to `BTC_NETWORK_API_CPUS=2.0` and `BTC_NETWORK_API_MEM_LIMIT=2g`; override them in your shell or a repository-root `.env` file before running `docker compose`
 - API errors stay generic on the wire and keep adapter-specific detail in logs only
 - the web and desktop analytics UI should use this app through `VITE_API_BASE_URL`, not through Tauri commands or direct database access

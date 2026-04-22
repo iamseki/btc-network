@@ -112,188 +112,62 @@ pub fn build_router_with_config(
 mod tests {
     use std::sync::Arc;
 
-    use axum::body::Body;
-    use axum::http::{HeaderValue, Request, StatusCode, header};
-    use btc_network::crawler::{
-        AsnNodeCountItem, CrawlRunDetail, CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader,
-        CrawlerRepositoryError, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
-        LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
-        LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
-        LastRunUserAgentCountItem, RepositoryFuture,
-    };
+    use axum::http::{HeaderValue, StatusCode, header};
+    use btc_network_postgres::PostgresCrawlerRepository;
+    use btc_network_testkit::{FixtureRouterApp, TestkitResult};
     use tower::util::ServiceExt;
 
-    use super::build_router_with_config;
-    use crate::{ApiRuntimeConfig, DocsConfig};
+    use super::*;
 
-    #[derive(Default)]
-    struct CorsReader {
-        runs: Vec<CrawlRunListItem>,
-    }
-
-    impl CrawlerAnalyticsReader for CorsReader {
-        fn list_crawl_runs<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<CrawlRunListItem>, CrawlerRepositoryError>> {
-            let runs = self.runs.clone();
-            Box::pin(async move { Ok(runs) })
-        }
-
-        fn get_crawl_run<'a>(
-            &'a self,
-            _run_id: &'a CrawlRunId,
-            _checkpoint_limit: usize,
-        ) -> RepositoryFuture<'a, Result<Option<CrawlRunDetail>, CrawlerRepositoryError>> {
-            Box::pin(async { Ok(None) })
-        }
-
-        fn count_nodes_by_asn<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>> {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_services<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_protocol_versions<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<
-            'a,
-            Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError>,
-        > {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_user_agents<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_network_types<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_countries<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_asns<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_start_heights<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_asn_organizations<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<
-            'a,
-            Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError>,
-        > {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-
-        fn list_last_run_nodes<'a>(
-            &'a self,
-            _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-    }
-
-    fn sample_run() -> CrawlRunListItem {
-        CrawlRunListItem {
-            run_id: "00000000-0000-0000-0000-000000000001".to_string(),
-            phase: "finished".to_string(),
-            started_at: "2026-03-30T12:00:00+00:00".to_string(),
-            last_checkpointed_at: "2026-03-30T12:10:00+00:00".to_string(),
-            stop_reason: Some("idle timeout".to_string()),
-            failure_reason: None,
-            scheduled_tasks: 10,
-            successful_handshakes: 4,
-            failed_tasks: 6,
-            unique_nodes: 12,
-            persisted_observation_rows: 10,
-            success_pct: 40.0,
-            scheduled_pct: 83.33,
-            unscheduled_gap: 2,
-        }
+    fn build_configured_router(
+        database: &btc_network_testkit::ScenarioDatabase,
+    ) -> TestkitResult<Router> {
+        Ok(build_router_with_config(
+            Arc::new(PostgresCrawlerRepository::new(database.config())?),
+            ApiRuntimeConfig::default()
+                .with_allowed_origins(vec![HeaderValue::from_static("https://btcnetwork.info")]),
+            DocsConfig::default(),
+        ))
     }
 
     #[tokio::test]
-    async fn cors_allows_configured_origin_and_omits_disallowed_origin() {
-        let origin = HeaderValue::from_static("https://btcnetwork.info");
-        let app = build_router_with_config(
-            Arc::new(CorsReader {
-                runs: vec![sample_run()],
-            }),
-            ApiRuntimeConfig::default().with_allowed_origins(vec![origin.clone()]),
-            DocsConfig::default(),
-        );
+    async fn cors_allows_configured_origin_and_omits_disallowed_origin() -> TestkitResult {
+        let app = FixtureRouterApp::empty("cors", build_configured_router).await?;
 
         let allowed = app
+            .router
             .clone()
             .oneshot(
-                Request::builder()
-                    .uri("/api/v1/network/historical/runs")
+                axum::http::Request::builder()
+                    .uri(handlers::HISTORICAL_RUNS_PATH)
                     .header(header::ORIGIN, "https://btcnetwork.info")
-                    .body(Body::empty())
+                    .body(axum::body::Body::empty())
                     .unwrap(),
             )
-            .await
-            .expect("allowed response");
+            .await?;
         assert_eq!(allowed.status(), StatusCode::OK);
         assert_eq!(
             allowed.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN),
-            Some(&origin)
+            Some(&HeaderValue::from_static("https://btcnetwork.info"))
         );
 
         let disallowed = app
+            .router
             .oneshot(
-                Request::builder()
-                    .uri("/api/v1/network/historical/runs")
+                axum::http::Request::builder()
+                    .uri(handlers::HISTORICAL_RUNS_PATH)
                     .header(header::ORIGIN, "https://evil.example")
-                    .body(Body::empty())
+                    .body(axum::body::Body::empty())
                     .unwrap(),
             )
-            .await
-            .expect("disallowed response");
+            .await?;
         assert!(
             disallowed
                 .headers()
                 .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
                 .is_none()
         );
+
+        Ok(())
     }
 }

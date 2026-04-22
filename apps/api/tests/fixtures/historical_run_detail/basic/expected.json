@@ -1,0 +1,65 @@
+{
+  "run": {
+    "runId": "00000000-0000-0000-0000-000000000101",
+    "phase": "finished",
+    "startedAt": "2026-04-02T12:00:00+00:00",
+    "lastCheckpointedAt": "2026-04-02T12:05:00+00:00",
+    "stopReason": "idle timeout",
+    "failureReason": null,
+    "scheduledTasks": 10,
+    "successfulHandshakes": 4,
+    "failedTasks": 6,
+    "uniqueNodes": 12,
+    "persistedObservationRows": 2,
+    "successPct": 40.0,
+    "scheduledPct": 83.33,
+    "unscheduledGap": 2
+  },
+  "checkpoints": [
+    {
+      "phase": "finished",
+      "checkpointedAt": "2026-04-02T12:05:00+00:00",
+      "checkpointSequence": 2,
+      "stopReason": "idle timeout",
+      "failureReason": null,
+      "frontierSize": 0,
+      "inFlightWork": 0,
+      "scheduledTasks": 10,
+      "successfulHandshakes": 4,
+      "failedTasks": 6,
+      "uniqueNodes": 12,
+      "persistedObservationRows": 2,
+      "writerBacklog": 0
+    },
+    {
+      "phase": "crawling",
+      "checkpointedAt": "2026-04-02T12:03:00+00:00",
+      "checkpointSequence": 1,
+      "stopReason": null,
+      "failureReason": null,
+      "frontierSize": 4,
+      "inFlightWork": 2,
+      "scheduledTasks": 10,
+      "successfulHandshakes": 4,
+      "failedTasks": 6,
+      "uniqueNodes": 12,
+      "persistedObservationRows": 2,
+      "writerBacklog": 0
+    }
+  ],
+  "failureCounts": [
+    {
+      "classification": "handshake",
+      "observations": 1
+    }
+  ],
+  "networkOutcomes": [
+    {
+      "networkType": "ipv4",
+      "observations": 2,
+      "verifiedNodes": 1,
+      "failedNodes": 1,
+      "verifiedPct": 50.0
+    }
+  ]
+}

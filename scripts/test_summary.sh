@@ -3,6 +3,7 @@
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEST_POSTGRES_ADMIN_URL="${BTC_NETWORK_TEST_POSTGRES_ADMIN_URL:-postgresql://btc_network_dev:btc_network_dev@localhost:5432/postgres}"
 
 COMPONENT_NAMES=()
 COMPONENT_TYPES=()
@@ -86,8 +87,12 @@ run_rust_package() {
 
   log_file="$(mktemp)"
   if ! (
-    cd "$ROOT_DIR" &&
+    cd "$ROOT_DIR"
+    if [[ "$package_name" == "btc-network-api" ]]; then
+      BTC_NETWORK_TEST_POSTGRES_ADMIN_URL="$TEST_POSTGRES_ADMIN_URL" cargo test -p "$package_name" --locked
+    else
       cargo test -p "$package_name" --locked
+    fi
   ) 2>&1 | tee "$log_file"; then
     status="FAIL"
   fi

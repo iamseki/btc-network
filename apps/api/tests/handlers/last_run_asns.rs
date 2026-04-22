@@ -1,24 +1,20 @@
 use axum::http::StatusCode;
+use btc_network_testkit::{json_body, request};
 use tower::util::ServiceExt;
 
-use crate::common::{StubAnalyticsReader, app, json_body, request, sample_last_run_asn};
+use crate::{TestResult, fixture_app};
 
 #[tokio::test]
-async fn last_run_asns_returns_rows_payload() {
-    let app = app(StubAnalyticsReader {
-        last_run_asns: vec![sample_last_run_asn()],
-        ..StubAnalyticsReader::default()
-    });
-
+async fn last_run_asns_returns_fixture_payload() -> TestResult {
+    let app = fixture_app("last_run_asns/basic").await?;
     let response = app
+        .router
+        .clone()
         .oneshot(request("/api/v1/network/last-run/asns?limit=10"))
-        .await
-        .expect("response");
+        .await?;
 
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json_body(response).await?, app.expected_result()?);
 
-    let json = json_body(response).await;
-    assert_eq!(json["rows"][0]["asn"], 64512);
-    assert_eq!(json["rows"][0]["asnOrganization"], "Example ASN");
-    assert_eq!(json["rows"][0]["nodeCount"], 4);
+    Ok(())
 }

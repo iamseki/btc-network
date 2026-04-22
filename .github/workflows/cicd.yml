@@ -69,7 +69,7 @@ jobs:
             ${{ env.CARGO_HOME }}/registry
             ${{ env.CARGO_HOME }}/git
             target
-          key: ${{ runner.os }}-cargo-build-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-build-${{ env.RUST_TOOLCHAIN }}-
             ${{ runner.os }}-cargo-build-
@@ -103,8 +103,17 @@ jobs:
       - name: Build
         run: cargo build --workspace --bins --locked
 
+      - name: Start shared PostgreSQL
+        run: make infra-postgres-up
+
       - name: Test
+        env:
+          BTC_NETWORK_TEST_POSTGRES_ADMIN_URL: postgresql://btc_network_dev:btc_network_dev@localhost:5432/postgres
         run: make test
+
+      - name: Stop shared PostgreSQL
+        if: always()
+        run: make infra-postgres-down
 
   dependency-security:
     runs-on: ubuntu-latest
@@ -128,7 +137,7 @@ jobs:
             ${{ env.CARGO_HOME }}/git
             ${{ env.CARGO_HOME }}/.crates2.json
             ${{ env.CARGO_HOME }}/.crates.toml
-          key: ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ env.CARGO_AUDIT_VERSION }}-${{ env.CARGO_DENY_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ env.CARGO_AUDIT_VERSION }}-${{ env.CARGO_DENY_VERSION }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-${{ env.CARGO_AUDIT_VERSION }}-${{ env.CARGO_DENY_VERSION }}-
             ${{ runner.os }}-cargo-security-${{ env.RUST_TOOLCHAIN }}-

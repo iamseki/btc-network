@@ -1,0 +1,36 @@
+{
+  "runs": [
+    {
+      "runId": "00000000-0000-0000-0000-000000000001",
+      "phase": "finished",
+      "startedAt": "2026-04-01T12:00:00+00:00",
+      "lastCheckpointedAt": "2026-04-01T12:10:00+00:00",
+      "stopReason": "idle timeout",
+      "failureReason": null,
+      "scheduledTasks": 10,
+      "successfulHandshakes": 4,
+      "failedTasks": 6,
+      "uniqueNodes": 12,
+      "persistedObservationRows": 10,
+      "successPct": 40.0,
+      "scheduledPct": 83.33,
+      "unscheduledGap": 2
+    },
+    {
+      "runId": "00000000-0000-0000-0000-000000000002",
+      "phase": "finished",
+      "startedAt": "2026-03-31T09:00:00+00:00",
+      "lastCheckpointedAt": "2026-03-31T09:05:00+00:00",
+      "stopReason": "manual stop",
+      "failureReason": null,
+      "scheduledTasks": 8,
+      "successfulHandshakes": 2,
+      "failedTasks": 6,
+      "uniqueNodes": 10,
+      "persistedObservationRows": 8,
+      "successPct": 25.0,
+      "scheduledPct": 80.0,
+      "unscheduledGap": 2
+    }
+  ]
+}

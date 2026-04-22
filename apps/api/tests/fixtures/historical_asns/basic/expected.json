@@ -1,0 +1,14 @@
+{
+  "rows": [
+    {
+      "asn": 64512,
+      "asnOrganization": "Example ASN",
+      "verifiedNodes": 2
+    },
+    {
+      "asn": null,
+      "asnOrganization": null,
+      "verifiedNodes": 1
+    }
+  ]
+}

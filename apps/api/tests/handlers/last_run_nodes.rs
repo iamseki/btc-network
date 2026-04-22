@@ -1,36 +1,35 @@
 use axum::http::StatusCode;
+use btc_network_testkit::{json_body, request};
 use tower::util::ServiceExt;
 
-use crate::common::{StubAnalyticsReader, app, json_body, request, sample_last_run_node};
+use crate::{TestResult, fixture_app};
 
 #[tokio::test]
-async fn last_run_nodes_returns_table_rows_payload() {
-    let app = app(StubAnalyticsReader {
-        last_run_nodes: vec![sample_last_run_node()],
-        ..StubAnalyticsReader::default()
-    });
-
+async fn last_run_nodes_returns_fixture_payload() -> TestResult {
+    let app = fixture_app("last_run_nodes/basic").await?;
     let response = app
+        .router
+        .clone()
         .oneshot(request("/api/v1/network/last-run/nodes?limit=25"))
-        .await
-        .expect("response");
+        .await?;
 
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json_body(response).await?, app.expected_result()?);
 
-    let json = json_body(response).await;
-    assert_eq!(json["rows"][0]["endpoint"], "1.1.1.7:8333");
-    assert_eq!(json["rows"][0]["protocolVersion"], 70016);
-    assert_eq!(json["rows"][0]["userAgent"], "/Satoshi:27.0.0/");
+    Ok(())
 }
 
 #[tokio::test]
-async fn last_run_nodes_rejects_limit_above_node_max() {
-    let app = app(StubAnalyticsReader::default());
-
+async fn last_run_nodes_rejects_limit_above_node_max() -> TestResult {
+    let app = fixture_app("last_run_nodes/limit_too_high").await?;
     let response = app
+        .router
+        .clone()
         .oneshot(request("/api/v1/network/last-run/nodes?limit=1001"))
-        .await
-        .expect("response");
+        .await?;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(json_body(response).await?, app.expected_result()?);
+
+    Ok(())
 }

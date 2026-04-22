@@ -7,6 +7,7 @@ members = [
     "apps/desktop/src-tauri",
     "crates/btc-network",
     "crates/btc-network-postgres",
+    "crates/btc-network-testkit",
     "crates/btc-network-mmdb",
     "crates/btc-network-observability",
 ]
@@ -18,6 +19,7 @@ default-members = [
     "apps/desktop/src-tauri",
     "crates/btc-network",
     "crates/btc-network-postgres",
+    "crates/btc-network-testkit",
     "crates/btc-network-mmdb",
     "crates/btc-network-observability",
 ]
