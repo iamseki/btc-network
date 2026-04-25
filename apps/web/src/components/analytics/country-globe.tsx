@@ -26,7 +26,7 @@ const Globe = lazy(
 );
 
 const DEFAULT_GLOBE_WIDTH = 760;
-const GLOBE_HEIGHT = 390;
+const DEFAULT_GLOBE_HEIGHT = 520;
 const COUNTRY_LIMIT = 32;
 
 type GlobeCountry = {
@@ -47,6 +47,7 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   const globeRef = useRef<GlobeMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(DEFAULT_GLOBE_WIDTH);
+  const [height, setHeight] = useState(DEFAULT_GLOBE_HEIGHT);
   const [canRenderWebGl, setCanRenderWebGl] = useState(false);
   const [hoveredCountryKey, setHoveredCountryKey] = useState<string | null>(null);
   const [pinnedCountryKey, setPinnedCountryKey] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
 
     const observer = new ResizeObserver(([entry]) => {
       setWidth(Math.max(320, Math.round(entry.contentRect.width)));
+      setHeight(Math.max(420, Math.round(entry.contentRect.height)));
     });
     observer.observe(element);
 
@@ -84,6 +86,10 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   }, []);
 
   useEffect(() => {
+    configureGlobeControls();
+  }, [playback?.isLive, canRenderWebGl]);
+
+  function configureGlobeControls() {
     const controls = globeRef.current?.controls();
 
     if (!controls) {
@@ -91,12 +97,12 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
     }
 
     controls.autoRotate = true;
-    controls.autoRotateSpeed = playback?.isLive ? 0.32 : 0.18;
+    controls.autoRotateSpeed = playback?.isLive ? 0.22 : 0.14;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 170;
     controls.maxDistance = 520;
-  }, [playback?.isLive, canRenderWebGl]);
+  }
 
   function focusCountry(country: GlobeCountry) {
     setPinnedCountryKey(country.key);
@@ -104,16 +110,18 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
       {
         lat: country.lat,
         lng: country.lng,
-        altitude: 1.7,
+        altitude: 1.25,
       },
       780,
     );
+    window.setTimeout(configureGlobeControls, 820);
   }
 
   function resetView() {
     setPinnedCountryKey(null);
     setHoveredCountryKey(null);
     globeRef.current?.pointOfView({ lat: 18, lng: -28, altitude: 2.35 }, 760);
+    window.setTimeout(configureGlobeControls, 800);
   }
 
   function zoom(delta: number) {
@@ -129,12 +137,18 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
       },
       320,
     );
+    window.setTimeout(configureGlobeControls, 360);
   }
 
   return (
-    <section className="rounded-[14px] border border-primary/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.2)] sm:p-5">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex items-center gap-1.5">
+    <section className="flex h-full flex-col">
+      <div
+        ref={containerRef}
+        role="img"
+        aria-label="Interactive 3D globe of verified Bitcoin nodes aggregated by country"
+        className="relative min-h-[30rem] flex-1 overflow-hidden rounded-[12px] border border-primary/14 bg-black xl:min-h-[34rem]"
+      >
+        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-[9px] border border-border/60 bg-background/60 p-1.5 shadow-[0_12px_26px_rgba(0,0,0,0.24)] backdrop-blur">
           <GlobeControl label="Zoom out globe" onClick={() => zoom(0.22)}>
             <Minus className="h-4 w-4" />
           </GlobeControl>
@@ -145,14 +159,7 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
             <RotateCcw className="h-4 w-4" />
           </GlobeControl>
         </div>
-      </div>
 
-      <div
-        ref={containerRef}
-        role="img"
-        aria-label="Interactive 3D globe of verified Bitcoin nodes aggregated by country"
-        className="relative mt-4 min-h-[27rem] overflow-hidden rounded-[12px] border border-primary/14 bg-black"
-      >
         <div className="absolute left-3 top-3 z-10 rounded-[9px] border border-primary/20 bg-[linear-gradient(180deg,rgba(10,10,10,0.86),rgba(10,10,10,0.66))] px-3 py-2 shadow-[0_12px_26px_rgba(0,0,0,0.28)]">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
             {activeCountry?.country ?? "Crawler sweep"}
@@ -170,7 +177,7 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
             <Globe
               ref={globeRef}
               width={width}
-              height={GLOBE_HEIGHT}
+              height={height}
               backgroundColor="#000011"
               animateIn={false}
               waitForGlobeReady={false}
@@ -194,7 +201,10 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
               onLabelHover={(country) => setHoveredCountryKey(country ? (country as GlobeCountry).key : null)}
               onLabelClick={(country) => focusCountry(country as GlobeCountry)}
               showPointerCursor
-              onGlobeReady={resetView}
+              onGlobeReady={() => {
+                resetView();
+                configureGlobeControls();
+              }}
             />
           </Suspense>
         ) : (
@@ -216,7 +226,7 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
           <button
             key={`country-shortcut-${country.key}`}
             type="button"
-            className="rounded-[9px] border border-border/70 bg-background/48 px-3 py-2 text-left outline-none transition-colors hover:border-primary/35 focus-visible:ring-2 focus-visible:ring-ring"
+            className="cursor-pointer rounded-[9px] border border-border/70 bg-background/48 px-3 py-2 text-left outline-none transition-colors hover:border-primary/35 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => focusCountry(country)}
           >
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
