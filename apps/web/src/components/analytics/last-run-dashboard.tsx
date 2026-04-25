@@ -1,5 +1,5 @@
 import { CircleHelp } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -46,9 +46,10 @@ export const LastRunSidebarCharts = memo(function LastRunSidebarCharts({
   startHeights,
 }: LastRunSidebarChartsProps) {
   const consensusHeights = startHeights.slice(0, 5);
+  const compact = useCompactCharts();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <AnalyticsCard
         title="Network Type Distribution"
         subtitle="Latest finished run transport mix"
@@ -58,7 +59,7 @@ export const LastRunSidebarCharts = memo(function LastRunSidebarCharts({
         {networkTypes.length === 0 ? (
           <DashboardEmpty message="No verified network-type buckets were returned for the latest finished run." />
         ) : (
-          <NetworkTypePieChart rows={networkTypes} />
+          <NetworkTypePieChart compact={compact} rows={networkTypes} />
         )}
       </AnalyticsCard>
 
@@ -71,7 +72,7 @@ export const LastRunSidebarCharts = memo(function LastRunSidebarCharts({
         {consensusHeights.length === 0 ? (
           <DashboardEmpty message="No start-height buckets were returned for the latest finished run." />
         ) : (
-          <StartHeightRadarChart rows={consensusHeights} />
+          <StartHeightRadarChart compact={compact} rows={consensusHeights} />
         )}
       </AnalyticsCard>
     </div>
@@ -85,10 +86,11 @@ export const LastRunDashboard = memo(function LastRunDashboard({
 }: LastRunDashboardProps) {
   const topAsns = asns.slice(0, 10);
   const topCountries = countries.slice(0, 10);
+  const compact = useCompactCharts();
 
   return (
-    <section className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+    <section className="space-y-4 sm:space-y-6">
+      <div className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <AnalyticsCard
           title="Top ASN Distribution"
           subtitle="Verified nodes by network operator"
@@ -98,7 +100,7 @@ export const LastRunDashboard = memo(function LastRunDashboard({
           {topAsns.length === 0 ? (
             <DashboardEmpty message="No ASN buckets were returned for the latest finished run." />
           ) : (
-            <AsnHorizontalBarChart rows={topAsns} />
+            <AsnHorizontalBarChart compact={compact} rows={topAsns} />
           )}
         </AnalyticsCard>
 
@@ -111,7 +113,7 @@ export const LastRunDashboard = memo(function LastRunDashboard({
           {topCountries.length === 0 ? (
             <DashboardEmpty message="No country buckets were returned for the latest finished run." />
           ) : (
-            <CountryInteractiveBarChart rows={topCountries} />
+            <CountryInteractiveBarChart compact={compact} rows={topCountries} />
           )}
         </AnalyticsCard>
       </div>
@@ -119,7 +121,13 @@ export const LastRunDashboard = memo(function LastRunDashboard({
   );
 });
 
-function NetworkTypePieChart({ rows }: { rows: LastRunNetworkTypeCountItem[] }) {
+function NetworkTypePieChart({
+  compact,
+  rows,
+}: {
+  compact: boolean;
+  rows: LastRunNetworkTypeCountItem[];
+}) {
   const chartRows = rows.map((row, index) => ({
     ...row,
     fill: PIE_COLORS[index % PIE_COLORS.length],
@@ -136,7 +144,7 @@ function NetworkTypePieChart({ rows }: { rows: LastRunNetworkTypeCountItem[] }) 
           },
         ]),
       )}
-      className="h-[290px]"
+      className={compact ? "h-[230px]" : "h-[290px]"}
     >
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
@@ -154,8 +162,8 @@ function NetworkTypePieChart({ rows }: { rows: LastRunNetworkTypeCountItem[] }) 
             data={chartRows}
             dataKey="nodeCount"
             nameKey="networkType"
-            innerRadius={42}
-            outerRadius={96}
+            innerRadius={compact ? 34 : 42}
+            outerRadius={compact ? 74 : 96}
             paddingAngle={3}
             stroke="rgba(8,8,8,0.72)"
             strokeWidth={2}
@@ -164,11 +172,13 @@ function NetworkTypePieChart({ rows }: { rows: LastRunNetworkTypeCountItem[] }) 
             {chartRows.map((row) => (
               <Cell key={row.networkType} fill={row.fill} />
             ))}
-            <LabelList
-              dataKey="networkType"
-              position="outside"
-              className="font-mono text-[10px] uppercase"
-            />
+            {compact ? null : (
+              <LabelList
+                dataKey="networkType"
+                position="outside"
+                className="font-mono text-[10px] uppercase"
+              />
+            )}
           </Pie>
         </PieChart>
       </ResponsiveContainer>
@@ -176,7 +186,13 @@ function NetworkTypePieChart({ rows }: { rows: LastRunNetworkTypeCountItem[] }) 
   );
 }
 
-function AsnHorizontalBarChart({ rows }: { rows: LastRunAsnCountItem[] }) {
+function AsnHorizontalBarChart({
+  compact,
+  rows,
+}: {
+  compact: boolean;
+  rows: LastRunAsnCountItem[];
+}) {
   const chartRows = [...rows]
     .reverse()
     .map((row) => ({
@@ -192,19 +208,19 @@ function AsnHorizontalBarChart({ rows }: { rows: LastRunAsnCountItem[] }) {
           color: BAR_COLOR,
         },
       }}
-      className="h-[320px]"
+      className={compact ? "h-[280px]" : "h-[320px]"}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartRows} layout="vertical" margin={{ left: 12, right: 18 }}>
+        <BarChart data={chartRows} layout="vertical" margin={{ left: compact ? 0 : 12, right: compact ? 4 : 18 }}>
           <CartesianGrid horizontal={false} stroke="rgba(245,239,226,0.08)" />
           <XAxis type="number" hide />
           <YAxis
             type="category"
             dataKey="label"
-            width={132}
+            width={compact ? 86 : 132}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value) => truncateLabel(String(value), 20)}
+            tickFormatter={(value) => truncateLabel(String(value), compact ? 12 : 20)}
           />
           <ChartTooltip
             cursor={false}
@@ -218,13 +234,15 @@ function AsnHorizontalBarChart({ rows }: { rows: LastRunAsnCountItem[] }) {
             }
           />
           <Bar dataKey="nodeCount" radius={5} fill={BAR_COLOR} isAnimationActive={false}>
-            <LabelList
-              dataKey="nodeCount"
-              position="right"
-              offset={10}
-              className="fill-foreground font-mono text-[11px]"
-              formatter={(value: unknown) => formatCount(value)}
-            />
+            {compact ? null : (
+              <LabelList
+                dataKey="nodeCount"
+                position="right"
+                offset={10}
+                className="fill-foreground font-mono text-[11px]"
+                formatter={(value: unknown) => formatCount(value)}
+              />
+            )}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -232,7 +250,13 @@ function AsnHorizontalBarChart({ rows }: { rows: LastRunAsnCountItem[] }) {
   );
 }
 
-function CountryInteractiveBarChart({ rows }: { rows: LastRunCountryCountItem[] }) {
+function CountryInteractiveBarChart({
+  compact,
+  rows,
+}: {
+  compact: boolean;
+  rows: LastRunCountryCountItem[];
+}) {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeCountry = rows[activeIndex] ?? null;
 
@@ -244,7 +268,7 @@ function CountryInteractiveBarChart({ rows }: { rows: LastRunCountryCountItem[] 
         </p>
         <div className="mt-2 flex items-end justify-between gap-3">
           <div>
-            <p className="font-serif text-[1.8rem] text-foreground">
+            <p className="font-serif text-[1.55rem] text-foreground sm:text-[1.8rem]">
               {activeCountry?.country ?? "n/a"}
             </p>
             <p className="text-sm text-muted-foreground">
@@ -262,10 +286,10 @@ function CountryInteractiveBarChart({ rows }: { rows: LastRunCountryCountItem[] 
             color: BAR_COLOR,
           },
         }}
-        className="h-[280px]"
+        className={compact ? "h-[240px]" : "h-[280px]"}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 18, left: 12, right: 18 }} onMouseMove={(state) => {
+          <BarChart data={rows} margin={{ top: 18, left: compact ? 0 : 12, right: compact ? 0 : 18 }} onMouseMove={(state) => {
             if (typeof state?.activeTooltipIndex === "number") {
               setActiveIndex(state.activeTooltipIndex);
             }
@@ -285,12 +309,14 @@ function CountryInteractiveBarChart({ rows }: { rows: LastRunCountryCountItem[] 
               }
             />
             <Bar dataKey="nodeCount" radius={[6, 6, 0, 0]} isAnimationActive={false}>
-              <LabelList
-                dataKey="nodeCount"
-                position="top"
-                className="fill-foreground font-mono text-[11px]"
-                formatter={(value: unknown) => formatCount(value)}
-              />
+              {compact ? null : (
+                <LabelList
+                  dataKey="nodeCount"
+                  position="top"
+                  className="fill-foreground font-mono text-[11px]"
+                  formatter={(value: unknown) => formatCount(value)}
+                />
+              )}
               {rows.map((row, index) => (
                 <Cell
                   key={row.country}
@@ -305,7 +331,13 @@ function CountryInteractiveBarChart({ rows }: { rows: LastRunCountryCountItem[] 
   );
 }
 
-function StartHeightRadarChart({ rows }: { rows: LastRunStartHeightCountItem[] }) {
+function StartHeightRadarChart({
+  compact,
+  rows,
+}: {
+  compact: boolean;
+  rows: LastRunStartHeightCountItem[];
+}) {
   const chartRows = rows.map((row) => ({
     heightLabel: formatHeightLabel(row.startHeight),
     nodeCount: row.nodeCount,
@@ -319,10 +351,10 @@ function StartHeightRadarChart({ rows }: { rows: LastRunStartHeightCountItem[] }
           color: BAR_COLOR,
         },
       }}
-      className="h-[300px]"
+      className={compact ? "h-[240px]" : "h-[300px]"}
     >
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart data={chartRows} outerRadius="72%">
+        <RadarChart data={chartRows} outerRadius={compact ? "60%" : "72%"}>
           <ChartTooltip
             content={
               <ChartTooltipContent
@@ -370,8 +402,8 @@ function AnalyticsCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[14px] border border-border/80 bg-background/72 p-4 shadow-[0_16px_28px_rgba(0,0,0,0.16)]">
-      <div className="flex items-start justify-between gap-3">
+    <div className="rounded-[14px] border border-border/80 bg-background/72 p-3 shadow-[0_16px_28px_rgba(0,0,0,0.16)] sm:p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -381,7 +413,9 @@ function AnalyticsCard({
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        <Badge variant="muted">{badge}</Badge>
+        <Badge className="max-w-full truncate text-[10px] tracking-[0.14em] sm:text-[11px] sm:tracking-[0.2em]" variant="muted">
+          {badge}
+        </Badge>
       </div>
       <div className="mt-4">{children}</div>
     </div>
@@ -414,6 +448,26 @@ function DashboardEmpty({ message }: { message: string }) {
       {message}
     </div>
   );
+}
+
+function useCompactCharts() {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const query = window.matchMedia("(max-width: 640px)");
+    const sync = () => setCompact(query.matches);
+
+    sync();
+    query.addEventListener("change", sync);
+
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return compact;
 }
 
 function formatCount(value: unknown): string {

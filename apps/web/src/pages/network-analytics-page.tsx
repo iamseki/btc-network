@@ -223,8 +223,8 @@ export function NetworkAnalyticsPage({
           : "Compare observed, verified, and failed nodes by network type for the latest run.";
   return (
     <Card>
-      <CardContent className="space-y-8 p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-3 border-b border-border/80 pb-5">
+      <CardContent className="space-y-5 p-3 sm:space-y-8 sm:p-6">
+        <div className="flex items-start justify-between gap-3 border-b border-border/80 pb-4 sm:items-center sm:pb-5">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="sr-only">Network Analytics</h1>
             <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.28em] text-primary">
@@ -279,7 +279,7 @@ export function NetworkAnalyticsPage({
         ) : (
           <div className="space-y-6">
             {showPanelNav ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <PanelButton
                   label="Overview"
                   selected={activePanel === "overview"}
@@ -304,8 +304,8 @@ export function NetworkAnalyticsPage({
             ) : null}
 
             {activePanel === "overview" ? (
-              <div className="space-y-6">
-                <section className="grid gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-stretch">
+              <div className="space-y-4 sm:space-y-6">
+                <section className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-stretch">
                   <div className="order-1 h-full xl:order-1">
                     {lastRunCountries.length > 0 ? (
                       <CountryGlobe
@@ -331,8 +331,8 @@ export function NetworkAnalyticsPage({
                   runId={latestRun?.runId ?? null}
                 />
 
-                <section className="grid gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
-                  <div className="rounded-[16px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-4 shadow-[0_16px_30px_rgba(0,0,0,0.16)]">
+                <section className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
+                  <div className="rounded-[16px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-3 shadow-[0_16px_30px_rgba(0,0,0,0.16)] sm:p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="muted">API product</Badge>
                       <Badge variant="muted">OpenAPI generated</Badge>
@@ -357,7 +357,7 @@ export function NetworkAnalyticsPage({
                     </div>
                   </div>
 
-                  <div className="rounded-[16px] border border-border/80 bg-background/72 p-4">
+                  <div className="rounded-[16px] border border-border/80 bg-background/72 p-3 sm:p-4">
                     <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
                       Next step
                     </p>
@@ -378,9 +378,9 @@ export function NetworkAnalyticsPage({
             ) : null}
 
             {activePanel === "risk" ? (
-              <div className="space-y-6">
-                <section className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-                  <div className="w-full self-start rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-3 shadow-[0_14px_24px_rgba(0,0,0,0.14)]">
+              <div className="space-y-4 sm:space-y-6">
+                <section className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                  <div className="w-full self-start rounded-[14px] border border-border/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-2.5 shadow-[0_14px_24px_rgba(0,0,0,0.14)] sm:p-3">
                     <div className="flex items-center justify-between gap-3 rounded-[10px] border border-border/60 bg-background/38 px-3 py-2.5">
                       <div>
                         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -470,7 +470,7 @@ export function NetworkAnalyticsPage({
                     </div>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {latestDetail ? (
                       <RiskDriversStrip
                         runId={latestDetail.run.runId}
@@ -510,8 +510,8 @@ export function NetworkAnalyticsPage({
                       />
                     ) : null}
 
-                    <section className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                      <div className="rounded-[14px] border border-border/80 bg-background/72 p-4">
+                    <section className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                      <div className="rounded-[14px] border border-border/80 bg-background/72 p-3 sm:p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -533,7 +533,7 @@ export function NetworkAnalyticsPage({
                         </div>
                       </div>
 
-                      <div className="rounded-[14px] border border-border/80 bg-background/72 p-4">
+                      <div className="rounded-[14px] border border-border/80 bg-background/72 p-3 sm:p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
@@ -700,7 +700,13 @@ function PanelButton({
   onClick: () => void;
 }) {
   return (
-    <Button type="button" variant={selected ? "default" : "secondary"} size="sm" onClick={onClick}>
+    <Button
+      type="button"
+      variant={selected ? "default" : "secondary"}
+      size="sm"
+      className="w-full justify-center sm:w-auto"
+      onClick={onClick}
+    >
       {label}
     </Button>
   );
@@ -870,7 +876,7 @@ function RiskDriversStrip({
   items: Array<{ label: string; value: string; detail: string }>;
 }) {
   return (
-    <div className="w-full rounded-[10px] border border-border/70 bg-background/52 p-4">
+    <div className="w-full rounded-[10px] border border-border/70 bg-background/52 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -880,10 +886,10 @@ function RiskDriversStrip({
             The strongest factors shaping the current public network view.
           </p>
         </div>
-        <p className="font-mono text-xs text-foreground">{runId}</p>
+        <p className="break-all font-mono text-xs text-foreground">{runId}</p>
       </div>
 
-      <div className="mt-4 grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-3 grid w-full gap-3 sm:mt-4 md:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => (
           <div
             key={item.label}
@@ -911,7 +917,7 @@ function AsnConcentrationChart({
   const maxValue = Math.max(...rows.map((row) => row.nodeCount), 1);
 
   return (
-    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
+    <div className="rounded-[8px] border border-border/80 bg-background/80 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">{title}</p>
         <p className="font-mono text-[11px] text-muted-foreground">{rows.length} ASNs</p>
@@ -951,7 +957,7 @@ function VerificationMixChart({
   rows: CrawlRunDetail["networkOutcomes"];
 }) {
   return (
-    <div className="rounded-[8px] border border-border/80 bg-background/80 p-4">
+    <div className="rounded-[8px] border border-border/80 bg-background/80 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">{title}</p>
         <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">

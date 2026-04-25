@@ -26,7 +26,7 @@ const Globe = lazy(
 );
 
 const DEFAULT_GLOBE_WIDTH = 760;
-const DEFAULT_GLOBE_HEIGHT = 520;
+const DEFAULT_GLOBE_HEIGHT = 420;
 const COUNTRY_LIMIT = 32;
 
 type GlobeCountry = {
@@ -64,6 +64,8 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   const revealedCountries = globeCountries.slice(0, visibleLimit);
   const activeCountryKey = pinnedCountryKey ?? hoveredCountryKey;
   const activeCountry = activeCountryKey ? countryMap.get(activeCountryKey) ?? null : null;
+  const isCompactGlobe = width < 520;
+  const renderWidth = isCompactGlobe ? Math.max(width, Math.round(height * 1.12)) : width;
 
   useEffect(() => {
     setCanRenderWebGl(hasWebGlSupport());
@@ -78,7 +80,7 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
 
     const observer = new ResizeObserver(([entry]) => {
       setWidth(Math.max(320, Math.round(entry.contentRect.width)));
-      setHeight(Math.max(420, Math.round(entry.contentRect.height)));
+      setHeight(Math.max(340, Math.round(entry.contentRect.height)));
     });
     observer.observe(element);
 
@@ -88,6 +90,19 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   useEffect(() => {
     configureGlobeControls();
   }, [playback?.isLive, canRenderWebGl]);
+
+  useEffect(() => {
+    if (!canRenderWebGl || pinnedCountryKey) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setDefaultView(0);
+      configureGlobeControls();
+    }, 80);
+
+    return () => window.clearTimeout(timeout);
+  }, [canRenderWebGl, height, pinnedCountryKey, width]);
 
   function configureGlobeControls() {
     const controls = globeRef.current?.controls();
@@ -120,8 +135,19 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   function resetView() {
     setPinnedCountryKey(null);
     setHoveredCountryKey(null);
-    globeRef.current?.pointOfView({ lat: 18, lng: -28, altitude: 2.35 }, 760);
+    setDefaultView(760);
     window.setTimeout(configureGlobeControls, 800);
+  }
+
+  function setDefaultView(duration: number) {
+    globeRef.current?.pointOfView(
+      {
+        lat: isCompactGlobe ? 12 : 18,
+        lng: isCompactGlobe ? -18 : -28,
+        altitude: isCompactGlobe ? 2.7 : 2.35,
+      },
+      duration,
+    );
   }
 
   function zoom(delta: number) {
@@ -146,9 +172,9 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
         ref={containerRef}
         role="img"
         aria-label="Interactive 3D globe of verified Bitcoin nodes aggregated by country"
-        className="relative min-h-[30rem] flex-1 overflow-hidden rounded-[12px] border border-primary/14 bg-black xl:min-h-[34rem]"
+        className="relative isolate min-h-[22rem] flex-1 overflow-hidden rounded-[12px] border border-primary/14 bg-black sm:min-h-[26rem] lg:min-h-[30rem] xl:min-h-[34rem]"
       >
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-[9px] border border-border/60 bg-background/60 p-1.5 shadow-[0_12px_26px_rgba(0,0,0,0.24)] backdrop-blur">
+        <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 rounded-[9px] border border-border/60 bg-background/60 p-1 shadow-[0_12px_26px_rgba(0,0,0,0.24)] backdrop-blur sm:right-3 sm:top-3 sm:gap-1.5 sm:p-1.5">
           <GlobeControl label="Zoom out globe" onClick={() => zoom(0.22)}>
             <Minus className="h-4 w-4" />
           </GlobeControl>
@@ -160,58 +186,62 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
           </GlobeControl>
         </div>
 
-        <div className="absolute left-3 top-3 z-10 rounded-[9px] border border-primary/20 bg-[linear-gradient(180deg,rgba(10,10,10,0.86),rgba(10,10,10,0.66))] px-3 py-2 shadow-[0_12px_26px_rgba(0,0,0,0.28)]">
+        <div className="absolute left-2 top-2 z-[2] max-w-[calc(100%-7.5rem)] rounded-[9px] border border-primary/20 bg-[linear-gradient(180deg,rgba(10,10,10,0.86),rgba(10,10,10,0.66))] px-2.5 py-2 shadow-[0_12px_26px_rgba(0,0,0,0.28)] sm:left-3 sm:top-3 sm:max-w-none sm:px-3">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
             {activeCountry?.country ?? "Crawler sweep"}
           </p>
           <p className="mt-1 font-mono text-sm text-foreground">
             {activeCountry ? `${formatCount(activeCountry.nodeCount)} nodes` : `${Math.round(populationRatio * 100)}% populated`}
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 hidden text-[11px] text-muted-foreground sm:block">
             {activeCountry ? `Rank ${activeCountry.rank} of ${globeCountries.length}` : "Drag rotate · wheel zoom"}
           </p>
         </div>
 
         {canRenderWebGl ? (
           <Suspense fallback={<GlobeFallback message="Loading WebGL globe." />}>
-            <Globe
-              ref={globeRef}
-              width={width}
-              height={height}
-              backgroundColor="#000011"
-              animateIn={false}
-              waitForGlobeReady={false}
-              globeCurvatureResolution={4}
-              globeImageUrl={EARTH_IMAGE_URL}
-              labelsData={revealedCountries}
-              labelLat={(country) => (country as GlobeCountry).lat}
-              labelLng={(country) => (country as GlobeCountry).lng}
-              labelText={(country) => (country as GlobeCountry).country}
-              labelSize={(country) => 0.34 + Math.sqrt((country as GlobeCountry).nodeCount / maxNodes) * 0.82}
-              labelDotRadius={(country) => 0.28 + Math.sqrt((country as GlobeCountry).nodeCount / maxNodes) * 0.52}
-              labelColor={(country) =>
-                activeCountryKey === (country as GlobeCountry).key
-                  ? "rgba(255, 215, 128, 0.92)"
-                  : "rgba(255, 165, 0, 0.75)"
-              }
-              labelAltitude={0.01}
-              labelResolution={2}
-              labelsTransitionDuration={450}
-              labelLabel={(country) => countryLabel(country as GlobeCountry)}
-              onLabelHover={(country) => setHoveredCountryKey(country ? (country as GlobeCountry).key : null)}
-              onLabelClick={(country) => focusCountry(country as GlobeCountry)}
-              showPointerCursor
-              onGlobeReady={() => {
-                resetView();
-                configureGlobeControls();
-              }}
-            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div style={{ width: renderWidth }}>
+                <Globe
+                  ref={globeRef}
+                  width={renderWidth}
+                  height={height}
+                  backgroundColor="#000011"
+                  animateIn={false}
+                  waitForGlobeReady={false}
+                  globeCurvatureResolution={4}
+                  globeImageUrl={EARTH_IMAGE_URL}
+                  labelsData={revealedCountries}
+                  labelLat={(country) => (country as GlobeCountry).lat}
+                  labelLng={(country) => (country as GlobeCountry).lng}
+                  labelText={(country) => (country as GlobeCountry).country}
+                  labelSize={(country) => 0.34 + Math.sqrt((country as GlobeCountry).nodeCount / maxNodes) * 0.82}
+                  labelDotRadius={(country) => 0.28 + Math.sqrt((country as GlobeCountry).nodeCount / maxNodes) * 0.52}
+                  labelColor={(country) =>
+                    activeCountryKey === (country as GlobeCountry).key
+                      ? "rgba(255, 215, 128, 0.92)"
+                      : "rgba(255, 165, 0, 0.75)"
+                  }
+                  labelAltitude={0.01}
+                  labelResolution={2}
+                  labelsTransitionDuration={450}
+                  labelLabel={(country) => countryLabel(country as GlobeCountry)}
+                  onLabelHover={(country) => setHoveredCountryKey(country ? (country as GlobeCountry).key : null)}
+                  onLabelClick={(country) => focusCountry(country as GlobeCountry)}
+                  showPointerCursor
+                  onGlobeReady={() => {
+                    resetView();
+                    configureGlobeControls();
+                  }}
+                />
+              </div>
+            </div>
           </Suspense>
         ) : (
           <GlobeFallback message="WebGL unavailable. Showing country replay controls and ranked buckets." />
         )}
 
-        <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-border/60 bg-background/55 px-3 py-2 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-2 left-2 right-2 z-[2] hidden flex-wrap items-center justify-between gap-2 rounded-[9px] border border-border/60 bg-background/55 px-3 py-2 backdrop-blur sm:flex">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             react-globe.gl · country labels · aggregate nodes
           </p>
@@ -221,18 +251,18 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-2 grid grid-cols-3 gap-2 sm:mt-3">
         {globeCountries.slice(0, 3).map((country) => (
           <button
             key={`country-shortcut-${country.key}`}
             type="button"
-            className="cursor-pointer rounded-[9px] border border-border/70 bg-background/48 px-3 py-2 text-left outline-none transition-colors hover:border-primary/35 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+            className="cursor-pointer rounded-[9px] border border-border/70 bg-background/48 px-2.5 py-2 text-left outline-none transition-colors hover:border-primary/35 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
             onClick={() => focusCountry(country)}
           >
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {country.country}
+              <span className="block truncate">{country.country}</span>
             </p>
-            <p className="mt-1 font-mono text-sm text-foreground">{formatCount(country.nodeCount)}</p>
+            <p className="mt-1 truncate font-mono text-xs text-foreground sm:text-sm">{formatCount(country.nodeCount)}</p>
           </button>
         ))}
       </div>
@@ -266,7 +296,7 @@ function GlobeControl({
 
 function GlobeFallback({ message }: { message: string }) {
   return (
-    <div className="relative z-10 flex min-h-[27rem] items-center justify-center px-6 text-center">
+    <div className="relative z-[1] flex min-h-[22rem] items-center justify-center px-4 text-center sm:min-h-[26rem] sm:px-6">
       <div className="max-w-sm rounded-[12px] border border-primary/20 bg-background/72 p-4">
         <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
           Globe renderer
