@@ -8,8 +8,8 @@ import {
   LastRunDashboard,
   LastRunSidebarCharts,
 } from "@/components/analytics/last-run-dashboard";
+import { CountryGlobe } from "@/components/analytics/country-globe";
 import {
-  CrawlerLiveSignal,
   useCrawlerSignalPlayback,
 } from "@/components/crawler-live-signal";
 import {
@@ -307,15 +307,13 @@ export function NetworkAnalyticsPage({
               <div className="space-y-6">
                 <section className="grid gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-start">
                   <div className="order-1 xl:order-1">
-                    {latestDetail ? (
-                      <CrawlerLiveSignal
-                        detail={latestDetail}
+                    {lastRunCountries.length > 0 ? (
+                      <CountryGlobe
+                        countries={lastRunCountries}
                         playback={playback}
-                        variant="hero"
-                        hideHeroHeader
                       />
                     ) : (
-                      <StatusPanel message="No latest snapshot is available for replay." />
+                      <StatusPanel message="No country buckets are available for globe replay." />
                     )}
                   </div>
 

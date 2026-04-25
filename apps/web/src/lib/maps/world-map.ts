@@ -5,6 +5,17 @@ export type MapPoint = {
   y: number;
 };
 
+export type GeoPoint = {
+  lat: number;
+  lon: number;
+};
+
+export type CountryGeoLayer = {
+  id: string;
+  name: string;
+  rings: GeoPoint[][];
+};
+
 type CountryNodeInput = {
   countryCode: string;
   lat: number;
@@ -27,6 +38,52 @@ const [WORLD_MAP_MIN_X, WORLD_MAP_MIN_Y, WORLD_MAP_WIDTH, WORLD_MAP_HEIGHT] = WO
 export const WORLD_MAP_LAYER_INDEX = new Map(
   worldMap.layers.map((layer) => [layer.id.toLowerCase(), layer]),
 );
+let WORLD_LAND_GEO_LAYERS: CountryGeoLayer[] | null = null;
+const ISO_COUNTRY_GEO_ANCHORS: Record<string, GeoPoint> = {
+  ae: { lat: 23.42, lon: 53.85 },
+  ar: { lat: -38.42, lon: -63.62 },
+  at: { lat: 47.52, lon: 14.55 },
+  au: { lat: -25.27, lon: 133.78 },
+  be: { lat: 50.5, lon: 4.47 },
+  br: { lat: -14.24, lon: -51.93 },
+  ca: { lat: 56.13, lon: -106.35 },
+  ch: { lat: 46.82, lon: 8.23 },
+  cl: { lat: -35.68, lon: -71.54 },
+  co: { lat: 4.57, lon: -74.3 },
+  cz: { lat: 49.82, lon: 15.47 },
+  de: { lat: 51.16, lon: 10.45 },
+  dk: { lat: 56.26, lon: 9.5 },
+  es: { lat: 40.46, lon: -3.75 },
+  fi: { lat: 61.92, lon: 25.75 },
+  fr: { lat: 46.23, lon: 2.21 },
+  gb: { lat: 55.38, lon: -3.44 },
+  hk: { lat: 22.32, lon: 114.17 },
+  id: { lat: -0.79, lon: 113.92 },
+  ie: { lat: 53.41, lon: -8.24 },
+  in: { lat: 20.59, lon: 78.96 },
+  ir: { lat: 32.43, lon: 53.69 },
+  is: { lat: 64.96, lon: -19.02 },
+  it: { lat: 41.87, lon: 12.57 },
+  jp: { lat: 36.2, lon: 138.25 },
+  ke: { lat: -0.02, lon: 37.91 },
+  mx: { lat: 23.63, lon: -102.55 },
+  nl: { lat: 52.13, lon: 5.29 },
+  no: { lat: 60.47, lon: 8.47 },
+  nz: { lat: -40.9, lon: 174.89 },
+  pe: { lat: -9.19, lon: -75.02 },
+  ph: { lat: 12.88, lon: 121.77 },
+  pl: { lat: 51.92, lon: 19.15 },
+  pt: { lat: 39.4, lon: -8.22 },
+  ru: { lat: 61.52, lon: 105.32 },
+  se: { lat: 60.13, lon: 18.64 },
+  sg: { lat: 1.35, lon: 103.82 },
+  th: { lat: 15.87, lon: 100.99 },
+  tn: { lat: 33.89, lon: 9.54 },
+  ug: { lat: 1.37, lon: 32.29 },
+  us: { lat: 39.5, lon: -98.35 },
+  za: { lat: -30.56, lon: 22.94 },
+  zm: { lat: -13.13, lon: 27.85 },
+};
 const FALLBACK_WORLD_COUNTRY_VISUAL_ANCHORS: Record<string, MapPoint> = {
   ae: { x: 252, y: 116 },
   ar: { x: 119, y: 185 },
@@ -76,6 +133,39 @@ export function getCountryVisualAnchor(countryCode: string): MapPoint | null {
   COMPUTED_WORLD_COUNTRY_ANCHORS.set(normalizedCountryCode, anchor);
 
   return anchor;
+}
+
+export function getCountryGeoAnchor(countryCode: string): GeoPoint | null {
+  const normalizedCountryCode = countryCode.toLowerCase();
+  const isoAnchor = ISO_COUNTRY_GEO_ANCHORS[normalizedCountryCode];
+
+  if (isoAnchor) {
+    return isoAnchor;
+  }
+
+  const anchor = getCountryVisualAnchor(countryCode);
+
+  if (!anchor) {
+    return null;
+  }
+
+  return mapPointToGeoPoint(anchor);
+}
+
+export function getWorldLandGeoLayers(): CountryGeoLayer[] {
+  if (WORLD_LAND_GEO_LAYERS) {
+    return WORLD_LAND_GEO_LAYERS;
+  }
+
+  WORLD_LAND_GEO_LAYERS = worldMap.layers
+    .map((layer) => ({
+      id: layer.id.toLowerCase(),
+      name: layer.name,
+      rings: parseWorldPathRings(layer.d),
+    }))
+    .filter((layer) => layer.rings.length > 0);
+
+  return WORLD_LAND_GEO_LAYERS;
 }
 
 export function projectCountryNode(seed: CountryNodeInput): MapPoint {
@@ -254,6 +344,132 @@ function isPointInsidePath(path: SVGPathElement, x: number, y: number) {
 
 function interpolate(start: number, end: number, ratio: number) {
   return start + (end - start) * ratio;
+}
+
+function parseWorldPathRings(pathData: string): GeoPoint[][] {
+  const tokens = pathData.match(/[A-Za-z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
+  const rings: GeoPoint[][] = [];
+  let command = "";
+  let tokenIndex = 0;
+  let x = 0;
+  let y = 0;
+  let currentRing: GeoPoint[] = [];
+
+  function closeCurrentRing() {
+    if (currentRing.length >= 3) {
+      rings.push(currentRing);
+    }
+
+    currentRing = [];
+  }
+
+  while (tokenIndex < tokens.length) {
+    const token = tokens[tokenIndex];
+
+    if (isPathCommand(token)) {
+      command = token;
+      tokenIndex += 1;
+
+      if (command === "z" || command === "Z") {
+        closeCurrentRing();
+        continue;
+      }
+    }
+
+    if (command === "m" || command === "M") {
+      let firstPair = true;
+
+      while (hasNumberPair(tokens, tokenIndex)) {
+        const nextX = Number(tokens[tokenIndex]);
+        const nextY = Number(tokens[tokenIndex + 1]);
+        tokenIndex += 2;
+
+        if (command === "m") {
+          x += nextX;
+          y += nextY;
+        } else {
+          x = nextX;
+          y = nextY;
+        }
+
+        if (firstPair) {
+          closeCurrentRing();
+          firstPair = false;
+        }
+
+        currentRing.push(rawWorldPointToGeoPoint({ x, y }));
+      }
+
+      command = command === "m" ? "l" : "L";
+      continue;
+    }
+
+    if (command === "l" || command === "L") {
+      while (hasNumberPair(tokens, tokenIndex)) {
+        const nextX = Number(tokens[tokenIndex]);
+        const nextY = Number(tokens[tokenIndex + 1]);
+        tokenIndex += 2;
+
+        if (command === "l") {
+          x += nextX;
+          y += nextY;
+        } else {
+          x = nextX;
+          y = nextY;
+        }
+
+        currentRing.push(rawWorldPointToGeoPoint({ x, y }));
+      }
+
+      continue;
+    }
+
+    tokenIndex += 1;
+  }
+
+  closeCurrentRing();
+
+  return rings;
+}
+
+function rawWorldPointToGeoPoint(point: MapPoint): GeoPoint {
+  const xRatio = clampRatio((point.x - WORLD_MAP_MIN_X) / WORLD_MAP_WIDTH);
+  const yRatio = clampRatio((point.y - WORLD_MAP_MIN_Y) / WORLD_MAP_HEIGHT);
+
+  return {
+    lat: 90 - yRatio * 180,
+    lon: xRatio * 360 - 180,
+  };
+}
+
+function mapPointToGeoPoint(point: MapPoint): GeoPoint {
+  const xRatio = clampRatio((point.x - WORLD_MAP_FRAME.x) / WORLD_MAP_FRAME.width);
+  const yRatio = clampRatio((point.y - WORLD_MAP_FRAME.y) / WORLD_MAP_FRAME.height);
+
+  return {
+    lat: 90 - yRatio * 180,
+    lon: xRatio * 360 - 180,
+  };
+}
+
+function hasNumberPair(tokens: string[], tokenIndex: number) {
+  return tokenIndex + 1 < tokens.length && !isPathCommand(tokens[tokenIndex]) && !isPathCommand(tokens[tokenIndex + 1]);
+}
+
+function isPathCommand(token: string) {
+  return /^[A-Za-z]$/.test(token);
+}
+
+function clampRatio(value: number) {
+  if (value < 0) {
+    return 0;
+  }
+
+  if (value > 1) {
+    return 1;
+  }
+
+  return value;
 }
 
 function hashString(value: string) {

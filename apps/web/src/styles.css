@@ -181,6 +181,11 @@
     transform-origin: center;
     transform-box: fill-box;
   }
+
+  .fx-globe-sweep {
+    stroke-dasharray: 9 12;
+    animation: fx-globe-sweep 3.2s linear infinite;
+  }
 }
 
 @keyframes fx-ambient-pan {
@@ -253,9 +258,19 @@
   }
 }
 
+@keyframes fx-globe-sweep {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -42;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fx-ambient-panel,
   .fx-arc-flow,
+  .fx-globe-sweep,
   .fx-node-pulse,
   .fx-signal-track::after,
   .fx-fade-up,

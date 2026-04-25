@@ -173,6 +173,9 @@ describe("NetworkAnalyticsPage", () => {
     expect(screen.queryByText("Checkpoint Rail")).toBeNull();
     expect(screen.getByRole("button", { name: "Network Analytics overview" })).toBeTruthy();
     expect(screen.queryByText("Block Height")).toBeNull();
+    expect(screen.getByRole("img", { name: /Interactive 3D globe/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Zoom in globe" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reset globe view" })).toBeTruthy();
     expect(screen.getByText("Network Type Distribution")).toBeTruthy();
     expect(screen.getByText("Height Consensus")).toBeTruthy();
     expect(screen.getByText("Top ASN Distribution")).toBeTruthy();
