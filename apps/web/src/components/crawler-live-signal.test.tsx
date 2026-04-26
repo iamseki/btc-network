@@ -277,13 +277,14 @@ describe("useCrawlerSignalPlayback", () => {
     expect(screen.getByRole("img", { name: "Crawler execution playback across a world route map" })).toBeTruthy();
   });
 
-  it("renders a compact map preview in the default variant", () => {
+  it("renders a compact country-globe preview in the default variant", () => {
     render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} />);
 
     expect(screen.getByText("Crawler Snapshot")).toBeTruthy();
-    expect(screen.getByText("Global Sweep")).toBeTruthy();
-    expect(screen.getByRole("img", { name: "Crawler execution playback across a world route map" })).toBeTruthy();
-    expect(screen.getByText("1k")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Interactive 3D globe of verified Bitcoin nodes aggregated by country" })).toBeTruthy();
+    expect(screen.getByText(/crawled ·/i)).toBeTruthy();
+    expect(screen.queryByText("Tracked")).toBeNull();
+    expect(screen.queryByText("Yield")).toBeNull();
     expect(screen.queryByText("Map Focus")).toBeNull();
     expect(screen.queryByText("Top Locations")).toBeNull();
     expect(screen.queryByText("Top ASNs")).toBeNull();

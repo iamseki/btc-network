@@ -13,7 +13,6 @@ import {
 import type { GlobeMethods, GlobeProps } from "react-globe.gl";
 
 import { Button } from "@/components/ui/button";
-import type { CrawlerSignalPlayback } from "@/components/crawler-live-signal";
 import type { LastRunCountryCountItem } from "@/lib/api/types";
 import { getCountryGeoAnchor } from "@/lib/maps/world-map";
 
@@ -40,10 +39,29 @@ type GlobeCountry = {
 
 type CountryGlobeProps = {
   countries: LastRunCountryCountItem[];
-  playback: CrawlerSignalPlayback | null;
+  playback: CountryGlobePlayback | null;
+  variant?: "analytics" | "preview";
+  interactive?: boolean;
+  summaryNodeCount?: number;
 };
 
-export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
+type CountryGlobePlayback = {
+  isLive: boolean;
+  playbackSnapshot: {
+    successfulHandshakes: number;
+  };
+  finalSnapshot: {
+    successfulHandshakes: number;
+  };
+};
+
+export function CountryGlobe({
+  countries,
+  playback,
+  variant = "analytics",
+  interactive = true,
+  summaryNodeCount,
+}: CountryGlobeProps) {
   const globeRef = useRef<GlobeMethods | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(DEFAULT_GLOBE_WIDTH);
@@ -66,6 +84,10 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   const activeCountry = activeCountryKey ? countryMap.get(activeCountryKey) ?? null : null;
   const isCompactGlobe = width < 520;
   const renderWidth = isCompactGlobe ? Math.max(width, Math.round(height * 1.12)) : width;
+  const isPreview = variant === "preview";
+  const frameClass = isPreview
+    ? "relative isolate min-h-[18rem] flex-1 overflow-hidden rounded-[12px] border border-primary/14 bg-black sm:min-h-[31rem]"
+    : "relative isolate min-h-[22rem] flex-1 overflow-hidden rounded-[12px] border border-primary/14 bg-black sm:min-h-[26rem] lg:min-h-[30rem] xl:min-h-[34rem]";
 
   useEffect(() => {
     setCanRenderWebGl(hasWebGlSupport());
@@ -120,6 +142,10 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
   }
 
   function focusCountry(country: GlobeCountry) {
+    if (!interactive) {
+      return;
+    }
+
     setPinnedCountryKey(country.key);
     globeRef.current?.pointOfView(
       {
@@ -172,26 +198,32 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
         ref={containerRef}
         role="img"
         aria-label="Interactive 3D globe of verified Bitcoin nodes aggregated by country"
-        className="relative isolate min-h-[22rem] flex-1 overflow-hidden rounded-[12px] border border-primary/14 bg-black sm:min-h-[26rem] lg:min-h-[30rem] xl:min-h-[34rem]"
+        className={frameClass}
       >
-        <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 rounded-[9px] border border-border/60 bg-background/60 p-1 shadow-[0_12px_26px_rgba(0,0,0,0.24)] backdrop-blur sm:right-3 sm:top-3 sm:gap-1.5 sm:p-1.5">
-          <GlobeControl label="Zoom out globe" onClick={() => zoom(0.22)}>
-            <Minus className="h-4 w-4" />
-          </GlobeControl>
-          <GlobeControl label="Zoom in globe" onClick={() => zoom(-0.22)}>
-            <Plus className="h-4 w-4" />
-          </GlobeControl>
-          <GlobeControl label="Reset globe view" onClick={resetView}>
-            <RotateCcw className="h-4 w-4" />
-          </GlobeControl>
-        </div>
+        {interactive ? (
+          <div className="absolute right-2 top-2 z-[2] flex items-center gap-1 rounded-[9px] border border-border/60 bg-background/60 p-1 shadow-[0_12px_26px_rgba(0,0,0,0.24)] backdrop-blur sm:right-3 sm:top-3 sm:gap-1.5 sm:p-1.5">
+            <GlobeControl label="Zoom out globe" onClick={() => zoom(0.22)}>
+              <Minus className="h-4 w-4" />
+            </GlobeControl>
+            <GlobeControl label="Zoom in globe" onClick={() => zoom(-0.22)}>
+              <Plus className="h-4 w-4" />
+            </GlobeControl>
+            <GlobeControl label="Reset globe view" onClick={resetView}>
+              <RotateCcw className="h-4 w-4" />
+            </GlobeControl>
+          </div>
+        ) : null}
 
         <div className="absolute left-2 top-2 z-[2] max-w-[calc(100%-7.5rem)] rounded-[9px] border border-primary/20 bg-[linear-gradient(180deg,rgba(10,10,10,0.86),rgba(10,10,10,0.66))] px-2.5 py-2 shadow-[0_12px_26px_rgba(0,0,0,0.28)] sm:left-3 sm:top-3 sm:max-w-none sm:px-3">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
             {activeCountry?.country ?? "Crawler sweep"}
           </p>
           <p className="mt-1 font-mono text-sm text-foreground">
-            {activeCountry ? `${formatCount(activeCountry.nodeCount)} nodes` : `${Math.round(populationRatio * 100)}% populated`}
+            {activeCountry
+              ? `${formatCount(activeCountry.nodeCount)} nodes`
+              : summaryNodeCount
+                ? `${formatCount(summaryNodeCount)} crawled`
+                : `${Math.round(populationRatio * 100)}% populated`}
           </p>
           <p className="mt-1 hidden text-[11px] text-muted-foreground sm:block">
             {activeCountry ? `Rank ${activeCountry.rank} of ${globeCountries.length}` : "Drag rotate · wheel zoom"}
@@ -226,9 +258,9 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
                   labelResolution={2}
                   labelsTransitionDuration={450}
                   labelLabel={(country) => countryLabel(country as GlobeCountry)}
-                  onLabelHover={(country) => setHoveredCountryKey(country ? (country as GlobeCountry).key : null)}
-                  onLabelClick={(country) => focusCountry(country as GlobeCountry)}
-                  showPointerCursor
+                  onLabelHover={interactive ? (country) => setHoveredCountryKey(country ? (country as GlobeCountry).key : null) : undefined}
+                  onLabelClick={interactive ? (country) => focusCountry(country as GlobeCountry) : undefined}
+                  showPointerCursor={interactive}
                   onGlobeReady={() => {
                     resetView();
                     configureGlobeControls();
@@ -253,20 +285,52 @@ export function CountryGlobe({ countries, playback }: CountryGlobeProps) {
 
       <div className="mt-2 grid grid-cols-3 gap-2 sm:mt-3">
         {globeCountries.slice(0, 3).map((country) => (
-          <button
+          <CountryShortcut
             key={`country-shortcut-${country.key}`}
-            type="button"
-            className="cursor-pointer rounded-[9px] border border-border/70 bg-background/48 px-2.5 py-2 text-left outline-none transition-colors hover:border-primary/35 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
+            country={country}
+            interactive={interactive}
             onClick={() => focusCountry(country)}
-          >
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              <span className="block truncate">{country.country}</span>
-            </p>
-            <p className="mt-1 truncate font-mono text-xs text-foreground sm:text-sm">{formatCount(country.nodeCount)}</p>
-          </button>
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+function CountryShortcut({
+  country,
+  interactive,
+  onClick,
+}: {
+  country: GlobeCountry;
+  interactive: boolean;
+  onClick: () => void;
+}) {
+  const content = (
+    <>
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="block truncate">{country.country}</span>
+      </p>
+      <p className="mt-1 truncate font-mono text-xs text-foreground sm:text-sm">{formatCount(country.nodeCount)}</p>
+    </>
+  );
+
+  if (!interactive) {
+    return (
+      <div className="rounded-[9px] border border-border/70 bg-background/48 px-2.5 py-2 text-left sm:px-3">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="cursor-pointer rounded-[9px] border border-border/70 bg-background/48 px-2.5 py-2 text-left outline-none transition-colors hover:border-primary/35 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring sm:px-3"
+      onClick={onClick}
+    >
+      {content}
+    </button>
   );
 }
 

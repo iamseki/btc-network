@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Activity, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { CountryGlobe } from "@/components/analytics/country-globe";
 import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
 import {
   getCountryVisualAnchor,
@@ -164,8 +165,8 @@ export function CrawlerPulseButton({
       type="button"
       className={
         disabled
-          ? "inline-flex min-w-[13rem] items-center gap-3 rounded-[10px] border border-border/70 bg-background/45 px-3 py-2.5 text-left text-muted-foreground"
-          : "inline-flex min-w-[13rem] cursor-pointer items-center gap-3 rounded-[10px] border border-border/80 bg-background/72 px-3 py-2.5 text-left transition-colors outline-none hover:border-primary/35 hover:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring"
+          ? "inline-flex h-11 w-11 shrink-0 items-center justify-center gap-3 rounded-[10px] border border-border/70 bg-background/45 px-0 text-left text-muted-foreground sm:h-auto sm:w-auto sm:min-w-[13rem] sm:justify-start sm:px-3 sm:py-2.5"
+          : "inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center gap-3 rounded-[10px] border border-border/80 bg-background/72 px-0 text-left transition-colors outline-none hover:border-primary/35 hover:bg-primary/8 focus-visible:ring-2 focus-visible:ring-ring sm:h-auto sm:w-auto sm:min-w-[13rem] sm:justify-start sm:px-3 sm:py-2.5"
       }
       aria-expanded={disabled ? false : expanded}
       aria-label={ariaLabel}
@@ -184,7 +185,7 @@ export function CrawlerPulseButton({
         ) : null}
         <Activity className="relative h-4 w-4" />
       </span>
-      <span className="min-w-0">
+      <span className="hidden min-w-0 sm:block">
         <span className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           <span>Latest Snapshot</span>
           <span className={live ? "text-primary" : "text-muted-foreground/80"}>
@@ -475,6 +476,11 @@ export function CrawlerLiveSignal({
   const markers = signalPlayback.markers;
 
   if (isCompactPreview) {
+    const previewCountries = mapLocations.map((location) => ({
+      country: location.countryCode,
+      nodeCount: Math.max(location.verifiedCount, location.count),
+    }));
+
     return (
       <section className={shellClass}>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -499,166 +505,19 @@ export function CrawlerLiveSignal({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <SignalMetric
-            label="Tracked"
-            value={playbackSnapshot.uniqueNodes.toLocaleString()}
-            detail="Endpoints in the latest snapshot window"
-          />
-          <SignalMetric
-            label="Verified"
-            value={playbackSnapshot.successfulHandshakes.toLocaleString()}
-            detail="Successful handshakes in the latest sweep"
-          />
-          <SignalMetric
-            label="Yield"
-            value={`${formatPercent(progressRatio(playbackSnapshot.successfulHandshakes, playbackSnapshot.scheduledTasks))}%`}
-            detail={`${playbackSnapshot.scheduledTasks.toLocaleString()} total attempts`}
+        <div className="mt-4">
+          <CountryGlobe
+            countries={previewCountries}
+            playback={signalPlayback}
+            variant="preview"
+            interactive={false}
+            summaryNodeCount={playbackSnapshot.uniqueNodes}
           />
         </div>
 
-        <div className="mt-4 rounded-[10px] border border-border/70 bg-background/62 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Global Sweep
-            </p>
-            <p className="text-[11px] text-muted-foreground">Static preview</p>
-          </div>
-          <div className="mt-3 relative mx-auto aspect-[420/260] w-full max-w-[420px]">
-            <svg
-              viewBox="0 0 420 260"
-              role="img"
-              aria-label="Crawler execution playback across a world route map"
-              className="absolute inset-0 h-full w-full cursor-default"
-            >
-              <defs>
-                <linearGradient id="map-scan-compact" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="rgba(245,179,1,0)" />
-                  <stop offset="45%" stopColor="rgba(245,179,1,0.02)" />
-                  <stop offset="50%" stopColor="rgba(245,179,1,0.12)" />
-                  <stop offset="55%" stopColor="rgba(245,179,1,0.02)" />
-                  <stop offset="100%" stopColor="rgba(245,179,1,0)" />
-                </linearGradient>
-              </defs>
-
-              <rect x="0" y="0" width="420" height="260" rx="18" fill="rgba(0,0,0,0.16)" />
-
-              <g transform="translate(18 16)">
-                <rect
-                  x="0"
-                  y="0"
-                  width="384"
-                  height="228"
-                  rx="16"
-                  fill="rgba(8,8,8,0.34)"
-                  stroke="rgba(245,239,226,0.1)"
-                />
-
-                <svg
-                  x={WORLD_MAP_FRAME.x}
-                  y={WORLD_MAP_FRAME.y}
-                  width={WORLD_MAP_FRAME.width}
-                  height={WORLD_MAP_FRAME.height}
-                  viewBox={WORLD_MAP_VIEWBOX}
-                  preserveAspectRatio="xMidYMid meet"
-                  aria-hidden="true"
-                >
-                  {worldMap.layers.map((layer) => (
-                    <path
-                      key={`compact-landmass-${layer.id}`}
-                      d={layer.d}
-                      fill="rgba(245,239,226,0.05)"
-                      stroke="rgba(245,239,226,0.075)"
-                      strokeWidth="0.7"
-                      strokeLinejoin="round"
-                    />
-                  ))}
-                  {mapLocations.map((location) => {
-                    const layer = WORLD_MAP_LAYER_INDEX.get(location.countryCode);
-
-                    if (!layer) {
-                      return null;
-                    }
-
-                    return (
-                      <path
-                        key={`compact-tracked-${location.key}`}
-                        d={layer.d}
-                        fill="rgba(245,179,1,0.055)"
-                        stroke="rgba(245,179,1,0.14)"
-                        strokeWidth="0.9"
-                        strokeLinejoin="round"
-                      />
-                    );
-                  })}
-                </svg>
-
-                <rect x={scanX} y="18" width="22" height="192" fill="url(#map-scan-compact)" opacity="0.9" />
-
-                <CrawlerSourceBeacon cx={18} cy={114} pulseOpacity={0.12} />
-
-                {activeFlowNodes.map((node, index) => (
-                  <g key={`compact-flow-${node.key}`}>
-                    <path
-                      d={buildFlowArcPath(18, 114, node.x, node.y)}
-                      fill="none"
-                      stroke={node.isVerified ? "rgba(245,179,1,0.58)" : "rgba(245,239,226,0.22)"}
-                      strokeWidth={node.isVerified ? 1.4 : 1}
-                      strokeLinecap="round"
-                      className="fx-arc-flow"
-                    />
-                    {(() => {
-                      const traveler = projectArcTraveler(18, 114, node.x, node.y, wrapLoopRatio(visualLoopRatio + index * 0.16));
-
-                      return (
-                        <circle
-                          cx={traveler.x}
-                          cy={traveler.y}
-                          r={node.isVerified ? 2.2 : 1.8}
-                          fill={node.isVerified ? "rgba(245,179,1,0.92)" : "rgba(245,239,226,0.82)"}
-                          opacity={0.9}
-                        />
-                      );
-                    })()}
-                  </g>
-                ))}
-
-                {visibleNodes.map((node) => (
-                  <g key={`compact-node-${node.key}`}>
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={node.isRecent ? 3.4 : 2.4}
-                      fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.68)"}
-                      stroke={node.isVerified ? "rgba(255,240,197,0.5)" : "rgba(245,239,226,0.18)"}
-                      strokeWidth="1"
-                    />
-                  </g>
-                ))}
-
-                {mapLocations.map((location) => (
-                  <g key={`compact-location-${location.key}`} transform={`translate(${location.x}, ${location.y})`} aria-hidden="true">
-                    <circle
-                      r={8 + Math.min(4, location.count)}
-                      fill="rgba(245,179,1,0.12)"
-                      stroke="rgba(245,179,1,0.34)"
-                      strokeWidth="1"
-                    />
-                    <text
-                      x="0"
-                      y="3.5"
-                      textAnchor="middle"
-                      className="fill-[rgba(245,239,226,0.82)]"
-                      style={{ fontSize: "9px", fontFamily: "monospace", fontWeight: 700 }}
-                    >
-                      {formatMapBubbleCount(location.count)}
-                    </text>
-                  </g>
-                ))}
-              </g>
-            </svg>
-          </div>
-        </div>
+        <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          {playbackSnapshot.uniqueNodes.toLocaleString()} crawled · {previewCountries.length} country buckets
+        </p>
 
       </section>
     );

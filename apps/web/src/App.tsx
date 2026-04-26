@@ -399,7 +399,7 @@ export function App() {
     <div className="min-h-screen bg-background text-foreground">
       <div className={`relative min-h-screen md:grid md:w-full ${desktopShellClass}`}>
         {isCrawlerPreviewRendered && latestCrawlerPreview ? (
-          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 md:p-6">
+          <div className="fixed inset-0 z-30 flex items-end justify-center p-2 sm:p-4 md:items-center md:p-6">
             <button
               type="button"
               aria-label="Close latest snapshot preview"
@@ -409,12 +409,25 @@ export function App() {
               onClick={() => setIsCrawlerPreviewOpen(false)}
             />
             <div
-              className={`relative z-10 w-full max-w-5xl rounded-[12px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] transform-gpu transition-[opacity,transform,filter] duration-300 ease-out ${
+              className={`relative z-10 max-h-[calc(100svh-4.5rem)] w-full max-w-5xl overflow-y-auto rounded-t-[16px] border border-border/80 bg-card/96 p-2 shadow-[0_30px_80px_rgba(0,0,0,0.45)] transform-gpu transition-[opacity,transform,filter] duration-300 ease-out md:max-h-[calc(100vh-3rem)] md:rounded-[12px] ${
                 isCrawlerPreviewVisible
                   ? "translate-y-0 scale-100 opacity-100 blur-0"
                   : "translate-y-6 scale-[0.96] opacity-0 blur-[6px]"
               }`}
             >
+              <div className="flex items-center justify-between gap-3 px-2 py-2 md:hidden">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Latest Snapshot Preview
+                </p>
+                <button
+                  type="button"
+                  aria-label="Back to current page"
+                  className="inline-flex h-8 items-center rounded-md border border-border/70 bg-background/60 px-3 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground"
+                  onClick={() => setIsCrawlerPreviewOpen(false)}
+                >
+                  Back
+                </button>
+              </div>
               <CrawlerLiveSignal detail={latestCrawlerPreview} playback={crawlerPreviewPlayback} />
               <div className="flex justify-end px-2 pb-2">
                 <button
