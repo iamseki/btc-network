@@ -4,6 +4,7 @@ use crate::wire::message::AddrV2Addr;
 #[cfg(test)]
 use crate::wire::message::VersionMessage;
 use sha3::{Digest, Sha3_256};
+use std::fmt::Display;
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
@@ -65,29 +66,35 @@ pub(crate) async fn process_node(
     let mut session = AsyncSession::new(stream, config.io_timeout);
 
     let handshake_started = Instant::now();
-    let version = session.handshake().await.map_err(|message| {
-        Box::new(NodeVisitFailure {
-            node: endpoint.clone(),
-            latency: total_started.elapsed(),
-            classification: FailureClassification::Handshake,
-            message: message.to_string(),
-            connect_error_kind: None,
-        })
-    })?;
-    let handshake_elapsed = handshake_started.elapsed();
-
-    let get_addr_started = Instant::now();
-    let discovered = request_peer_addresses(&mut session)
+    let version = with_stage_deadline(config.io_timeout, "handshake", session.handshake())
         .await
         .map_err(|message| {
             Box::new(NodeVisitFailure {
                 node: endpoint.clone(),
                 latency: total_started.elapsed(),
-                classification: FailureClassification::PeerDiscovery,
+                classification: FailureClassification::Handshake,
                 message,
                 connect_error_kind: None,
             })
         })?;
+    let handshake_elapsed = handshake_started.elapsed();
+
+    let get_addr_started = Instant::now();
+    let discovered = with_stage_deadline(
+        config.io_timeout,
+        "peer discovery",
+        request_peer_addresses(&mut session),
+    )
+    .await
+    .map_err(|message| {
+        Box::new(NodeVisitFailure {
+            node: endpoint.clone(),
+            latency: total_started.elapsed(),
+            classification: FailureClassification::PeerDiscovery,
+            message,
+            connect_error_kind: None,
+        })
+    })?;
     let get_addr_elapsed = get_addr_started.elapsed();
 
     let visit = NodeVisit {
@@ -117,6 +124,21 @@ pub(crate) async fn process_node(
     }
 
     Ok(visit)
+}
+
+async fn with_stage_deadline<T, E, F>(
+    stage_timeout: Duration,
+    stage_name: &str,
+    future: F,
+) -> Result<T, String>
+where
+    E: Display,
+    F: Future<Output = Result<T, E>>,
+{
+    tokio::time::timeout(stage_timeout, future)
+        .await
+        .map_err(|_| format!("{stage_name} timed out after {stage_timeout:?}"))?
+        .map_err(|err| err.to_string())
 }
 
 async fn connect_once(

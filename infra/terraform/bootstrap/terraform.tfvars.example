@@ -1,0 +1,11 @@
+aws_region              = "us-east-1"
+state_bucket_name       = "btc-network-tf-state-example"
+noncurrent_days         = 7
+newer_noncurrent_versions = 2
+
+tags = {
+  Project     = "btc-network"
+  Environment = "bootstrap"
+  ManagedBy   = "terraform"
+}
+

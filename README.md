@@ -19,6 +19,7 @@ btc-network is a Rust-based Bitcoin P2P research and observability project focus
 - `apps/postgres-migrate` — PostgreSQL migration runner for local and container flows
 - `apps/web` — web-first React frontend
 - `apps/desktop` — Tauri desktop shell reusing the web UI
+- `infra/` — Terraform and portable Linux host scaffolding for hosted deployment
 
 ## Current Capabilities
 
@@ -127,6 +128,8 @@ make web-dev-demo
 Phase 1 production deploys use the repository `CI/CD` GitHub Actions workflow plus `Cloudflare Pages`.
 
 See [docs/deployment.md](docs/deployment.md) for the current production setup, required GitHub and Cloudflare configuration, and the manual Hostinger DNS steps.
+
+Hosted backend scaffolding for BNDD-0011 lives under [infra/](infra/README.md).
 
 ## Notes
 

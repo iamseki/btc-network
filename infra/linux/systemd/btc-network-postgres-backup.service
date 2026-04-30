@@ -1,0 +1,14 @@
+[Unit]
+Description=btc-network PostgreSQL backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+EnvironmentFile=-/etc/btc-network/postgres-backup.env
+ExecStart=/opt/btc-network/bin/backup-postgres.sh
+
+[Install]
+WantedBy=multi-user.target
+

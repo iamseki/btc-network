@@ -462,6 +462,21 @@ pub struct PersistedNodeObservation {
     pub enrichment: IpEnrichment,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnreachableNodeUpdateKind {
+    Record,
+    Recover,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnreachableNodeUpdate {
+    pub endpoint: CrawlEndpoint,
+    pub crawl_run_id: CrawlRunId,
+    pub observed_at: DateTime<Utc>,
+    pub failure_classification: Option<FailureClassification>,
+    pub kind: UnreachableNodeUpdateKind,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrawlRunMetrics {
     pub frontier_size: usize,

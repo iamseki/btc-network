@@ -1,0 +1,12 @@
+aws_region         = "us-east-1"
+environment        = "prod"
+domain_name        = "btcnetwork.info"
+api_hostname       = "api.btcnetwork.info"
+cloudflare_zone_id = "replace-me"
+
+tags = {
+  Project     = "btc-network"
+  Environment = "prod"
+  ManagedBy   = "terraform"
+}
+

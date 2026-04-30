@@ -14,6 +14,7 @@ The current crawler storage split is:
 
 - `node_observations` for append-only observation history
 - `crawler_run_checkpoints` for append-only progress history
+- `unreachable_nodes` for active unreachable-node state used by normal crawler exclusion and recovery
 - `schema_migrations` for the migration ledger
 
 ## Create A Migration

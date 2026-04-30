@@ -11,7 +11,11 @@
 #
 # Examples:
 # - `make crawler ARGS="--mmdb-asn-path ... --mmdb-country-path ..."`
+# - `make crawler-unreachable-recovery ARGS="--mmdb-asn-path ... --mmdb-country-path ..."`
 # - `make postgres-migrate`
+# - `make infra-tf-prod-plan TF_STATE_BUCKET=...`
+# - `make infra-aws-api-status API_SSM_INSTANCE_ID=i-...`
+# - `make infra-aws-postgres-status POSTGRES_SSM_INSTANCE_ID=i-...`
 # - `make test`
 # - `make setup-git-hooks`
 #
@@ -22,6 +26,7 @@ MAKEFLAGS += --no-print-directory
 .PHONY: \
 	help \
 	crawler \
+	crawler-unreachable-recovery \
 	postgres-migrate \
 	infra-postgres-up \
 	infra-postgres-down \
@@ -34,6 +39,25 @@ MAKEFLAGS += --no-print-directory
 	infra-crawler-api-up-build \
 	infra-compose-down \
 	infra-compose-reset \
+	infra-linux-check \
+	infra-tf-fmt \
+	infra-tf-fmt-check \
+	infra-tf-bootstrap-init \
+	infra-tf-bootstrap-plan \
+	infra-tf-bootstrap-apply \
+	infra-tf-prod-init \
+	infra-tf-prod-validate \
+	infra-tf-prod-plan \
+	infra-tf-prod-apply \
+	infra-aws-ssm-session \
+	infra-aws-ssm-command \
+	infra-aws-api-status \
+	infra-aws-postgres-status \
+	infra-aws-postgres-backup-status \
+	infra-aws-postgres-backup-run \
+	infra-aws-crawler-status \
+	infra-aws-crawler-timer-status \
+	infra-aws-crawler-run \
 	crawler-mmdb-update \
 	api \
 	crawler-debug \
@@ -71,6 +95,22 @@ LOCAL_NPM_CACHE := $(CURDIR)/.npm-cache
 LOCAL_GIT_HOOKS_PATH := .githooks
 DOCKER_COMPOSE := docker compose -f docker-compose.yml
 COMPOSE_BUILD_FLAG := $(if $(filter 1 true yes,$(BUILD)),--build,)
+AWS ?= aws
+AWS_REGION ?= us-east-1
+TERRAFORM ?= terraform
+TERRAFORM_BOOTSTRAP_DIR := infra/terraform/bootstrap
+TERRAFORM_PROD_DIR := infra/terraform/envs/prod
+TF_BOOTSTRAP_VAR_FILE ?= terraform.tfvars
+TF_PROD_VAR_FILE ?= terraform.tfvars
+TF_STATE_KEY ?= envs/prod/terraform.tfstate
+TF_STATE_REGION ?= $(AWS_REGION)
+TF_STATE_BUCKET ?=
+SSM_INSTANCE_ID ?=
+API_SSM_INSTANCE_ID ?= $(SSM_INSTANCE_ID)
+POSTGRES_SSM_INSTANCE_ID ?= $(SSM_INSTANCE_ID)
+CRAWLER_SSM_INSTANCE_ID ?= $(API_SSM_INSTANCE_ID)
+SSM_COMMAND ?=
+SYSTEMD_VERIFY ?=
 
 # Shared local PostgreSQL defaults used by the crawler, API, and migration
 # targets. Override per command via ARGS when a non-default local setup is
@@ -90,6 +130,9 @@ API_TEST_ENV = \
 
 crawler: ## Run the crawler binary with local PostgreSQL defaults; pass crawler flags via ARGS="..."
 	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-crawler -- $(ARGS)
+
+crawler-unreachable-recovery: ## Retry only currently unreachable nodes; pass flags via ARGS="..."
+	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-crawler -- recover-unreachable $(ARGS)
 
 postgres-migrate: ## Apply PostgreSQL migrations with local development defaults; pass overrides via ARGS="..."
 	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-postgres-migrate -- $(ARGS)
@@ -134,6 +177,106 @@ infra-compose-reset: ## Force-remove local Compose containers and network metada
 	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans >/dev/null 2>&1 || true
 	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-tor btc-network-crawler btc-network-api >/dev/null 2>&1 || true
 	@docker network rm btc-network_default >/dev/null 2>&1 || true
+
+##@ Hosted Infrastructure
+
+infra-linux-check: ## Check portable Linux shell artifacts; set SYSTEMD_VERIFY=1 to verify units locally
+	@bash -n infra/linux/scripts/*.sh infra/linux/firewall/*.sh
+	@if test "$(SYSTEMD_VERIFY)" = "1" && command -v systemd-analyze >/dev/null 2>&1; then \
+		systemd-analyze verify infra/linux/systemd/*.service infra/linux/systemd/*.timer; \
+	else \
+		echo "Skipping systemd unit verification. Set SYSTEMD_VERIFY=1 on a compatible Linux host to enable it."; \
+	fi
+
+infra-tf-fmt: ## Format all Terraform HCL under infra/terraform
+	@$(TERRAFORM) fmt -recursive infra/terraform
+
+infra-tf-fmt-check: ## Check Terraform HCL formatting under infra/terraform
+	@$(TERRAFORM) fmt -check -recursive infra/terraform
+
+infra-tf-bootstrap-init: ## Initialize bootstrap Terraform root with local state
+	@cd "$(TERRAFORM_BOOTSTRAP_DIR)" && $(TERRAFORM) init
+
+infra-tf-bootstrap-plan: ## Plan bootstrap Terraform root; override TF_BOOTSTRAP_VAR_FILE or pass ARGS="..."
+	@cd "$(TERRAFORM_BOOTSTRAP_DIR)" && $(TERRAFORM) plan -var-file="$(TF_BOOTSTRAP_VAR_FILE)" $(ARGS)
+
+infra-tf-bootstrap-apply: ## Apply bootstrap Terraform root; requires CONFIRM_APPLY=1
+	@test "$(CONFIRM_APPLY)" = "1" || (echo "Refusing apply. Re-run with CONFIRM_APPLY=1 after reviewing the plan." && exit 1)
+	@cd "$(TERRAFORM_BOOTSTRAP_DIR)" && $(TERRAFORM) apply -var-file="$(TF_BOOTSTRAP_VAR_FILE)" $(ARGS)
+
+infra-tf-prod-init: ## Initialize prod Terraform backend; requires TF_STATE_BUCKET=...
+	@test -n "$(TF_STATE_BUCKET)" || (echo "Set TF_STATE_BUCKET to the bootstrap state bucket." && exit 1)
+	@cd "$(TERRAFORM_PROD_DIR)" && $(TERRAFORM) init \
+		-backend-config="bucket=$(TF_STATE_BUCKET)" \
+		-backend-config="key=$(TF_STATE_KEY)" \
+		-backend-config="region=$(TF_STATE_REGION)" \
+		-backend-config="use_lockfile=true"
+
+infra-tf-prod-validate: ## Validate prod Terraform root without remote backend access
+	@cd "$(TERRAFORM_PROD_DIR)" && $(TERRAFORM) init -backend=false
+	@cd "$(TERRAFORM_PROD_DIR)" && $(TERRAFORM) validate
+
+infra-tf-prod-plan: ## Plan prod Terraform root after init; override TF_PROD_VAR_FILE or pass ARGS="..."
+	@cd "$(TERRAFORM_PROD_DIR)" && $(TERRAFORM) plan -var-file="$(TF_PROD_VAR_FILE)" $(ARGS)
+
+infra-tf-prod-apply: ## Apply prod Terraform root; requires CONFIRM_APPLY=1
+	@test "$(CONFIRM_APPLY)" = "1" || (echo "Refusing apply. Re-run with CONFIRM_APPLY=1 after reviewing the plan." && exit 1)
+	@cd "$(TERRAFORM_PROD_DIR)" && $(TERRAFORM) apply -var-file="$(TF_PROD_VAR_FILE)" $(ARGS)
+
+infra-aws-ssm-session: ## Open an AWS SSM shell session; requires SSM_INSTANCE_ID=...
+	@test -n "$(SSM_INSTANCE_ID)" || (echo "Set SSM_INSTANCE_ID to the EC2 instance id." && exit 1)
+	@$(AWS) ssm start-session --region "$(AWS_REGION)" --target "$(SSM_INSTANCE_ID)"
+
+infra-aws-ssm-command: ## Run one AWS SSM shell command; requires SSM_INSTANCE_ID=... SSM_COMMAND='...'
+	@test -n "$(SSM_INSTANCE_ID)" || (echo "Set SSM_INSTANCE_ID to the EC2 instance id." && exit 1)
+	@test -n "$(SSM_COMMAND)" || (echo "Set SSM_COMMAND to the host command to run." && exit 1)
+	@command_id="$$($(AWS) ssm send-command \
+		--region "$(AWS_REGION)" \
+		--instance-ids "$(SSM_INSTANCE_ID)" \
+		--document-name "AWS-RunShellScript" \
+		--comment "btc-network make infra-aws-ssm-command" \
+		--parameters commands='["$(SSM_COMMAND)"]' \
+		--query 'Command.CommandId' \
+		--output text)"; \
+	echo "SSM command id: $$command_id"; \
+	$(AWS) ssm wait command-executed \
+		--region "$(AWS_REGION)" \
+		--command-id "$$command_id" \
+		--instance-id "$(SSM_INSTANCE_ID)" || true; \
+	$(AWS) ssm get-command-invocation \
+		--region "$(AWS_REGION)" \
+		--command-id "$$command_id" \
+		--instance-id "$(SSM_INSTANCE_ID)" \
+		--query '{Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+		--output json
+
+infra-aws-api-status: ## Request btc-network API systemd status through SSM; requires API_SSM_INSTANCE_ID=...
+	@test -n "$(API_SSM_INSTANCE_ID)" || (echo "Set API_SSM_INSTANCE_ID to the API/crawler EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(API_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl status btc-network-api --no-pager'
+
+infra-aws-postgres-status: ## Request PostgreSQL systemd status through SSM; requires POSTGRES_SSM_INSTANCE_ID=...
+	@test -n "$(POSTGRES_SSM_INSTANCE_ID)" || (echo "Set POSTGRES_SSM_INSTANCE_ID to the PostgreSQL EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(POSTGRES_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl status postgresql --no-pager'
+
+infra-aws-postgres-backup-status: ## Request PostgreSQL backup timer status through SSM; requires POSTGRES_SSM_INSTANCE_ID=...
+	@test -n "$(POSTGRES_SSM_INSTANCE_ID)" || (echo "Set POSTGRES_SSM_INSTANCE_ID to the PostgreSQL EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(POSTGRES_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl status btc-network-postgres-backup.timer --no-pager'
+
+infra-aws-postgres-backup-run: ## Trigger one PostgreSQL backup service run through SSM; requires POSTGRES_SSM_INSTANCE_ID=...
+	@test -n "$(POSTGRES_SSM_INSTANCE_ID)" || (echo "Set POSTGRES_SSM_INSTANCE_ID to the PostgreSQL EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(POSTGRES_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl start btc-network-postgres-backup.service'
+
+infra-aws-crawler-status: ## Request crawler systemd status through SSM; requires CRAWLER_SSM_INSTANCE_ID=...; defaults to API_SSM_INSTANCE_ID
+	@test -n "$(CRAWLER_SSM_INSTANCE_ID)" || (echo "Set API_SSM_INSTANCE_ID or CRAWLER_SSM_INSTANCE_ID to the crawler EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(CRAWLER_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl status btc-network-crawler --no-pager'
+
+infra-aws-crawler-timer-status: ## Request crawler timer status through SSM; requires CRAWLER_SSM_INSTANCE_ID=...; defaults to API_SSM_INSTANCE_ID
+	@test -n "$(CRAWLER_SSM_INSTANCE_ID)" || (echo "Set API_SSM_INSTANCE_ID or CRAWLER_SSM_INSTANCE_ID to the crawler EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(CRAWLER_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl status btc-network-crawler.timer --no-pager'
+
+infra-aws-crawler-run: ## Trigger one crawler oneshot run through SSM; requires CRAWLER_SSM_INSTANCE_ID=...; defaults to API_SSM_INSTANCE_ID
+	@test -n "$(CRAWLER_SSM_INSTANCE_ID)" || (echo "Set API_SSM_INSTANCE_ID or CRAWLER_SSM_INSTANCE_ID to the crawler EC2 instance id." && exit 1)
+	@$(MAKE) infra-aws-ssm-command SSM_INSTANCE_ID="$(CRAWLER_SSM_INSTANCE_ID)" SSM_COMMAND='systemctl start btc-network-crawler.service'
 
 crawler-mmdb-update: ## Download or refresh local MMDB files for crawler development
 	@bash scripts/update-crawler-mmdb.sh
@@ -260,6 +403,7 @@ help: ## Show available commands
 		printf "\nUsage:\n  make <target>\n"; \
 		printf "\nNotes:\n"; \
 		printf "  ARGS=... passes extra CLI flags to wrapper targets such as crawler, cli, api, and postgres-migrate.\n"; \
+		printf "  Hosted infra targets use AWS_REGION, TF_STATE_BUCKET, API_SSM_INSTANCE_ID, POSTGRES_SSM_INSTANCE_ID, CONFIRM_APPLY, and ARGS where relevant.\n"; \
 		printf "  Demo web mode: use make web-dev-demo for local mocked analytics or make web-build-demo for a demo build.\n"; \
 		printf "  Targets are grouped by section below.\n"; \
 	} \

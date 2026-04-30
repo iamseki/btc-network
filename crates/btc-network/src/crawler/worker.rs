@@ -12,7 +12,10 @@ use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawN
 use super::node::NodeProcessor;
 use super::node::connect_retry_delay;
 use super::ports::IpEnrichmentProvider;
-use super::types::{CrawlState, CrawlerConfig, CrawlerStats, NodeVisit, QueuedNode};
+use super::types::{
+    CrawlState, CrawlerConfig, CrawlerStats, NodeVisit, PersistedNodeRecord, QueuedNode,
+    UnreachableNodeAction,
+};
 use crate::crawler::PersistedNodeObservation;
 
 pub(crate) struct WorkerContext {
@@ -23,8 +26,10 @@ pub(crate) struct WorkerContext {
     pub(crate) stop: Arc<AtomicBool>,
     pub(crate) queue_rx: Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
     pub(crate) queue_tx: mpsc::UnboundedSender<QueuedNode>,
+    pub(crate) retry_queue_rx: Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
+    pub(crate) retry_queue_tx: mpsc::UnboundedSender<QueuedNode>,
     pub(crate) retry_tasks: Arc<Mutex<JoinSet<()>>>,
-    pub(crate) observation_tx: mpsc::Sender<PersistedNodeObservation>,
+    pub(crate) observation_tx: mpsc::Sender<PersistedNodeRecord>,
     pub(crate) processor: Arc<dyn NodeProcessor>,
     pub(crate) enrichment_provider: Arc<dyn IpEnrichmentProvider>,
 }
@@ -48,6 +53,8 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         stop,
         queue_rx,
         queue_tx,
+        retry_queue_rx,
+        retry_queue_tx,
         retry_tasks,
         observation_tx,
         processor,
@@ -60,21 +67,11 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         }
 
         let node_cycle_started = Instant::now();
-        let next = tokio::time::timeout(Duration::from_millis(250), async {
-            let queue_lock_wait_started = Instant::now();
-            let mut guard = queue_rx.lock().await;
-            let queue_lock_wait = queue_lock_wait_started.elapsed();
-            let recv_wait_started = Instant::now();
-            let item = guard.recv().await;
-            let recv_wait = recv_wait_started.elapsed();
-            let queue_lock_hold = queue_lock_wait_started.elapsed();
-            (item, queue_lock_wait, recv_wait, queue_lock_hold)
-        })
-        .await;
+        let next = receive_next_queued_node(&retry_queue_rx, &queue_rx).await;
 
         let (maybe_endpoint, queue_lock_wait, queue_recv_wait, queue_lock_hold) = match next {
-            Ok(v) => v,
-            Err(_) => continue,
+            Some(v) => v,
+            None => continue,
         };
 
         let Some(queued_node) = maybe_endpoint else {
@@ -89,6 +86,16 @@ pub(crate) async fn run_worker(context: WorkerContext) {
         }
 
         stats.scheduled.fetch_add(1, Ordering::Relaxed);
+        let attempt = queued_node.attempt_count + 1;
+        warn!(
+            run_id = %run_id,
+            node = %endpoint.canonical,
+            attempt,
+            retry_attempt = attempt,
+            completed_attempts_before_start = queued_node.attempt_count,
+            max_attempts = config.connect_max_attempts,
+            "[crawler] starting node attempt"
+        );
         if endpoint.is_reachable_with_config(&config) {
             stats
                 .connectable_tasks_started
@@ -115,11 +122,19 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     visit.latency,
                 );
                 let persisted = build_persisted_observation(raw, enrichment_provider.as_ref());
+                let record = PersistedNodeRecord {
+                    observation: persisted,
+                    unreachable_action: if config.follow_discovered_nodes {
+                        UnreachableNodeAction::None
+                    } else {
+                        UnreachableNodeAction::Recover
+                    },
+                };
                 if !enqueue_observation(
                     &stats,
                     &stop,
                     &observation_tx,
-                    persisted,
+                    record,
                     endpoint.canonical.as_str(),
                 )
                 .await
@@ -167,6 +182,54 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 stats.failed.fetch_add(1, Ordering::Relaxed);
                 record_connect_failure(stats.as_ref(), err.connect_error_kind);
 
+                let retry_plan = retry_plan(&config, &queued_node, err.as_ref());
+                if let Some(retry_plan) = retry_plan {
+                    warn!(
+                        run_id = %run_id,
+                        node = %endpoint.canonical,
+                        completed_attempts = queued_node.completed_attempts_after_current_failure(),
+                        attempt = queued_node.attempt_count + 1,
+                        next_retry_attempt = retry_plan.retry_node.attempt_count + 1,
+                        retry_attempt = retry_plan.retry_node.attempt_count + 1,
+                        max_attempts = config.connect_max_attempts,
+                    failure_classification = ?err.classification,
+                    "[crawler] failed node attempt will retry"
+                    );
+                    clear_in_flight_endpoint(&state, &endpoint).await;
+                    schedule_retry(
+                        &config,
+                        &run_id,
+                        &state,
+                        &stats,
+                        &stop,
+                        &retry_queue_tx,
+                        &retry_tasks,
+                        retry_plan,
+                    )
+                    .await;
+                    continue;
+                }
+
+                let completed_attempts = queued_node.completed_attempts_after_current_failure();
+                let endpoint_reachable = err.node.is_reachable_with_config(&config);
+                let unreachable_action =
+                    unreachable_action_after_terminal_failure(&config, &queued_node, err.as_ref());
+                let terminal_reason = terminal_failure_reason(&config, &queued_node, err.as_ref());
+                warn!(
+                    run_id = %run_id,
+                    node = %err.node.canonical,
+                    attempt = queued_node.attempt_count + 1,
+                    retry_attempt = queued_node.attempt_count + 1,
+                    completed_attempts,
+                    max_attempts = config.connect_max_attempts,
+                    endpoint_reachable,
+                    failure_classification = ?err.classification,
+                    unreachable_action = ?unreachable_action,
+                    will_record_unreachable = matches!(unreachable_action, UnreachableNodeAction::Record),
+                    terminal_reason,
+                    "[crawler] terminal failure retry decision"
+                );
+
                 let raw = RawNodeObservation::from_failure(
                     Utc::now(),
                     run_id.clone(),
@@ -175,11 +238,23 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                     err.latency,
                 );
                 let persisted = build_persisted_observation(raw, enrichment_provider.as_ref());
+                let record = PersistedNodeRecord {
+                    unreachable_action,
+                    observation: persisted,
+                };
+                warn!(
+                    run_id = %run_id,
+                    node = %err.node.canonical,
+                    attempt = queued_node.attempt_count + 1,
+                    failure_classification = ?err.classification,
+                    unreachable_action = ?unreachable_action,
+                    "[crawler] enqueueing terminal failed observation"
+                );
                 if !enqueue_observation(
                     &stats,
                     &stop,
                     &observation_tx,
-                    persisted,
+                    record,
                     err.node.canonical.as_str(),
                 )
                 .await
@@ -189,18 +264,6 @@ pub(crate) async fn run_worker(context: WorkerContext) {
                 }
 
                 clear_in_flight_endpoint(&state, &endpoint).await;
-                maybe_schedule_retry(
-                    &config,
-                    &state,
-                    &stats,
-                    &stop,
-                    &queue_tx,
-                    &retry_tasks,
-                    &queued_node,
-                    err.as_ref(),
-                )
-                .await;
-
                 if config.verbose {
                     info!(
                         node = %endpoint.canonical,
@@ -225,6 +288,31 @@ struct InFlightGuard<'a> {
     stats: &'a CrawlerStats,
 }
 
+async fn receive_next_queued_node(
+    retry_queue_rx: &Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
+    queue_rx: &Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
+) -> Option<(Option<QueuedNode>, Duration, Duration, Duration)> {
+    tokio::select! {
+        biased;
+        item = receive_from_queue(retry_queue_rx) => Some(item),
+        item = receive_from_queue(queue_rx) => Some(item),
+        _ = tokio::time::sleep(Duration::from_millis(250)) => None,
+    }
+}
+
+async fn receive_from_queue(
+    queue_rx: &Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
+) -> (Option<QueuedNode>, Duration, Duration, Duration) {
+    let queue_lock_wait_started = Instant::now();
+    let mut guard = queue_rx.lock().await;
+    let queue_lock_wait = queue_lock_wait_started.elapsed();
+    let recv_wait_started = Instant::now();
+    let item = guard.recv().await;
+    let recv_wait = recv_wait_started.elapsed();
+    let queue_lock_hold = queue_lock_wait_started.elapsed();
+    (item, queue_lock_wait, recv_wait, queue_lock_hold)
+}
+
 impl<'a> InFlightGuard<'a> {
     fn new(stats: &'a CrawlerStats) -> Self {
         Self { stats }
@@ -240,12 +328,12 @@ impl Drop for InFlightGuard<'_> {
 async fn enqueue_observation(
     stats: &Arc<CrawlerStats>,
     stop: &Arc<AtomicBool>,
-    observation_tx: &mpsc::Sender<PersistedNodeObservation>,
-    observation: PersistedNodeObservation,
+    observation_tx: &mpsc::Sender<PersistedNodeRecord>,
+    record: PersistedNodeRecord,
     endpoint_label: &str,
 ) -> bool {
     stats.writer_backlog.fetch_add(1, Ordering::Relaxed);
-    if observation_tx.send(observation).await.is_err() {
+    if observation_tx.send(record).await.is_err() {
         stats.writer_backlog.fetch_sub(1, Ordering::Relaxed);
         stop.store(true, Ordering::Relaxed);
         warn!("[crawler] observation writer channel closed while processing {endpoint_label}");
@@ -308,6 +396,10 @@ pub(crate) fn apply_visit_to_state(
     } = visit;
     state.seen_nodes.insert(node);
 
+    if !config.follow_discovered_nodes {
+        return Vec::new();
+    }
+
     let mut new_nodes = Vec::new();
     for endpoint in discovered {
         if !endpoint.is_reachable_with_config(config) {
@@ -332,6 +424,10 @@ fn try_track_endpoint(
     endpoint: CrawlEndpoint,
     max_tracked_nodes: usize,
 ) -> bool {
+    if state.excluded_nodes.contains(&endpoint.canonical) {
+        return false;
+    }
+
     if state.seen_nodes.contains(&endpoint) {
         return false;
     }
@@ -343,37 +439,35 @@ fn try_track_endpoint(
     state.seen_nodes.insert(endpoint)
 }
 
-async fn maybe_schedule_retry(
-    config: &CrawlerConfig,
+async fn schedule_retry(
+    _config: &CrawlerConfig,
+    run_id: &CrawlRunId,
     state: &Arc<Mutex<CrawlState>>,
     stats: &Arc<CrawlerStats>,
     stop: &Arc<AtomicBool>,
-    queue_tx: &mpsc::UnboundedSender<QueuedNode>,
+    retry_queue_tx: &mpsc::UnboundedSender<QueuedNode>,
     retry_tasks: &Arc<Mutex<JoinSet<()>>>,
-    queued_node: &QueuedNode,
-    error: &crate::crawler::types::NodeVisitFailure,
+    retry_plan: RetryPlan,
 ) {
-    let Some(retry_plan) = retry_plan(config, queued_node, error) else {
-        return;
-    };
     let state = Arc::clone(state);
     let stats = Arc::clone(stats);
     let stop = Arc::clone(stop);
-    let queue_tx = queue_tx.clone();
+    let retry_queue_tx = retry_queue_tx.clone();
+    let run_id = *run_id;
     stats
         .connect_retries_started
         .fetch_add(1, Ordering::Relaxed);
     stats.delayed_retry_backlog.fetch_add(1, Ordering::Relaxed);
-    if config.verbose {
-        info!(
-            node = %queued_node.endpoint.canonical,
-            retry_attempt = retry_plan.retry_node.attempt_count + 1,
-            previous_attempt_age_ms = retry_plan.previous_attempt_age.map(|age| age.as_millis()),
-            previous_failure_classification = ?retry_plan.previous_failure_classification,
-            retry_backoff_ms = retry_plan.backoff.as_millis(),
-            "[crawler] scheduling delayed retry"
-        );
-    }
+    warn!(
+        run_id = %run_id,
+        node = %retry_plan.retry_node.endpoint.canonical,
+        retry_attempt = retry_plan.retry_node.attempt_count + 1,
+        max_attempts = _config.connect_max_attempts,
+        previous_attempt_age_ms = retry_plan.previous_attempt_age.map(|age| age.as_millis()),
+        previous_failure_classification = ?retry_plan.previous_failure_classification,
+        retry_backoff_ms = retry_plan.backoff.as_millis(),
+        "[crawler] scheduling delayed retry"
+    );
 
     retry_tasks.lock().await.spawn(async move {
         if !retry_plan.backoff.is_zero() {
@@ -381,6 +475,13 @@ async fn maybe_schedule_retry(
         }
 
         if stop.load(Ordering::Relaxed) {
+            warn!(
+                run_id = %run_id,
+                node = %retry_plan.retry_node.endpoint.canonical,
+                retry_attempt = retry_plan.retry_node.attempt_count + 1,
+                retry_backoff_ms = retry_plan.backoff.as_millis(),
+                "[crawler] cancelled delayed retry because stop was requested"
+            );
             stats.delayed_retry_backlog.fetch_sub(1, Ordering::Relaxed);
             return;
         }
@@ -397,10 +498,63 @@ async fn maybe_schedule_retry(
                 .pending_nodes
                 .insert(retry_plan.retry_node.endpoint.clone());
             drop(guard);
-            let _ = queue_tx.send(retry_plan.retry_node);
+            warn!(
+                run_id = %run_id,
+                node = %retry_plan.retry_node.endpoint.canonical,
+                retry_attempt = retry_plan.retry_node.attempt_count + 1,
+                retry_backoff_ms = retry_plan.backoff.as_millis(),
+                "[crawler] re-enqueueing delayed retry"
+            );
+            if retry_queue_tx.send(retry_plan.retry_node.clone()).is_err() {
+                warn!(
+                    run_id = %run_id,
+                    node = %retry_plan.retry_node.endpoint.canonical,
+                    retry_attempt = retry_plan.retry_node.attempt_count + 1,
+                    "[crawler] failed to re-enqueue delayed retry because retry queue is closed"
+                );
+                stats.delayed_retry_backlog.fetch_sub(1, Ordering::Relaxed);
+                stop.store(true, Ordering::Relaxed);
+                return;
+            }
+        } else {
+            warn!(
+                run_id = %run_id,
+                node = %retry_plan.retry_node.endpoint.canonical,
+                retry_attempt = retry_plan.retry_node.attempt_count + 1,
+                "[crawler] skipped delayed retry re-enqueue because endpoint is already pending or in-flight"
+            );
         }
         stats.delayed_retry_backlog.fetch_sub(1, Ordering::Relaxed);
     });
+}
+
+fn unreachable_action_after_terminal_failure(
+    config: &CrawlerConfig,
+    queued_node: &QueuedNode,
+    _error: &crate::crawler::types::NodeVisitFailure,
+) -> UnreachableNodeAction {
+    let completed_attempts = queued_node.completed_attempts_after_current_failure();
+    if completed_attempts >= config.connect_max_attempts {
+        UnreachableNodeAction::Record
+    } else {
+        UnreachableNodeAction::None
+    }
+}
+
+fn terminal_failure_reason(
+    config: &CrawlerConfig,
+    queued_node: &QueuedNode,
+    error: &crate::crawler::types::NodeVisitFailure,
+) -> &'static str {
+    if !error.node.is_reachable_with_config(config) {
+        "endpoint_not_reachable_with_config"
+    } else if queued_node.completed_attempts_after_current_failure()
+        >= config.connect_max_attempts.max(1)
+    {
+        "attempt_budget_exhausted"
+    } else {
+        "retry_not_planned_before_attempt_budget"
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -416,11 +570,7 @@ fn retry_plan(
     queued_node: &QueuedNode,
     error: &crate::crawler::types::NodeVisitFailure,
 ) -> Option<RetryPlan> {
-    if error.classification != FailureClassification::Connect {
-        return None;
-    }
-
-    if error.node.socket_addr().is_none() {
+    if !error.node.is_reachable_with_config(config) {
         return None;
     }
 
@@ -474,7 +624,7 @@ mod tests {
     use crate::crawler::{CrawlNetwork, CrawlRunId, FailureClassification};
     use crate::wire::message::Services;
     use chrono::Utc;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
     use std::sync::Mutex as StdMutex;
     use std::sync::atomic::AtomicUsize;
@@ -544,12 +694,22 @@ mod tests {
             checkpoint_interval: Duration::from_millis(30),
             connect_timeout: Duration::from_millis(50),
             connect_max_attempts: 1,
+            unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+            follow_discovered_nodes: true,
             connect_retry_backoff: Duration::ZERO,
             io_timeout: Duration::from_millis(50),
             tor_socks5_addr: None,
             shutdown_grace_period: Duration::from_secs(1),
             verbose: false,
         }
+    }
+
+    fn retry_queue_parts() -> (
+        Arc<Mutex<mpsc::UnboundedReceiver<QueuedNode>>>,
+        mpsc::UnboundedSender<QueuedNode>,
+    ) {
+        let (retry_tx, retry_rx) = mpsc::unbounded_channel();
+        (Arc::new(Mutex::new(retry_rx)), retry_tx)
     }
 
     fn test_endpoint(octet: u8) -> CrawlEndpoint {
@@ -596,6 +756,16 @@ mod tests {
         }
     }
 
+    fn handshake_failure(node: CrawlEndpoint) -> crate::crawler::types::NodeVisitFailure {
+        crate::crawler::types::NodeVisitFailure {
+            node,
+            latency: Duration::from_millis(10),
+            classification: FailureClassification::Handshake,
+            message: "handshake failed".to_string(),
+            connect_error_kind: None,
+        }
+    }
+
     async fn abort_and_drain_retry_tasks(retry_tasks: &Arc<Mutex<JoinSet<()>>>) {
         let mut retry_tasks = retry_tasks.lock().await;
         retry_tasks.abort_all();
@@ -623,6 +793,24 @@ mod tests {
         assert!(state.seen_nodes.contains(&node));
         assert!(state.pending_nodes.contains(&new_node));
         assert!(state.last_new_node_at >= before);
+    }
+
+    #[test]
+    fn apply_visit_skips_unreachable_exclusion_set() {
+        let node = test_endpoint(2);
+        let excluded = public_endpoint(44);
+        let mut state =
+            CrawlState::with_excluded_nodes(HashSet::from([excluded.canonical.clone()]));
+
+        let inserted = apply_visit_to_state(
+            &mut state,
+            visit_for(node, vec![excluded.clone()]),
+            &test_config(),
+        );
+
+        assert!(inserted.is_empty());
+        assert!(!state.pending_nodes.contains(&excluded));
+        assert!(!state.seen_nodes.contains(&excluded));
     }
 
     #[test]
@@ -665,6 +853,7 @@ mod tests {
         let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
             enrichment: IpEnrichment::unavailable(),
         });
+        let (retry_queue_rx, retry_queue_tx) = retry_queue_parts();
         run_worker(WorkerContext {
             config,
             run_id: CrawlRunId::from_u128(1),
@@ -673,6 +862,8 @@ mod tests {
             stop,
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_queue_rx,
+            retry_queue_tx,
             retry_tasks,
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
@@ -716,6 +907,7 @@ mod tests {
                 Some("1.1.1.0/24".to_string()),
             ),
         });
+        let (retry_queue_rx, retry_queue_tx) = retry_queue_parts();
 
         run_worker(WorkerContext {
             config,
@@ -725,6 +917,8 @@ mod tests {
             stop,
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_queue_rx,
+            retry_queue_tx,
             retry_tasks,
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
@@ -732,7 +926,11 @@ mod tests {
         })
         .await;
 
-        let persisted = obs_rx.recv().await.expect("persisted observation");
+        let persisted = obs_rx
+            .recv()
+            .await
+            .expect("persisted observation")
+            .observation;
         assert_eq!(stats.scheduled.load(Ordering::Relaxed), 1);
         assert_eq!(stats.success.load(Ordering::Relaxed), 1);
         assert_eq!(stats.failed.load(Ordering::Relaxed), 0);
@@ -785,6 +983,7 @@ mod tests {
                 Some("203.0.113.0/24".to_string()),
             ),
         });
+        let (retry_queue_rx, retry_queue_tx) = retry_queue_parts();
 
         run_worker(WorkerContext {
             config,
@@ -794,6 +993,8 @@ mod tests {
             stop,
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_queue_rx,
+            retry_queue_tx,
             retry_tasks,
             observation_tx: obs_tx,
             processor: Arc::clone(&processor),
@@ -801,7 +1002,11 @@ mod tests {
         })
         .await;
 
-        let persisted = obs_rx.recv().await.expect("persisted observation");
+        let persisted = obs_rx
+            .recv()
+            .await
+            .expect("persisted observation")
+            .observation;
         assert_eq!(
             persisted.raw.failure_classification,
             Some(crate::crawler::FailureClassification::Connect)
@@ -809,6 +1014,54 @@ mod tests {
         assert_eq!(
             persisted.enrichment.status,
             crate::crawler::IpEnrichmentStatus::NotApplicable
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_marks_terminal_handshake_failure_as_unreachable() {
+        let config = test_config();
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let stats = Arc::new(CrawlerStats::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let (in_tx, in_rx) = mpsc::unbounded_channel();
+        let (out_tx, _out_rx) = mpsc::unbounded_channel();
+        let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let (obs_tx, mut obs_rx) = mpsc::channel(4);
+
+        let node = public_endpoint(35);
+        let _ = in_tx.send(QueuedNode::initial(node.clone()));
+        drop(in_tx);
+
+        let mut responses = HashMap::new();
+        responses.insert(node.clone(), Err(Box::new(handshake_failure(node.clone()))));
+        let processor: Arc<dyn NodeProcessor> = Arc::new(MockProcessor::new(responses));
+        let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
+            enrichment: IpEnrichment::unavailable(),
+        });
+        let (retry_queue_rx, retry_queue_tx) = retry_queue_parts();
+
+        run_worker(WorkerContext {
+            config,
+            run_id: CrawlRunId::from_u128(1),
+            state,
+            stats,
+            stop,
+            queue_rx: Arc::new(Mutex::new(in_rx)),
+            queue_tx: out_tx,
+            retry_queue_rx,
+            retry_queue_tx,
+            retry_tasks,
+            observation_tx: obs_tx,
+            processor: Arc::clone(&processor),
+            enrichment_provider: enrichment,
+        })
+        .await;
+
+        let record = obs_rx.recv().await.expect("persisted observation");
+        assert_eq!(record.unreachable_action, UnreachableNodeAction::Record);
+        assert_eq!(
+            record.observation.raw.failure_classification,
+            Some(FailureClassification::Handshake)
         );
     }
 
@@ -852,6 +1105,52 @@ mod tests {
         assert!(guard.seen_nodes.contains(&a));
         assert!(guard.seen_nodes.contains(&b));
         assert!(guard.in_flight_nodes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn seed_initial_nodes_skips_unreachable_exclusion_set() {
+        let excluded = test_endpoint(33);
+        let state = Arc::new(Mutex::new(CrawlState::with_excluded_nodes(HashSet::from(
+            [excluded.canonical.clone()],
+        ))));
+        let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
+
+        seed_initial_nodes(
+            &state,
+            &queue_tx,
+            vec![excluded.clone()],
+            test_config().max_tracked_nodes,
+        )
+        .await;
+
+        assert!(queue_rx.try_recv().is_err());
+        let guard = state.lock().await;
+        assert!(!guard.seen_nodes.contains(&excluded));
+        assert!(!guard.pending_nodes.contains(&excluded));
+    }
+
+    #[tokio::test]
+    async fn receive_next_queued_node_prefers_retry_queue() {
+        let (queue_tx, queue_rx) = mpsc::unbounded_channel();
+        let (retry_queue_tx, retry_queue_rx) = mpsc::unbounded_channel();
+        let normal = QueuedNode::initial(public_endpoint(40));
+        let retry = QueuedNode {
+            endpoint: public_endpoint(41),
+            attempt_count: 1,
+            retry_scheduled_at: Some(Instant::now()),
+            last_failure_classification: Some(FailureClassification::Connect),
+        };
+        let _ = queue_tx.send(normal.clone());
+        let _ = retry_queue_tx.send(retry.clone());
+
+        let (received, _, _, _) = receive_next_queued_node(
+            &Arc::new(Mutex::new(retry_queue_rx)),
+            &Arc::new(Mutex::new(queue_rx)),
+        )
+        .await
+        .expect("queued node");
+
+        assert_eq!(received.expect("retry node").endpoint, retry.endpoint);
     }
 
     #[test]
@@ -908,6 +1207,7 @@ mod tests {
         let enrichment: Arc<dyn IpEnrichmentProvider> = Arc::new(StaticIpEnrichmentProvider {
             enrichment: IpEnrichment::unavailable(),
         });
+        let (retry_queue_rx, retry_queue_tx) = retry_queue_parts();
 
         run_worker(WorkerContext {
             config,
@@ -917,6 +1217,8 @@ mod tests {
             stop: Arc::clone(&stop),
             queue_rx: Arc::new(Mutex::new(in_rx)),
             queue_tx: out_tx,
+            retry_queue_rx,
+            retry_queue_tx,
             retry_tasks,
             observation_tx: obs_tx,
             processor,
@@ -952,7 +1254,49 @@ mod tests {
     }
 
     #[test]
-    fn retry_plan_skips_non_connect_or_exhausted_failures() {
+    fn retry_plan_requeues_tor_connect_failures_when_proxy_is_configured() {
+        let mut config = CrawlerConfig {
+            connect_max_attempts: 3,
+            connect_retry_backoff: Duration::from_millis(25),
+            ..test_config()
+        };
+        config.tor_socks5_addr = Some("tor:9050".to_string());
+        let queued = QueuedNode::initial(overlay_endpoint());
+        let failure = connect_failure(queued.endpoint.clone());
+
+        let plan = retry_plan(&config, &queued, &failure).expect("retry plan");
+
+        assert_eq!(plan.retry_node.endpoint, queued.endpoint);
+        assert_eq!(plan.retry_node.attempt_count, 1);
+    }
+
+    #[test]
+    fn retry_plan_requeues_handshake_failures() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 2,
+            connect_retry_backoff: Duration::from_millis(25),
+            ..test_config()
+        };
+        let node = public_endpoint(23);
+        let handshake_failure = handshake_failure(node.clone());
+
+        let plan = retry_plan(
+            &config,
+            &QueuedNode::initial(node.clone()),
+            &handshake_failure,
+        )
+        .expect("retry plan");
+
+        assert_eq!(plan.retry_node.endpoint, node);
+        assert_eq!(plan.retry_node.attempt_count, 1);
+        assert_eq!(
+            plan.retry_node.last_failure_classification,
+            Some(FailureClassification::Handshake)
+        );
+    }
+
+    #[test]
+    fn retry_plan_skips_exhausted_failures() {
         let config = CrawlerConfig {
             connect_max_attempts: 2,
             connect_retry_backoff: Duration::from_millis(25),
@@ -965,23 +1309,43 @@ mod tests {
             retry_scheduled_at: None,
             last_failure_classification: None,
         };
-        let handshake_failure = crate::crawler::types::NodeVisitFailure {
-            node: node.clone(),
-            latency: Duration::from_millis(10),
-            classification: FailureClassification::Handshake,
-            message: "handshake failed".to_string(),
-            connect_error_kind: None,
-        };
 
-        assert!(
-            retry_plan(
-                &config,
-                &QueuedNode::initial(node.clone()),
-                &handshake_failure
-            )
-            .is_none()
-        );
         assert!(retry_plan(&config, &exhausted, &connect_failure(node)).is_none());
+    }
+
+    #[test]
+    fn terminal_handshake_failure_records_unreachable_after_attempt_budget() {
+        let config = CrawlerConfig {
+            connect_max_attempts: 2,
+            ..test_config()
+        };
+        let node = public_endpoint(34);
+        let queued = QueuedNode {
+            endpoint: node.clone(),
+            attempt_count: 1,
+            retry_scheduled_at: None,
+            last_failure_classification: Some(FailureClassification::Handshake),
+        };
+        let failure = handshake_failure(node);
+
+        let action = unreachable_action_after_terminal_failure(&config, &queued, &failure);
+
+        assert_eq!(action, UnreachableNodeAction::Record);
+    }
+
+    #[test]
+    fn terminal_tor_connect_failure_records_unreachable_when_proxy_is_configured() {
+        let mut config = CrawlerConfig {
+            connect_max_attempts: 1,
+            ..test_config()
+        };
+        config.tor_socks5_addr = Some("tor:9050".to_string());
+        let queued = QueuedNode::initial(overlay_endpoint());
+        let failure = connect_failure(queued.endpoint.clone());
+
+        let action = unreachable_action_after_terminal_failure(&config, &queued, &failure);
+
+        assert_eq!(action, UnreachableNodeAction::Record);
     }
 
     #[test]
@@ -1025,15 +1389,16 @@ mod tests {
         let queued = QueuedNode::initial(public_endpoint(24));
         let failure = connect_failure(queued.endpoint.clone());
 
-        maybe_schedule_retry(
+        let retry_plan = retry_plan(&config, &queued, &failure).expect("retry plan");
+        schedule_retry(
             &config,
+            &CrawlRunId::from_u128(1),
             &state,
             &stats,
             &stop,
             &queue_tx,
             &retry_tasks,
-            &queued,
-            &failure,
+            retry_plan,
         )
         .await;
 
@@ -1074,15 +1439,16 @@ mod tests {
         let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
 
-        maybe_schedule_retry(
+        let retry_plan = retry_plan(&config, &queued, &failure).expect("retry plan");
+        schedule_retry(
             &config,
+            &CrawlRunId::from_u128(1),
             &state,
             &stats,
             &stop,
             &queue_tx,
             &retry_tasks,
-            &queued,
-            &failure,
+            retry_plan,
         )
         .await;
         tokio::task::yield_now().await;
@@ -1108,15 +1474,16 @@ mod tests {
         let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let (queue_tx, mut queue_rx) = mpsc::unbounded_channel();
 
-        maybe_schedule_retry(
+        let retry_plan = retry_plan(&config, &queued, &failure).expect("retry plan");
+        schedule_retry(
             &config,
+            &CrawlRunId::from_u128(1),
             &state,
             &stats,
             &stop,
             &queue_tx,
             &retry_tasks,
-            &queued,
-            &failure,
+            retry_plan,
         )
         .await;
         stop.store(true, Ordering::Relaxed);

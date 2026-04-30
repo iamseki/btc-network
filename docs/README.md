@@ -54,6 +54,7 @@ Start here if you need repository documentation and do not yet know which docume
   - [Frontend Architecture](./agents/frontend-architecture.md)
 - `deployment and operations`
   - [Deployment](./deployment.md)
+  - [Infrastructure scaffold](../infra/README.md)
 - `troubleshooting and runbooks`
   - [Troubleshooting](./troubleshooting/README.md)
 - `archived observability experiment`
@@ -68,5 +69,6 @@ Start here if you need repository documentation and do not yet know which docume
 - `docs/agents/` is optimized for agent and implementation guidance.
 - `docs/design_docs/` is the canonical home for BNDD (bitcoin network design doc) decision records.
 - `docs/deployment.md` is the human-oriented guide for the current Cloudflare Pages and Hostinger setup.
+- `infra/` is the concrete scaffold for hosted infrastructure and Linux host artifacts.
 - `docs/observability.md` is the archive note for the rejected local agent observability experiment.
 - `CONTRIBUTING.md` remains the short human-oriented contribution guide at the repository root.

@@ -1,0 +1,39 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+groups:
+  - btc-network
+
+users:
+  - default
+  - name: btc-network
+    system: true
+    group: btc-network
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+
+packages:
+  - postgresql
+  - postgresql-client
+  - awscli
+  - curl
+  - jq
+  - unzip
+  - ca-certificates
+  - ufw
+
+write_files:
+  - path: /etc/sysctl.d/99-btc-network.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      vm.swappiness = 1
+
+runcmd:
+  - install -d -o btc-network -g btc-network /opt/btc-network
+  - install -d -o btc-network -g btc-network /opt/btc-network/bin
+  - install -d -o root -g root /etc/btc-network
+  - install -d -o btc-network -g btc-network /var/log/btc-network
+  - install -d -o postgres -g postgres /var/backups/btc-network/postgres
+  - sysctl --system

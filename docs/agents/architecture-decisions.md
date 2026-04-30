@@ -32,9 +32,12 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - persisted observations derive success/failure outcome from whether `failure_classification` is null; there is no separate `confidence_level` column in the current schema
 - persisted observations do not carry a separate `batch_id` column in the current schema
 - failed persisted observations can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
+- normal crawler startup loads active `unreachable_nodes` rows from the configured lookback into an in-memory `HashSet<String>` and skips them before enqueueing seed or discovered work
+- terminal reachable endpoint failures after the retry budget are captured in the dedicated `unreachable_nodes` table; recovery uses the crawler binary's `recover-unreachable` subcommand and soft-deletes rows when peers become reachable again
 - crawler no longer performs durable startup recovery; after crash or manual restart, operators start a fresh run from seed nodes
-- overlapping crawler writers against the same persistence database are still a deployment bug, but checkpoints are now operator history only rather than restart state
+- the crawler deployment model intentionally assumes one active writer per persistence database; this is a design choice that keeps concurrency control inside one process and avoids extra cross-process coordination and contention
 - the default crawler persistence adapter is PostgreSQL in `crates/btc-network-postgres`
+- the accepted hosted deployment direction keeps the crawler as a sporadic batch workload on the AWS host, triggered by scheduler or operator action, not as an always-on service by default
 
 ## Frontend Architecture
 
@@ -45,6 +48,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - The current real desktop-backed flows are handshake, ping, peer address lookup, chain height, block summary, and block download
 - Crawler analytics reads now go through the browser-safe HTTP app in `apps/api`
 - The default analytics storage adapter behind `apps/api` is PostgreSQL
+- The accepted first public API hosting direction is Cloudflare edge plus one AWS API/crawler EC2 host and one private AWS PostgreSQL EC2 host, provisioned through Terraform-compatible IaC
 - Both web and desktop analytics reads use the same HTTP helper and `VITE_API_BASE_URL`
 - Hosted browser builds may opt into `VITE_DEMO_MODE` to serve deterministic mock analytics data instead of calling the HTTP API
 - Hosted demo mode may replay a client-only latest-snapshot cycle from the most recent run, persist replay state in local storage, and restart a fresh live cycle when the user returns after a longer absence

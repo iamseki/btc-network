@@ -34,6 +34,10 @@ pub(crate) fn crawl_network_to_str(value: CrawlNetwork) -> &'static str {
     }
 }
 
+pub(crate) fn crawl_network_from_str(value: &str) -> Option<CrawlNetwork> {
+    CrawlNetwork::from_storage_str(value)
+}
+
 pub(crate) fn enrichment_status_to_str(value: IpEnrichmentStatus) -> &'static str {
     match value {
         IpEnrichmentStatus::Matched => "matched",

@@ -1,16 +1,19 @@
 use std::error::Error;
 use std::fs::File;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, TcpListener as StdTcpListener};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration as StdDuration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
 use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
-    CrawlRunMetrics, CrawlerAnalyticsReader, CrawlerRepository, IpEnrichment, IpEnrichmentProvider,
-    ObservationId, PersistedNodeObservation, RawNodeObservation,
+    CrawlRunMetrics, Crawler, CrawlerAnalyticsReader, CrawlerConfig, CrawlerRepository,
+    IpEnrichment, IpEnrichmentProvider, ObservationId, PersistedNodeObservation,
+    RawNodeObservation, UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };
+use btc_network::wire::{self, Command};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_postgres::{
     PostgresConnectionConfig, PostgresCrawlerRepository, PostgresMigrationRunner,
@@ -22,8 +25,10 @@ use sqlx_core::{query::query, row::Row};
 use sqlx_postgres::{PgPool, Postgres};
 use testcontainers_modules::{
     postgres,
-    testcontainers::{ContainerAsync, ImageExt, runners::AsyncRunner},
+    testcontainers::{ContainerAsync, ImageExt, core::Mount, runners::AsyncRunner},
 };
+use tokio::net::{TcpListener as TokioTcpListener, TcpStream};
+use tokio::task::JoinHandle;
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 const TEST_POSTGRES_PASSWORD: &str = "btc-network-test";
@@ -37,30 +42,63 @@ fn observation_id(value: u128) -> ObservationId {
     ObservationId::from_u128(value)
 }
 
+struct UnavailableEnrichmentProvider;
+
+impl IpEnrichmentProvider for UnavailableEnrichmentProvider {
+    fn enrich(&self, _endpoint: &CrawlEndpoint) -> IpEnrichment {
+        IpEnrichment::unavailable()
+    }
+}
+
 struct TestDatabase {
-    _container: ContainerAsync<postgres::Postgres>,
+    container: Option<ContainerAsync<postgres::Postgres>>,
     config: PostgresConnectionConfig,
+    socket_dir: Option<SocketDir>,
+}
+
+struct SocketDir {
+    actual: PathBuf,
+    link: PathBuf,
 }
 
 impl TestDatabase {
     async fn start() -> TestResult<Self> {
         let database = unique_database_name();
-        let container = postgres::Postgres::default()
-            .with_tag("17")
+        // Use a Unix socket on Unix hosts so tests do not depend on Docker's
+        // host-port forwarding, which can be unavailable in nested/containerized
+        // development environments.
+        let socket_dir = create_socket_dir();
+        let mut postgres = postgres::Postgres::default()
+            .with_tag("18")
             .with_env_var("POSTGRES_DB", database.clone())
             .with_env_var("POSTGRES_PASSWORD", TEST_POSTGRES_PASSWORD)
-            .with_env_var("POSTGRES_USER", TEST_POSTGRES_USER)
-            .start()
-            .await?;
-        let host = container.get_host().await?;
-        let port = container.get_host_port_ipv4(5432).await?;
-        let url = format!(
-            "postgresql://{TEST_POSTGRES_USER}:{TEST_POSTGRES_PASSWORD}@{host}:{port}/{database}"
-        );
+            .with_env_var("POSTGRES_USER", TEST_POSTGRES_USER);
+
+        if let Some(socket_dir) = socket_dir.as_ref() {
+            postgres = postgres.with_mount(Mount::bind_mount(
+                socket_dir.actual.to_string_lossy(),
+                "/var/run/postgresql",
+            ));
+        }
+
+        let container = postgres.start().await?;
+        let url = if let Some(socket_dir) = socket_dir.as_ref() {
+            format!(
+                "postgresql://{TEST_POSTGRES_USER}:{TEST_POSTGRES_PASSWORD}@{}/{database}",
+                encode_socket_host(&socket_dir.link)
+            )
+        } else {
+            let host = container.get_host().await?;
+            let port = container.get_host_port_ipv4(5432).await?;
+            format!(
+                "postgresql://{TEST_POSTGRES_USER}:{TEST_POSTGRES_PASSWORD}@{host}:{port}/{database}"
+            )
+        };
 
         Ok(Self {
-            _container: container,
+            container: Some(container),
             config: PostgresConnectionConfig::new(url).with_max_connections(8),
+            socket_dir,
         })
     }
 
@@ -75,6 +113,59 @@ impl TestDatabase {
     async fn connect(&self) -> TestResult<PgPool> {
         Ok(PgPool::connect(self.config.url()).await?)
     }
+}
+
+fn encode_socket_host(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('/', "%2F")
+}
+
+impl Drop for TestDatabase {
+    fn drop(&mut self) {
+        if let (Some(container), Some(_socket_dir)) = (&self.container, &self.socket_dir) {
+            let _ = std::process::Command::new("docker")
+                .args([
+                    "exec",
+                    container.id(),
+                    "sh",
+                    "-c",
+                    "rm -f /var/run/postgresql/.s.PGSQL.5432*; chmod 0777 /var/run/postgresql",
+                ])
+                .status();
+        }
+        drop(self.container.take());
+        if let Some(socket_dir) = self.socket_dir.take() {
+            let _ = fs::remove_dir_all(socket_dir.actual);
+            let _ = fs::remove_file(socket_dir.link);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn create_socket_dir() -> Option<SocketDir> {
+    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::symlink;
+
+    static NEXT_SOCKET_ID: AtomicU64 = AtomicU64::new(0);
+    let unique = NEXT_SOCKET_ID.fetch_add(1, Ordering::Relaxed);
+    let socket_root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/test-postgres-sockets");
+    fs::create_dir_all(&socket_root).expect("create postgres socket root");
+
+    let actual = socket_root.join(format!("socket-{unique}"));
+    let link = env::temp_dir().join(format!("bnpg-{}-{unique}", std::process::id()));
+
+    fs::create_dir_all(&actual).expect("create postgres socket dir");
+    fs::set_permissions(&actual, fs::Permissions::from_mode(0o777))
+        .expect("chmod postgres socket dir");
+    let _ = fs::remove_file(&link);
+    symlink(&actual, &link).expect("symlink postgres socket dir");
+
+    Some(SocketDir { actual, link })
+}
+
+#[cfg(not(unix))]
+fn create_socket_dir() -> Option<SocketDir> {
+    None
 }
 
 struct TestFixtureDir {
@@ -162,20 +253,20 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
 
     assert_eq!(
         first_report.applied_versions,
-        vec!["20260404000100", "20260404000200",]
+        vec!["20260404000100", "20260404000200", "20260426000100",]
     );
     assert!(first_report.skipped_versions.is_empty());
     assert!(second_report.applied_versions.is_empty());
     assert_eq!(
         second_report.skipped_versions,
-        vec!["20260404000100", "20260404000200",]
+        vec!["20260404000100", "20260404000200", "20260426000100",]
     );
     assert_eq!(
         applied
             .iter()
             .map(|row| row.version.as_str())
             .collect::<Vec<_>>(),
-        vec!["20260404000100", "20260404000200",]
+        vec!["20260404000100", "20260404000200", "20260426000100",]
     );
 
     let client = db.connect().await?;
@@ -197,6 +288,7 @@ ORDER BY tablename
     assert!(table_names.contains(&"crawler_run_checkpoints".to_string()));
     assert!(table_names.contains(&"node_observations".to_string()));
     assert!(table_names.contains(&"schema_migrations".to_string()));
+    assert!(table_names.contains(&"unreachable_nodes".to_string()));
 
     Ok(())
 }
@@ -298,6 +390,398 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
     );
 
     Ok(())
+}
+
+#[tokio::test]
+async fn repository_loads_and_updates_unreachable_nodes() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+    let run_id = run_id(12);
+    let base_time = Utc::now();
+
+    repository
+        .insert_observations_stream(vec![
+            sample_connect_failed_observation(
+                &run_id,
+                "1.1.1.10",
+                1201,
+                base_time - Duration::minutes(1),
+            ),
+            sample_failed_observation(&run_id, "1.1.1.14", 1203, base_time - Duration::seconds(30)),
+            sample_verified_observation(
+                &run_id,
+                "1.1.1.11",
+                1202,
+                base_time,
+                Some(64512),
+                Some("Example ASN"),
+                Some("US"),
+            ),
+        ])
+        .await?;
+
+    let mut loaded = repository
+        .load_unreachable_nodes(base_time - Duration::hours(1))
+        .await?;
+    loaded.sort_by(|left, right| left.canonical.cmp(&right.canonical));
+
+    assert!(
+        loaded.is_empty(),
+        "failed observations alone should not populate active unreachable state"
+    );
+
+    let recorded = CrawlEndpoint::new(
+        "1.1.1.12",
+        8333,
+        CrawlNetwork::Ipv4,
+        Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 12))),
+    );
+    repository
+        .apply_unreachable_node_updates(vec![UnreachableNodeUpdate {
+            endpoint: recorded.clone(),
+            crawl_run_id: run_id,
+            observed_at: base_time + Duration::seconds(1),
+            failure_classification: Some(btc_network::crawler::FailureClassification::Connect),
+            kind: UnreachableNodeUpdateKind::Record,
+        }])
+        .await?;
+
+    let client = db.connect().await?;
+    let row = query::<Postgres>(
+        "
+SELECT
+    endpoint,
+    network_type,
+    last_crawl_run_id,
+    last_failure_classification,
+    failure_count,
+    recovered_at
+FROM unreachable_nodes
+WHERE endpoint = $1
+",
+    )
+    .bind(recorded.canonical.as_str())
+    .fetch_one(&client)
+    .await?;
+
+    assert_eq!(row.get::<String, _>("endpoint"), recorded.canonical);
+    assert_eq!(row.get::<String, _>("network_type"), "ipv4");
+    assert_eq!(
+        row.get::<uuid::Uuid, _>("last_crawl_run_id"),
+        run_id.as_uuid()
+    );
+    assert_eq!(
+        row.get::<String, _>("last_failure_classification"),
+        "connect"
+    );
+    assert_eq!(row.get::<i64, _>("failure_count"), 1);
+    assert!(
+        row.get::<Option<chrono::DateTime<Utc>>, _>("recovered_at")
+            .is_none()
+    );
+
+    let loaded = repository
+        .load_unreachable_nodes(base_time - Duration::hours(1))
+        .await?;
+    assert!(
+        loaded
+            .iter()
+            .any(|endpoint| endpoint.canonical == recorded.canonical)
+    );
+
+    let handshake_recorded = CrawlEndpoint::new(
+        "1.1.1.13",
+        8333,
+        CrawlNetwork::Ipv4,
+        Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 13))),
+    );
+    repository
+        .apply_unreachable_node_updates(vec![UnreachableNodeUpdate {
+            endpoint: handshake_recorded.clone(),
+            crawl_run_id: run_id,
+            observed_at: base_time + Duration::seconds(1),
+            failure_classification: Some(btc_network::crawler::FailureClassification::Handshake),
+            kind: UnreachableNodeUpdateKind::Record,
+        }])
+        .await?;
+
+    let loaded = repository
+        .load_unreachable_nodes(base_time - Duration::hours(1))
+        .await?;
+    assert!(
+        loaded
+            .iter()
+            .any(|endpoint| endpoint.canonical == handshake_recorded.canonical)
+    );
+
+    repository
+        .apply_unreachable_node_updates(vec![UnreachableNodeUpdate {
+            endpoint: recorded.clone(),
+            crawl_run_id: run_id,
+            observed_at: base_time + Duration::seconds(2),
+            failure_classification: None,
+            kind: UnreachableNodeUpdateKind::Recover,
+        }])
+        .await?;
+
+    let loaded = repository
+        .load_unreachable_nodes(base_time + Duration::seconds(1))
+        .await?;
+    assert!(
+        !loaded
+            .iter()
+            .any(|endpoint| endpoint.canonical == recorded.canonical)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn crawler_records_unreachable_node_after_retry_budget() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = Arc::new(PostgresCrawlerRepository::new(&db.config)?);
+    let endpoint = closed_loopback_endpoint()?;
+    let crawler = Crawler::with_adapters(
+        CrawlerConfig {
+            max_concurrency: 1,
+            max_in_flight_connects: 1,
+            max_tracked_nodes: 16,
+            max_runtime: StdDuration::from_secs(5),
+            idle_timeout: StdDuration::from_millis(20),
+            lifecycle_tick: StdDuration::from_millis(5),
+            checkpoint_interval: StdDuration::from_millis(50),
+            connect_timeout: StdDuration::from_millis(100),
+            connect_max_attempts: 3,
+            unreachable_nodes_lookback: StdDuration::from_secs(7 * 24 * 60 * 60),
+            follow_discovered_nodes: true,
+            connect_retry_backoff: StdDuration::ZERO,
+            io_timeout: StdDuration::from_millis(100),
+            tor_socks5_addr: None,
+            shutdown_grace_period: StdDuration::from_secs(1),
+            verbose: false,
+        },
+        repository,
+        Arc::new(UnavailableEnrichmentProvider),
+    );
+
+    let summary = crawler
+        .run_with_seed_nodes(vec![endpoint.clone()])
+        .await
+        .map_err(|err| std::io::Error::other(err.to_string()))?;
+
+    assert_eq!(summary.failed_tasks, 3);
+
+    let client = db.connect().await?;
+    let row = query::<Postgres>(
+        "
+SELECT
+    endpoint,
+    network_type,
+    last_failure_classification,
+    failure_count,
+    recovered_at
+FROM unreachable_nodes
+WHERE endpoint = $1
+",
+    )
+    .bind(endpoint.canonical.as_str())
+    .fetch_one(&client)
+    .await?;
+
+    assert_eq!(row.get::<String, _>("endpoint"), endpoint.canonical);
+    assert_eq!(row.get::<String, _>("network_type"), "ipv4");
+    assert_eq!(
+        row.get::<String, _>("last_failure_classification"),
+        "connect"
+    );
+    assert_eq!(row.get::<i64, _>("failure_count"), 1);
+    assert!(
+        row.get::<Option<chrono::DateTime<Utc>>, _>("recovered_at")
+            .is_none()
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn crawler_records_unreachable_node_after_handshake_timeouts() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = Arc::new(PostgresCrawlerRepository::new(&db.config)?);
+    let (endpoint, server) = start_fake_peer(FakePeerMode::Silent).await?;
+    let crawler = Crawler::with_adapters(
+        crawler_retry_test_config(),
+        repository,
+        Arc::new(UnavailableEnrichmentProvider),
+    );
+
+    let summary = crawler
+        .run_with_seed_nodes(vec![endpoint.clone()])
+        .await
+        .map_err(|err| std::io::Error::other(err.to_string()))?;
+    server.abort();
+
+    assert_eq!(summary.failed_tasks, 3);
+    assert_unreachable_node(&db, &endpoint, "handshake").await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn crawler_records_unreachable_node_after_peer_discovery_timeouts() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = Arc::new(PostgresCrawlerRepository::new(&db.config)?);
+    let (endpoint, server) = start_fake_peer(FakePeerMode::NoAddrResponse).await?;
+    let crawler = Crawler::with_adapters(
+        crawler_retry_test_config(),
+        repository,
+        Arc::new(UnavailableEnrichmentProvider),
+    );
+
+    let summary = crawler
+        .run_with_seed_nodes(vec![endpoint.clone()])
+        .await
+        .map_err(|err| std::io::Error::other(err.to_string()))?;
+    server.abort();
+
+    assert_eq!(summary.failed_tasks, 3);
+    assert_unreachable_node(&db, &endpoint, "peer_discovery").await?;
+
+    Ok(())
+}
+
+fn closed_loopback_endpoint() -> TestResult<CrawlEndpoint> {
+    let listener = StdTcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+    let port = listener.local_addr()?.port();
+    drop(listener);
+
+    Ok(CrawlEndpoint::new(
+        Ipv4Addr::LOCALHOST.to_string(),
+        port,
+        CrawlNetwork::Ipv4,
+        Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+    ))
+}
+
+fn crawler_retry_test_config() -> CrawlerConfig {
+    CrawlerConfig {
+        max_concurrency: 1,
+        max_in_flight_connects: 1,
+        max_tracked_nodes: 16,
+        max_runtime: StdDuration::from_secs(5),
+        idle_timeout: StdDuration::from_millis(20),
+        lifecycle_tick: StdDuration::from_millis(5),
+        checkpoint_interval: StdDuration::from_millis(50),
+        connect_timeout: StdDuration::from_millis(100),
+        connect_max_attempts: 3,
+        unreachable_nodes_lookback: StdDuration::from_secs(7 * 24 * 60 * 60),
+        follow_discovered_nodes: true,
+        connect_retry_backoff: StdDuration::ZERO,
+        io_timeout: StdDuration::from_millis(100),
+        tor_socks5_addr: None,
+        shutdown_grace_period: StdDuration::from_secs(1),
+        verbose: false,
+    }
+}
+
+async fn assert_unreachable_node(
+    db: &TestDatabase,
+    endpoint: &CrawlEndpoint,
+    expected_failure_classification: &str,
+) -> TestResult {
+    let client = db.connect().await?;
+    let row = query::<Postgres>(
+        "
+SELECT
+    endpoint,
+    network_type,
+    last_failure_classification,
+    failure_count,
+    recovered_at
+FROM unreachable_nodes
+WHERE endpoint = $1
+",
+    )
+    .bind(endpoint.canonical.as_str())
+    .fetch_one(&client)
+    .await?;
+
+    assert_eq!(row.get::<String, _>("endpoint"), endpoint.canonical);
+    assert_eq!(row.get::<String, _>("network_type"), "ipv4");
+    assert_eq!(
+        row.get::<String, _>("last_failure_classification"),
+        expected_failure_classification
+    );
+    assert_eq!(row.get::<i64, _>("failure_count"), 1);
+    assert!(
+        row.get::<Option<chrono::DateTime<Utc>>, _>("recovered_at")
+            .is_none()
+    );
+
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum FakePeerMode {
+    Silent,
+    NoAddrResponse,
+}
+
+async fn start_fake_peer(mode: FakePeerMode) -> TestResult<(CrawlEndpoint, JoinHandle<()>)> {
+    let listener = TokioTcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
+    let port = listener.local_addr()?.port();
+    let endpoint = CrawlEndpoint::new(
+        Ipv4Addr::LOCALHOST.to_string(),
+        port,
+        CrawlNetwork::Ipv4,
+        Some(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+    );
+    let server = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            tokio::spawn(handle_fake_peer_connection(stream, mode));
+        }
+    });
+
+    Ok((endpoint, server))
+}
+
+async fn handle_fake_peer_connection(mut stream: TcpStream, mode: FakePeerMode) {
+    match mode {
+        FakePeerMode::Silent => {
+            tokio::time::sleep(StdDuration::from_secs(1)).await;
+        }
+        FakePeerMode::NoAddrResponse => {
+            if complete_fake_handshake(&mut stream).await.is_ok() {
+                tokio::time::sleep(StdDuration::from_secs(1)).await;
+            }
+        }
+    }
+}
+
+async fn complete_fake_handshake(stream: &mut TcpStream) -> std::io::Result<()> {
+    let first = wire::read_message_async(stream).await?;
+    if first.command != Command::Version {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "expected version message",
+        ));
+    }
+
+    let payload = wire::build_version_payload(wire::constants::PROTOCOL_VERSION, 0)?;
+    wire::send_message_async(stream, Command::Version, &payload).await?;
+    wire::send_message_async(stream, Command::Verack, &[]).await?;
+
+    loop {
+        let raw = wire::read_message_async(stream).await?;
+        match raw.command {
+            Command::Verack => return Ok(()),
+            Command::Ping => wire::send_message_async(stream, Command::Pong, &raw.payload).await?,
+            _ => {}
+        }
+    }
 }
 
 #[tokio::test]
@@ -843,6 +1327,41 @@ fn sample_failed_observation(
         discovered_peer_addresses_count: 0,
         latency: Some(std::time::Duration::from_millis(300)),
         failure_classification: Some(btc_network::crawler::FailureClassification::Handshake),
+    }
+    .into_persisted(
+        observation_id(observation_id_value),
+        IpEnrichment::matched(
+            Some(64513),
+            Some("Transit ASN".to_string()),
+            Some("DE".to_string()),
+            Some(format!("{host}/24")),
+        ),
+    )
+}
+
+fn sample_connect_failed_observation(
+    run_id: &CrawlRunId,
+    host: &str,
+    observation_id_value: u128,
+    observed_at: chrono::DateTime<Utc>,
+) -> PersistedNodeObservation {
+    RawNodeObservation {
+        observed_at,
+        crawl_run_id: *run_id,
+        endpoint: CrawlEndpoint::new(
+            host,
+            8333,
+            CrawlNetwork::Ipv4,
+            Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
+        ),
+        protocol_version: None,
+        services: None,
+        user_agent: None,
+        start_height: None,
+        relay: None,
+        discovered_peer_addresses_count: 0,
+        latency: Some(std::time::Duration::from_millis(300)),
+        failure_classification: Some(btc_network::crawler::FailureClassification::Connect),
     }
     .into_persisted(
         observation_id(observation_id_value),

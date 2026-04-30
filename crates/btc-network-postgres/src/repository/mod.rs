@@ -1,17 +1,20 @@
 use btc_network::crawler::{
-    AsnNodeCountItem, CountNodesByAsnRow, CrawlRunCheckpoint, CrawlRunDetail, CrawlRunId,
-    CrawlRunListItem, CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError,
-    LastRunAsnCountItem, LastRunAsnOrganizationCountItem, LastRunCountryCountItem,
-    LastRunNetworkTypeCountItem, LastRunNodeSummaryItem, LastRunProtocolVersionCountItem,
-    LastRunServicesCountItem, LastRunStartHeightCountItem, LastRunUserAgentCountItem,
-    PersistedNodeObservation, RepositoryFuture, RepositoryRuntimeMetrics,
+    AsnNodeCountItem, CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunDetail,
+    CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader, CrawlerRepository,
+    CrawlerRepositoryError, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
+    LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
+    LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
+    LastRunUserAgentCountItem, PersistedNodeObservation, RepositoryFuture,
+    RepositoryRuntimeMetrics, UnreachableNodeUpdate,
 };
+use chrono::{DateTime, Utc};
 use sqlx_postgres::PgPool;
 
 use crate::config::{PostgresConfigError, PostgresConnectionConfig};
 
 mod analytics;
 mod runs;
+mod unreachable;
 mod writes;
 
 /// PostgreSQL-backed implementation of the crawler write and analytics ports.
@@ -75,6 +78,22 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
         Box::pin(async move { analytics::count_nodes_by_asn(&self.pool).await })
+    }
+
+    fn load_unreachable_nodes<'a>(
+        &'a self,
+        since: DateTime<Utc>,
+    ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> {
+        Box::pin(async move { unreachable::load_unreachable_nodes(&self.pool, since).await })
+    }
+
+    fn apply_unreachable_node_updates<'a>(
+        &'a self,
+        updates: Vec<UnreachableNodeUpdate>,
+    ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+        Box::pin(
+            async move { unreachable::apply_unreachable_node_updates(&self.pool, updates).await },
+        )
     }
 
     fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {

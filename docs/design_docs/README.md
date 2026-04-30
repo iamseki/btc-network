@@ -45,4 +45,5 @@ Use only the canonical status values below.
 | `BNDD-0008` | `Minimal durable crawler recovery state` | `deprecated` | [BNDD-0008/BNDD-0008.md](./BNDD-0008/BNDD-0008.md) |
 | `BNDD-0009` | `Outbound connection admission control and runtime pressure telemetry` | `implemented` | [BNDD-0009/BNDD-0009.md](./BNDD-0009/BNDD-0009.md) |
 | `BNDD-0010` | `Optional Tor reachability layer for crawler observations` | `implemented` | [BNDD-0010/BNDD-0010.md](./BNDD-0010/BNDD-0010.md) |
-| `BNDD-0011` | `Low-cost public API edge and PostgreSQL deployment` | `proposed` | [BNDD-0011/BNDD-0011.md](./BNDD-0011/BNDD-0011.md) |
+| `BNDD-0011` | `AWS split-VM API, PostgreSQL, and edge deployment strategy` | `accepted` | [BNDD-0011/BNDD-0011.md](./BNDD-0011/BNDD-0011.md) |
+| `BNDD-0012` | `Unreachable-node exclusion and recovery crawler path` | `implemented` | [BNDD-0012/BNDD-0012.md](./BNDD-0012/BNDD-0012.md) |

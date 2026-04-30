@@ -6,6 +6,7 @@ mod ports;
 mod types;
 mod worker;
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex as StdSyncMutex;
@@ -29,6 +30,7 @@ pub use domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
     CrawlRunMetrics, FailureClassification, IpEnrichment, IpEnrichmentStatus, ObservationId,
     PersistedNodeObservation, RawNodeObservation, StartCrawlRequest, StopCrawlRequest,
+    UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };
 use lifecycle::{
     CheckpointEmitterContext, SharedStopReason, capture_snapshot, checkpoint_from_capture,
@@ -40,7 +42,7 @@ pub use ports::{
     RepositoryFuture, RepositoryRuntimeMetrics,
 };
 use types::QueuedNode;
-use types::{CrawlState, CrawlerStats};
+use types::{CrawlState, CrawlerStats, PersistedNodeRecord, UnreachableNodeAction};
 pub use types::{CrawlSummary, CrawlerConfig, NodeState};
 use worker::{run_worker, seed_initial_nodes};
 
@@ -88,6 +90,19 @@ impl Crawler {
             .into_iter()
             .map(CrawlEndpoint::from_socket_addr)
             .collect::<Vec<_>>();
+        self.run_with_seed_nodes(seed_nodes).await
+    }
+
+    /// Starts a normal crawl from caller-supplied seed nodes.
+    ///
+    /// This keeps DNS seed selection outside the crawler for integration tests
+    /// and operator-directed runs while preserving the same retry, exclusion,
+    /// and persistence behavior as `run`.
+    pub async fn run_with_seed_nodes(
+        &self,
+        seed_nodes: Vec<CrawlEndpoint>,
+    ) -> Result<CrawlSummary, Box<dyn Error>> {
+        let excluded_nodes = self.load_unreachable_node_set(&self.config).await?;
         let request = StartCrawlRequest {
             config: self.config.clone(),
             seed_nodes,
@@ -97,7 +112,38 @@ impl Crawler {
         let processor: Arc<dyn NodeProcessor> =
             Arc::new(DefaultNodeProcessor::new(Arc::clone(&connect_limiter)));
 
-        self.run_with_request(request, processor, Some(connect_limiter))
+        self.run_with_request(request, processor, Some(connect_limiter), excluded_nodes)
+            .await
+    }
+
+    /// Starts a recovery crawl that visits only currently unreachable nodes.
+    ///
+    /// Successful visits soft-delete the endpoint from unreachable state. The
+    /// recovery path does not follow discovered peers; normal crawling owns new
+    /// peer expansion.
+    pub async fn run_unreachable_recovery(&self) -> Result<CrawlSummary, Box<dyn Error>> {
+        let seed_nodes = self
+            .repository
+            .load_unreachable_nodes(unreachable_since(&self.config))
+            .await?;
+        if seed_nodes.is_empty() {
+            return Ok(CrawlSummary {
+                scheduled_tasks: 0,
+                successful_handshakes: 0,
+                failed_tasks: 0,
+                unique_nodes: 0,
+                elapsed: Duration::ZERO,
+            });
+        }
+
+        let mut config = self.config.clone();
+        config.follow_discovered_nodes = false;
+        let connect_limiter = Arc::new(Semaphore::new(config.max_in_flight_connects.max(1)));
+        let processor: Arc<dyn NodeProcessor> =
+            Arc::new(DefaultNodeProcessor::new(Arc::clone(&connect_limiter)));
+        let request = StartCrawlRequest { config, seed_nodes };
+
+        self.run_with_request(request, processor, Some(connect_limiter), HashSet::new())
             .await
     }
 
@@ -106,6 +152,7 @@ impl Crawler {
         request: StartCrawlRequest,
         processor: Arc<dyn NodeProcessor>,
         connect_limiter: Option<Arc<Semaphore>>,
+        excluded_nodes: HashSet<String>,
     ) -> Result<CrawlSummary, Box<dyn Error>> {
         if request.seed_nodes.is_empty() {
             return Err("no seed addresses resolved".into());
@@ -114,7 +161,12 @@ impl Crawler {
         let started_at = Instant::now();
         let started_at_utc = Utc::now();
         let run_id = CrawlRunId::now_v7();
-        let state = Arc::new(Mutex::new(CrawlState::new()));
+        let crawl_state = if excluded_nodes.is_empty() {
+            CrawlState::new()
+        } else {
+            CrawlState::with_excluded_nodes(excluded_nodes)
+        };
+        let state = Arc::new(Mutex::new(crawl_state));
         let stats = Arc::new(CrawlerStats::default());
         let checkpoint_sequence = Arc::new(AtomicU64::new(0));
         let phase = Arc::new(Mutex::new(CrawlPhase::Crawling));
@@ -185,10 +237,12 @@ impl Crawler {
         };
 
         let queue_rx = Arc::new(Mutex::new(queue_rx));
+        let (retry_queue_tx, retry_queue_rx) = mpsc::unbounded_channel::<QueuedNode>();
+        let retry_queue_rx = Arc::new(Mutex::new(retry_queue_rx));
         let retry_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let worker_count = config.max_concurrency.max(1);
         let (observation_tx, observation_rx) =
-            mpsc::channel::<PersistedNodeObservation>(worker_count * 2);
+            mpsc::channel::<PersistedNodeRecord>(worker_count * 2);
 
         // Split long-running crawler responsibilities into focused tasks:
         // workers visit nodes and enqueue observations, the writer persists
@@ -204,6 +258,7 @@ impl Crawler {
         )));
         let lifecycle_handle = AbortOnDropHandle::new(tokio::spawn(run_lifecycle(
             Arc::clone(&state),
+            Arc::clone(&stats),
             Arc::clone(&stop),
             Arc::clone(&stop_reason),
             started_at,
@@ -242,6 +297,8 @@ impl Crawler {
                     stop: Arc::clone(&stop),
                     queue_rx: Arc::clone(&queue_rx),
                     queue_tx: queue_tx.clone(),
+                    retry_queue_rx: Arc::clone(&retry_queue_rx),
+                    retry_queue_tx: retry_queue_tx.clone(),
                     retry_tasks: Arc::clone(&retry_tasks),
                     observation_tx: observation_tx.clone(),
                     processor: Arc::clone(&processor),
@@ -250,6 +307,7 @@ impl Crawler {
             ))));
         }
         drop(queue_tx);
+        drop(retry_queue_tx);
         drop(observation_tx);
 
         let mut task_set = CrawlTaskSet::new(
@@ -274,6 +332,20 @@ impl Crawler {
             warn!(
                 "[crawler] worker shutdown grace period elapsed after {:?}; aborting remaining workers",
                 config.shutdown_grace_period
+            );
+        }
+        let (pending_nodes, in_flight_nodes) = {
+            let guard = state.lock().await;
+            (guard.pending_nodes.len(), guard.in_flight_nodes.len())
+        };
+        let delayed_retries = stats.delayed_retry_backlog.load(Ordering::Relaxed);
+        if pending_nodes > 0 || in_flight_nodes > 0 || delayed_retries > 0 {
+            warn!(
+                pending_nodes,
+                in_flight_nodes,
+                delayed_retries,
+                stop_reason = ?load_stop_reason(&stop_reason),
+                "[crawler] shutdown left queued or active crawler work"
             );
         }
         abort_and_drain_retry_tasks(&retry_tasks).await;
@@ -353,6 +425,31 @@ impl Crawler {
             elapsed: started_at.elapsed(),
         })
     }
+
+    async fn load_unreachable_node_set(
+        &self,
+        config: &CrawlerConfig,
+    ) -> Result<HashSet<String>, CrawlerRepositoryError> {
+        let nodes = self
+            .repository
+            .load_unreachable_nodes(unreachable_since(config))
+            .await?;
+        let excluded = nodes
+            .into_iter()
+            .map(|node| node.canonical)
+            .collect::<HashSet<_>>();
+        info!(
+            excluded_nodes = excluded.len(),
+            "[crawler] loaded unreachable-node exclusion set"
+        );
+        Ok(excluded)
+    }
+}
+
+fn unreachable_since(config: &CrawlerConfig) -> DateTime<Utc> {
+    let lookback = chrono::Duration::from_std(config.unreachable_nodes_lookback)
+        .unwrap_or_else(|_| chrono::Duration::days(30));
+    Utc::now() - lookback
 }
 
 fn record_failure(failure_reason: &mut Option<String>, reason: String) {
@@ -413,6 +510,13 @@ fn abort_remaining_workers(worker_handles: &mut Vec<AbortOnDropHandle<()>>) {
 
 async fn abort_and_drain_retry_tasks(retry_tasks: &Arc<Mutex<JoinSet<()>>>) {
     let mut retry_tasks = retry_tasks.lock().await;
+    let retry_task_count = retry_tasks.len();
+    if retry_task_count > 0 {
+        warn!(
+            retry_task_count,
+            "[crawler] aborting delayed retry tasks during shutdown"
+        );
+    }
     retry_tasks.abort_all();
     while retry_tasks.join_next().await.is_some() {}
 }
@@ -523,7 +627,7 @@ async fn run_observation_writer(
     repository: Arc<dyn CrawlerRepository>,
     stats: Arc<CrawlerStats>,
     stop: Arc<AtomicBool>,
-    mut observation_rx: mpsc::Receiver<PersistedNodeObservation>,
+    mut observation_rx: mpsc::Receiver<PersistedNodeRecord>,
     batch_size: usize,
 ) -> Result<(), CrawlerRepositoryError> {
     let batch_size = batch_size.max(1);
@@ -547,14 +651,73 @@ async fn run_observation_writer(
         }
 
         let batch_len = batch.len();
-        if let Err(err) = repository.insert_observations_stream(batch).await {
+        let (observations, unreachable_updates) = split_persisted_records_into_writes(batch);
+        let unreachable_update_count = unreachable_updates.len();
+        if let Err(err) = repository.insert_observations_stream(observations).await {
             stop.store(true, Ordering::Relaxed);
             return Err(err);
+        }
+        for update in &unreachable_updates {
+            warn!(
+                node = %update.endpoint.canonical,
+                update_kind = ?update.kind,
+                failure_classification = ?update.failure_classification,
+                "[crawler] applying unreachable-node update"
+            );
+        }
+        if let Err(err) = repository
+            .apply_unreachable_node_updates(unreachable_updates)
+            .await
+        {
+            stop.store(true, Ordering::Relaxed);
+            return Err(err);
+        }
+        if unreachable_update_count > 0 {
+            warn!(
+                update_count = unreachable_update_count,
+                "[crawler] applied unreachable-node updates"
+            );
         }
 
         stats.persisted_rows.fetch_add(batch_len, Ordering::Relaxed);
         stats.writer_backlog.fetch_sub(batch_len, Ordering::Relaxed);
     }
+}
+
+fn split_persisted_records_into_writes(
+    records: Vec<PersistedNodeRecord>,
+) -> (Vec<PersistedNodeObservation>, Vec<UnreachableNodeUpdate>) {
+    let mut observations = Vec::with_capacity(records.len());
+    let mut unreachable_updates = Vec::new();
+
+    for record in records {
+        let action = record.unreachable_action;
+        let observation = record.observation;
+        match action {
+            UnreachableNodeAction::None => {}
+            UnreachableNodeAction::Record => {
+                unreachable_updates.push(UnreachableNodeUpdate {
+                    endpoint: observation.raw.endpoint.clone(),
+                    crawl_run_id: observation.raw.crawl_run_id,
+                    observed_at: observation.raw.observed_at,
+                    failure_classification: observation.raw.failure_classification.clone(),
+                    kind: UnreachableNodeUpdateKind::Record,
+                });
+            }
+            UnreachableNodeAction::Recover => {
+                unreachable_updates.push(UnreachableNodeUpdate {
+                    endpoint: observation.raw.endpoint.clone(),
+                    crawl_run_id: observation.raw.crawl_run_id,
+                    observed_at: observation.raw.observed_at,
+                    failure_classification: None,
+                    kind: UnreachableNodeUpdateKind::Recover,
+                });
+            }
+        }
+        observations.push(observation);
+    }
+
+    (observations, unreachable_updates)
 }
 
 /// Translates process signals into the crawler's shared shutdown flag.
@@ -685,11 +848,29 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
+    struct FailingNodeProcessor {
+        failure: crate::crawler::types::NodeVisitFailure,
+    }
+
+    impl NodeProcessor for FailingNodeProcessor {
+        fn process<'a>(
+            &'a self,
+            _endpoint: CrawlEndpoint,
+            _config: CrawlerConfig,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = NodeVisitResult> + Send + 'a>>
+        {
+            let failure = self.failure.clone();
+            Box::pin(async move { Err(Box::new(failure)) })
+        }
+    }
+
     #[derive(Default)]
     struct FlakyCheckpointRepository {
         checkpoint_results: StdSyncMutex<VecDeque<Result<(), CrawlerRepositoryError>>>,
         observations: StdSyncMutex<Vec<PersistedNodeObservation>>,
         checkpoints: StdSyncMutex<Vec<CrawlRunCheckpoint>>,
+        unreachable_updates: StdSyncMutex<Vec<UnreachableNodeUpdate>>,
     }
 
     impl FlakyCheckpointRepository {
@@ -698,6 +879,7 @@ mod tests {
                 checkpoint_results: StdSyncMutex::new(VecDeque::from(checkpoint_results)),
                 observations: StdSyncMutex::new(Vec::new()),
                 checkpoints: StdSyncMutex::new(Vec::new()),
+                unreachable_updates: StdSyncMutex::new(Vec::new()),
             }
         }
     }
@@ -768,6 +950,19 @@ mod tests {
         ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
+
+        fn apply_unreachable_node_updates<'a>(
+            &'a self,
+            updates: Vec<UnreachableNodeUpdate>,
+        ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+            Box::pin(async move {
+                self.unreachable_updates
+                    .lock()
+                    .expect("unreachable updates lock")
+                    .extend(updates);
+                Ok(())
+            })
+        }
     }
 
     struct StaticEnrichmentProvider;
@@ -785,6 +980,16 @@ mod tests {
             CrawlNetwork::Ipv4,
             Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, octet))),
         )
+    }
+
+    fn failed_visit(endpoint: CrawlEndpoint) -> crate::crawler::types::NodeVisitFailure {
+        crate::crawler::types::NodeVisitFailure {
+            node: endpoint,
+            latency: Duration::from_millis(5),
+            classification: FailureClassification::Connect,
+            message: "connect failed".to_string(),
+            connect_error_kind: Some(std::io::ErrorKind::TimedOut),
+        }
     }
 
     fn static_visit(endpoint: CrawlEndpoint) -> NodeVisit {
@@ -930,6 +1135,8 @@ mod tests {
                 checkpoint_interval: Duration::from_millis(5),
                 connect_timeout: Duration::from_millis(50),
                 connect_max_attempts: 1,
+                unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+                follow_discovered_nodes: true,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 tor_socks5_addr: None,
@@ -952,11 +1159,118 @@ mod tests {
                 },
                 processor,
                 None,
+                HashSet::new(),
             )
             .await
             .expect_err("checkpoint emitter failures should fail the crawl");
 
         assert!(err.to_string().contains("periodic checkpoint failed"));
+    }
+
+    #[tokio::test]
+    async fn terminal_failure_writes_unreachable_update() {
+        let repository = Arc::new(FlakyCheckpointRepository::default());
+        let crawler = Crawler::with_adapters(
+            CrawlerConfig {
+                max_concurrency: 1,
+                max_in_flight_connects: 1,
+                max_tracked_nodes: 16,
+                max_runtime: Duration::from_secs(1),
+                idle_timeout: Duration::from_millis(20),
+                lifecycle_tick: Duration::from_millis(5),
+                checkpoint_interval: Duration::from_millis(50),
+                connect_timeout: Duration::from_millis(50),
+                connect_max_attempts: 1,
+                unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+                follow_discovered_nodes: true,
+                connect_retry_backoff: Duration::ZERO,
+                io_timeout: Duration::from_millis(50),
+                tor_socks5_addr: None,
+                shutdown_grace_period: Duration::from_secs(1),
+                verbose: false,
+            },
+            repository.clone(),
+            Arc::new(StaticEnrichmentProvider),
+        );
+        let seed = public_endpoint(11);
+        let processor: Arc<dyn NodeProcessor> = Arc::new(FailingNodeProcessor {
+            failure: failed_visit(seed.clone()),
+        });
+
+        let summary = crawler
+            .run_with_request(
+                StartCrawlRequest {
+                    config: crawler.config.clone(),
+                    seed_nodes: vec![seed.clone()],
+                },
+                processor,
+                None,
+                HashSet::new(),
+            )
+            .await
+            .expect("terminal failure should complete cleanly");
+
+        assert_eq!(summary.failed_tasks, 1);
+        let updates = repository
+            .unreachable_updates
+            .lock()
+            .expect("unreachable updates lock");
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].endpoint, seed);
+        assert_eq!(updates[0].kind, UnreachableNodeUpdateKind::Record);
+    }
+
+    #[tokio::test]
+    async fn exhausted_retries_write_unreachable_update() {
+        let repository = Arc::new(FlakyCheckpointRepository::default());
+        let crawler = Crawler::with_adapters(
+            CrawlerConfig {
+                max_concurrency: 1,
+                max_in_flight_connects: 1,
+                max_tracked_nodes: 16,
+                max_runtime: Duration::from_secs(1),
+                idle_timeout: Duration::from_millis(20),
+                lifecycle_tick: Duration::from_millis(5),
+                checkpoint_interval: Duration::from_millis(50),
+                connect_timeout: Duration::from_millis(50),
+                connect_max_attempts: 5,
+                unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+                follow_discovered_nodes: true,
+                connect_retry_backoff: Duration::ZERO,
+                io_timeout: Duration::from_millis(50),
+                tor_socks5_addr: None,
+                shutdown_grace_period: Duration::from_secs(1),
+                verbose: false,
+            },
+            repository.clone(),
+            Arc::new(StaticEnrichmentProvider),
+        );
+        let seed = public_endpoint(12);
+        let processor: Arc<dyn NodeProcessor> = Arc::new(FailingNodeProcessor {
+            failure: failed_visit(seed.clone()),
+        });
+
+        let summary = crawler
+            .run_with_request(
+                StartCrawlRequest {
+                    config: crawler.config.clone(),
+                    seed_nodes: vec![seed.clone()],
+                },
+                processor,
+                None,
+                HashSet::new(),
+            )
+            .await
+            .expect("exhausted retries should complete cleanly");
+
+        assert_eq!(summary.failed_tasks, 5);
+        let updates = repository
+            .unreachable_updates
+            .lock()
+            .expect("unreachable updates lock");
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].endpoint, seed);
+        assert_eq!(updates[0].kind, UnreachableNodeUpdateKind::Record);
     }
 
     #[tokio::test]
@@ -973,6 +1287,8 @@ mod tests {
                 checkpoint_interval: Duration::from_millis(5),
                 connect_timeout: Duration::from_millis(50),
                 connect_max_attempts: 1,
+                unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+                follow_discovered_nodes: true,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 tor_socks5_addr: None,
@@ -995,7 +1311,9 @@ mod tests {
         let crawler_task = {
             let crawler = Arc::clone(&crawler);
             tokio::spawn(async move {
-                let _ = crawler.run_with_request(request, processor, None).await;
+                let _ = crawler
+                    .run_with_request(request, processor, None, HashSet::new())
+                    .await;
             })
         };
 
@@ -1058,6 +1376,8 @@ mod tests {
                 checkpoint_interval: Duration::from_millis(5),
                 connect_timeout: Duration::from_millis(50),
                 connect_max_attempts: 1,
+                unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+                follow_discovered_nodes: true,
                 connect_retry_backoff: Duration::ZERO,
                 io_timeout: Duration::from_millis(50),
                 tor_socks5_addr: None,
@@ -1081,6 +1401,7 @@ mod tests {
                 },
                 processor,
                 None,
+                HashSet::new(),
             )
             .await
             .expect("max-runtime stop should still complete cleanly");

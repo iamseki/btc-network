@@ -18,6 +18,12 @@ There are now two supported local paths:
 3. Run `make postgres-migrate`.
 4. Run `make crawler ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"`.
 
+To retry only nodes currently marked unreachable, run:
+
+```bash
+make crawler-unreachable-recovery ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"
+```
+
 ## Local Paths
 
 - PostgreSQL data: `.dev-data/postgres/`
@@ -112,9 +118,9 @@ That means the runtime containers:
 - do not compile on every start
 - only mount the host-managed MMDB directory read-only when the crawler needs it
 
-The image includes both binaries used by the crawler stack:
+The image includes both executables used by the crawler stack:
 
-- `btc-network-crawler`
+- `btc-network-crawler` (normal crawl and `recover-unreachable` subcommand)
 - `btc-network-postgres-migrate`
 
 The profiled crawler service also sets default runtime tuning through
@@ -125,6 +131,7 @@ environment variables in `compose/crawler.yml`, including:
 - `BTC_NETWORK_CRAWLER_MAX_TRACKED_NODES=500000`
 - `BTC_NETWORK_POSTGRES_MAX_CONNECTIONS=16`
 - `BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS=5`
+- `BTC_NETWORK_CRAWLER_UNREACHABLE_LOOKBACK_DAYS=7`
 - `BTC_NETWORK_CRAWLER_CONNECT_RETRY_BACKOFF_MS=250`
 - `BTC_NETWORK_CRAWLER_CONNECT_TIMEOUT_SECS=30`
 - `BTC_NETWORK_CRAWLER_IO_TIMEOUT_SECS=20`
@@ -170,6 +177,31 @@ Worker concurrency and connect concurrency are now separate controls:
 
 That means you can keep a high worker count for overall crawl throughput while
 holding active connect pressure to a lower, environment-specific budget.
+
+## Unreachable Node Exclusion
+
+Normal crawler runs load active unreachable endpoints at startup and keep them
+in an in-memory hash set keyed by canonical endpoint. Seed nodes and discovered
+peers in that set are skipped before workers spend connect permits.
+
+Unreachable state comes from active rows in `unreachable_nodes`.
+
+The unreachable-node lookback defaults to `7` days and can be changed with
+`--unreachable-lookback-days` or `BTC_NETWORK_CRAWLER_UNREACHABLE_LOOKBACK_DAYS`.
+
+Reachable endpoint failures are retried up to
+`BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS` times. Only after that budget is
+exhausted does the crawler record the endpoint in `unreachable_nodes` for later
+retry.
+
+The recovery subcommand retries only unreachable nodes:
+
+```bash
+make crawler-unreachable-recovery ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"
+```
+
+Recovery runs use the same retry budget, do not follow discovered peers, and
+soft-delete unreachable state when a node becomes reachable again.
 
 ## Optional Tor Reachability
 
@@ -277,7 +309,7 @@ Interpret them like this:
 - low `tcp_established` plus high `tcp_syn_sent` means most connect attempts are stuck before the TCP handshake finishes
 - `connect_slots_in_use` near the configured limit means the admission gate is actively capping new outbound connects
 - `connectable_tasks_started` counts connect-eligible endpoints that workers started processing; it is broader than raw TCP syscall count
-- rising `connect_retries_started` and `delayed_retry_backlog` mean the crawler is deferring retryable connect failures instead of hammering them inline
+- rising `connect_retries_started` and `delayed_retry_backlog` mean the crawler is deferring retryable endpoint failures instead of hammering them inline
 - failure counters help distinguish timeout-heavy runs from refusal-heavy or unreachable-heavy runs
 - high `writer_backlog` with high PostgreSQL acquisition would suggest persistence pressure instead
 

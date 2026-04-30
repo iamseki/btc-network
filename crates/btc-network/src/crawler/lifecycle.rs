@@ -46,6 +46,7 @@ pub(crate) struct SnapshotCapture {
 /// for too long without discovering a new node.
 pub(crate) async fn run_lifecycle(
     state: Arc<Mutex<CrawlState>>,
+    stats: Arc<CrawlerStats>,
     stop: Arc<AtomicBool>,
     stop_reason: SharedStopReason,
     started_at: Instant,
@@ -70,10 +71,20 @@ pub(crate) async fn run_lifecycle(
             return;
         }
 
-        let idle_for = {
+        let (idle_for, pending_nodes, in_flight_nodes) = {
             let guard = state.lock().await;
-            guard.last_new_node_at.elapsed()
+            (
+                guard.last_new_node_at.elapsed(),
+                guard.pending_nodes.len(),
+                guard.in_flight_nodes.len(),
+            )
         };
+        let delayed_retries = stats.delayed_retry_backlog.load(Ordering::Relaxed);
+        let active_workers = stats.in_flight.load(Ordering::Relaxed);
+
+        if pending_nodes > 0 || in_flight_nodes > 0 || active_workers > 0 || delayed_retries > 0 {
+            continue;
+        }
 
         if idle_for >= idle_timeout {
             let reason = format!("idle timeout reached ({idle_for:?})");
@@ -361,6 +372,7 @@ mod tests {
 
         run_lifecycle(
             Arc::clone(&state),
+            Arc::new(CrawlerStats::default()),
             Arc::clone(&stop),
             Arc::clone(&stop_reason),
             Instant::now(),
@@ -389,6 +401,7 @@ mod tests {
         let stop_reason = Arc::new(StdMutex::new(None));
         run_lifecycle(
             Arc::clone(&state),
+            Arc::new(CrawlerStats::default()),
             Arc::clone(&stop),
             Arc::clone(&stop_reason),
             Instant::now(),
@@ -406,6 +419,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lifecycle_does_not_stop_while_delayed_retries_are_pending() {
+        let state = Arc::new(Mutex::new(CrawlState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard.last_new_node_at = Instant::now() - Duration::from_millis(50);
+        }
+
+        let stats = Arc::new(CrawlerStats::default());
+        stats.delayed_retry_backlog.store(1, Ordering::Relaxed);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_reason = Arc::new(StdMutex::new(None));
+
+        let handle = tokio::spawn(run_lifecycle(
+            Arc::clone(&state),
+            Arc::clone(&stats),
+            Arc::clone(&stop),
+            Arc::clone(&stop_reason),
+            Instant::now(),
+            Duration::from_secs(10),
+            Duration::from_millis(20),
+            Duration::from_millis(5),
+        ));
+
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        assert!(!stop.load(Ordering::Relaxed));
+
+        stats.delayed_retry_backlog.store(0, Ordering::Relaxed);
+        tokio::time::timeout(Duration::from_millis(100), handle)
+            .await
+            .expect("lifecycle should stop after retry backlog clears")
+            .expect("lifecycle join should succeed");
+
+        assert!(stop.load(Ordering::Relaxed));
+        assert!(
+            load_stop_reason(&stop_reason)
+                .is_some_and(|reason| reason.contains("idle timeout reached"))
+        );
+    }
+
+    #[tokio::test]
     async fn lifecycle_exits_immediately_when_already_stopped() {
         let state = Arc::new(Mutex::new(CrawlState::new()));
         let stop = Arc::new(AtomicBool::new(true));
@@ -414,6 +467,7 @@ mod tests {
 
         run_lifecycle(
             Arc::clone(&state),
+            Arc::new(CrawlerStats::default()),
             Arc::clone(&stop),
             Arc::clone(&stop_reason),
             Instant::now(),
@@ -436,6 +490,7 @@ mod tests {
 
         run_lifecycle(
             Arc::clone(&state),
+            Arc::new(CrawlerStats::default()),
             Arc::clone(&stop),
             Arc::clone(&stop_reason),
             Instant::now() - Duration::from_millis(50),

@@ -7,14 +7,31 @@ use btc_network::crawler::{Crawler, CrawlerConfig, IpEnrichmentProvider};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_observability::init_tracing;
 use btc_network_postgres::{PostgresConnectionConfig, PostgresCrawlerRepository};
-use clap::{Args, Parser};
+use clap::{Args, Parser, Subcommand};
 use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
 #[command(name = "crawler")]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<CrawlerCommand>,
+
     #[command(flatten)]
     crawl: CrawlArgs,
+}
+
+#[derive(Subcommand, Debug)]
+enum CrawlerCommand {
+    /// Run a normal DNS-seeded crawl.
+    Crawl(CrawlArgs),
+    /// Retry active unreachable-node rows and mark recovered peers.
+    RecoverUnreachable(CrawlArgs),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunMode {
+    Crawl,
+    RecoverUnreachable,
 }
 
 /// Runtime knobs for a crawler run.
@@ -91,15 +108,24 @@ struct CrawlArgs {
 
     /// Maximum number of TCP connect attempts per node, including the first try.
     ///
-    /// Retries are only applied to connect failures, not later handshake or
-    /// peer-discovery failures. This is the total per-endpoint attempt budget.
+    /// Retries apply to any failed reachable endpoint. This is the total
+    /// per-endpoint attempt budget.
     #[arg(
         long,
         env = "BTC_NETWORK_CRAWLER_CONNECT_MAX_ATTEMPTS",
-        default_value_t = 3,
+        default_value_t = 5,
         value_parser = parse_positive_usize
     )]
     connect_max_attempts: usize,
+
+    /// Days of active unreachable-node state to load at startup.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_CRAWLER_UNREACHABLE_LOOKBACK_DAYS",
+        default_value_t = 7,
+        value_parser = parse_positive_u64
+    )]
+    unreachable_lookback_days: u64,
 
     /// Base exponential backoff in milliseconds between failed connect attempts.
     ///
@@ -214,18 +240,35 @@ fn parse_positive_u64(raw: &str) -> Result<u64, String> {
 async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing();
     let cli = Cli::parse();
-    run_crawler(cli.crawl).await
+    let (mode, args) = cli.into_run_request();
+    run_crawler(args, mode).await
 }
 
-async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
-    let config = build_crawler_config(&args);
+impl Cli {
+    fn into_run_request(self) -> (RunMode, CrawlArgs) {
+        match self.command {
+            Some(CrawlerCommand::Crawl(args)) => (RunMode::Crawl, args),
+            Some(CrawlerCommand::RecoverUnreachable(args)) => (RunMode::RecoverUnreachable, args),
+            None => (RunMode::Crawl, self.crawl),
+        }
+    }
+}
+
+async fn run_crawler(args: CrawlArgs, mode: RunMode) -> Result<(), Box<dyn Error>> {
+    let config = build_crawler_config(&args, mode);
     let postgres_config = build_postgres_config(&args.postgres);
     let repository = Arc::new(PostgresCrawlerRepository::new(&postgres_config)?);
     let enrichment_provider = build_enrichment_provider(&args.mmdb)?;
     let crawler = Crawler::with_adapters(config, repository, enrichment_provider);
-    let summary = crawler.run().await?;
+    let summary = match mode {
+        RunMode::Crawl => crawler.run().await?,
+        RunMode::RecoverUnreachable => crawler.run_unreachable_recovery().await?,
+    };
 
-    info!("Crawler finished.");
+    match mode {
+        RunMode::Crawl => info!("Crawler finished."),
+        RunMode::RecoverUnreachable => info!("Unreachable recovery finished."),
+    }
     info!("scheduled tasks: {}", summary.scheduled_tasks);
     info!("successful handshakes: {}", summary.successful_handshakes);
     info!("failed tasks: {}", summary.failed_tasks);
@@ -235,7 +278,7 @@ async fn run_crawler(args: CrawlArgs) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
+fn build_crawler_config(args: &CrawlArgs, mode: RunMode) -> CrawlerConfig {
     CrawlerConfig {
         max_concurrency: args.max_concurrency,
         max_in_flight_connects: args.max_in_flight_connects,
@@ -245,6 +288,10 @@ fn build_crawler_config(args: &CrawlArgs) -> CrawlerConfig {
         checkpoint_interval: Duration::from_secs(args.checkpoint_interval_secs),
         connect_timeout: Duration::from_secs(args.connect_timeout_secs),
         connect_max_attempts: args.connect_max_attempts,
+        unreachable_nodes_lookback: Duration::from_secs(
+            args.unreachable_lookback_days * 24 * 60 * 60,
+        ),
+        follow_discovered_nodes: mode == RunMode::Crawl,
         connect_retry_backoff: Duration::from_millis(args.connect_retry_backoff_ms),
         io_timeout: Duration::from_secs(args.io_timeout_secs),
         tor_socks5_addr: args.tor_socks5_addr.clone(),
@@ -292,6 +339,7 @@ mod tests {
             checkpoint_interval_secs: 30,
             connect_timeout_secs: 30,
             connect_max_attempts: 4,
+            unreachable_lookback_days: 14,
             connect_retry_backoff_ms: 500,
             io_timeout_secs: 10,
             tor_socks5_addr: Some("tor:9050".to_string()),
@@ -309,14 +357,82 @@ mod tests {
             },
         };
 
-        let config = build_crawler_config(&args);
+        let config = build_crawler_config(&args, RunMode::Crawl);
 
         assert_eq!(config.max_in_flight_connects, 256);
         assert_eq!(config.max_tracked_nodes, 250_000);
         assert_eq!(config.connect_max_attempts, 4);
+        assert_eq!(
+            config.unreachable_nodes_lookback,
+            Duration::from_secs(14 * 24 * 60 * 60)
+        );
+        assert!(config.follow_discovered_nodes);
         assert_eq!(config.connect_retry_backoff, Duration::from_millis(500));
         assert_eq!(config.tor_socks5_addr.as_deref(), Some("tor:9050"));
         assert_eq!(config.shutdown_grace_period, Duration::from_secs(20));
+    }
+
+    #[test]
+    fn build_crawler_config_disables_discovered_fanout_for_recovery() {
+        let args = test_crawl_args();
+
+        let config = build_crawler_config(&args, RunMode::RecoverUnreachable);
+
+        assert!(!config.follow_discovered_nodes);
+    }
+
+    #[test]
+    fn cli_defaults_to_normal_crawl_without_subcommand() {
+        let cli = Cli::parse_from(["crawler", "--connect-max-attempts", "4"]);
+
+        let (mode, args) = cli.into_run_request();
+
+        assert_eq!(mode, RunMode::Crawl);
+        assert_eq!(args.connect_max_attempts, 4);
+    }
+
+    #[test]
+    fn cli_accepts_explicit_recovery_subcommand() {
+        let cli = Cli::parse_from([
+            "crawler",
+            "recover-unreachable",
+            "--connect-max-attempts",
+            "2",
+        ]);
+
+        let (mode, args) = cli.into_run_request();
+
+        assert_eq!(mode, RunMode::RecoverUnreachable);
+        assert_eq!(args.connect_max_attempts, 2);
+    }
+
+    fn test_crawl_args() -> CrawlArgs {
+        CrawlArgs {
+            max_concurrency: 1000,
+            max_in_flight_connects: 256,
+            max_tracked_nodes: 250_000,
+            max_runtime_minutes: 60,
+            idle_timeout_minutes: 5,
+            checkpoint_interval_secs: 30,
+            connect_timeout_secs: 30,
+            connect_max_attempts: 4,
+            unreachable_lookback_days: 14,
+            connect_retry_backoff_ms: 500,
+            io_timeout_secs: 10,
+            tor_socks5_addr: Some("tor:9050".to_string()),
+            shutdown_grace_period_secs: 20,
+            verbose: false,
+            postgres: PostgresArgs {
+                postgres_url:
+                    "postgresql://btc_network_dev:btc_network_dev@localhost:5432/btc_network"
+                        .to_string(),
+                postgres_max_connections: 16,
+            },
+            mmdb: MmdbArgs {
+                mmdb_asn_path: None,
+                mmdb_country_path: None,
+            },
+        }
     }
 
     #[test]

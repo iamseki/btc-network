@@ -27,6 +27,10 @@ pub struct CrawlerConfig {
     pub connect_timeout: Duration,
     /// Maximum number of TCP connect attempts per node, including the first try.
     pub connect_max_attempts: usize,
+    /// How far back active unreachable-node state should be considered.
+    pub unreachable_nodes_lookback: Duration,
+    /// Whether a successful visit should enqueue discovered peers for follow-up.
+    pub follow_discovered_nodes: bool,
     /// Base exponential backoff between failed TCP connect attempts.
     pub connect_retry_backoff: Duration,
     /// Per-connection read/write timeout used by session I/O.
@@ -50,7 +54,9 @@ impl Default for CrawlerConfig {
             lifecycle_tick: Duration::from_secs(1),
             checkpoint_interval: Duration::from_secs(30),
             connect_timeout: Duration::from_secs(30),
-            connect_max_attempts: 3,
+            connect_max_attempts: 5,
+            unreachable_nodes_lookback: Duration::from_secs(7 * 24 * 60 * 60),
+            follow_discovered_nodes: true,
             connect_retry_backoff: Duration::from_millis(250),
             io_timeout: Duration::from_secs(10),
             tor_socks5_addr: None,
@@ -108,15 +114,21 @@ pub(crate) struct CrawlState {
     pub(crate) seen_nodes: HashSet<CrawlEndpoint>,
     pub(crate) pending_nodes: HashSet<CrawlEndpoint>,
     pub(crate) in_flight_nodes: HashSet<CrawlEndpoint>,
+    pub(crate) excluded_nodes: HashSet<String>,
     pub(crate) last_new_node_at: Instant,
 }
 
 impl CrawlState {
     pub(crate) fn new() -> Self {
+        Self::with_excluded_nodes(HashSet::new())
+    }
+
+    pub(crate) fn with_excluded_nodes(excluded_nodes: HashSet<String>) -> Self {
         Self {
             seen_nodes: HashSet::new(),
             pending_nodes: HashSet::new(),
             in_flight_nodes: HashSet::new(),
+            excluded_nodes,
             last_new_node_at: Instant::now(),
         }
     }
@@ -141,6 +153,19 @@ pub(crate) struct NodeVisitFailure {
 
 pub(crate) type NodeVisitError = Box<NodeVisitFailure>;
 pub(crate) type NodeVisitResult = Result<NodeVisit, NodeVisitError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnreachableNodeAction {
+    None,
+    Record,
+    Recover,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PersistedNodeRecord {
+    pub(crate) observation: super::domain::PersistedNodeObservation,
+    pub(crate) unreachable_action: UnreachableNodeAction,
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct QueuedNode {

@@ -5,7 +5,7 @@ use std::pin::Pin;
 
 use super::domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunId, IpEnrichment,
-    PersistedNodeObservation,
+    PersistedNodeObservation, UnreachableNodeUpdate,
 };
 use super::{
     AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem, LastRunAsnCountItem,
@@ -95,6 +95,20 @@ pub trait CrawlerRepository: Send + Sync {
     fn count_nodes_by_asn<'a>(
         &'a self,
     ) -> RepositoryFuture<'a, Result<Vec<CountNodesByAsnRow>, CrawlerRepositoryError>>;
+
+    fn load_unreachable_nodes<'a>(
+        &'a self,
+        _since: chrono::DateTime<chrono::Utc>,
+    ) -> RepositoryFuture<'a, Result<Vec<CrawlEndpoint>, CrawlerRepositoryError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    fn apply_unreachable_node_updates<'a>(
+        &'a self,
+        _updates: Vec<UnreachableNodeUpdate>,
+    ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+        Box::pin(async { Ok(()) })
+    }
 
     fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {
         RepositoryRuntimeMetrics::default()

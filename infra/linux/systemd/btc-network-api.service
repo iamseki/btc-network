@@ -1,0 +1,19 @@
+[Unit]
+Description=btc-network API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=btc-network
+Group=btc-network
+WorkingDirectory=/opt/btc-network/api/current
+EnvironmentFile=/etc/btc-network/api.env
+ExecStart=/opt/btc-network/api/current/btc-network-api
+Restart=on-failure
+RestartSec=3s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,16 @@
+[Unit]
+Description=btc-network crawler
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=btc-network
+Group=btc-network
+WorkingDirectory=/opt/btc-network/crawler/current
+EnvironmentFile=/etc/btc-network/crawler.env
+ExecStart=/usr/bin/flock -n /run/lock/btc-network-crawler.lock /opt/btc-network/bin/run-crawler.sh
+
+[Install]
+WantedBy=multi-user.target
+

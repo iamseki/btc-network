@@ -12,7 +12,7 @@ Phase 1 deploys only `apps/web`.
 - Domain: `btcnetwork.info`
 - Reserved future API hostname: `api.btcnetwork.info`
 
-This setup keeps the deploy path automated while leaving the first DNS cutover manual and low-risk.
+This setup keeps the deploy path automated while leaving any future API DNS cutover manual and low-risk.
 
 ## CI/CD Flow
 
@@ -94,7 +94,7 @@ Use Cloudflare Pages as the source of truth for the required DNS records. Do not
 ## Practical Defaults
 
 - Keep the registrar at Hostinger.
-- Do not move nameservers to Cloudflare unless there is a later operational reason to do so.
+- Do not move nameservers to Cloudflare during the current web-only phase.
 - Keep `api.btcnetwork.info` unused for now so it remains available for the future API.
 - Treat Cloudflare Pages as the production host for the static frontend only.
 
@@ -105,7 +105,10 @@ The current Phase 1 setup is only for the web app.
 The planned later path is:
 
 - keep the frontend on Cloudflare Pages
-- add a Rust API on self-managed infrastructure
-- keep PostgreSQL self-managed and non-public by default
+- move authoritative DNS to Cloudflare when the API goes live
+- add a Rust API on AWS self-managed infrastructure
+- provision infrastructure with Terraform-compatible HCL and review plan diffs in CI
+- keep PostgreSQL self-managed and non-public by default, initially on a separate private EC2 host from the API
+- run the crawler on the API/crawler host as a sporadic batch workload through a scheduler or operator trigger, while preventing overlapping runs
 
-See [BNDD-0003](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0003/BNDD-0003.md) for the staged deployment decision and [BNDD-0007](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0007/BNDD-0007.md) for the current default storage backend.
+See [BNDD-0003](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0003/BNDD-0003.md) for the staged web deployment decision, [BNDD-0011](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0011/BNDD-0011.md) for the accepted API hosting direction, and [BNDD-0007](/home/chseki/projects/personal/btc-network/docs/design_docs/BNDD-0007/BNDD-0007.md) for the current default storage backend.
