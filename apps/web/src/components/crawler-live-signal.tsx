@@ -90,6 +90,75 @@ type LocationInsight = {
   topAsnCount: number;
 };
 
+function CountryNodeMarker({
+  x,
+  y,
+  countryCode,
+  isVerified,
+  isRecent,
+}: {
+  x: number;
+  y: number;
+  countryCode: string;
+  isVerified: boolean;
+  isRecent: boolean;
+}) {
+  const scale = isRecent ? 2.05 : 1.5;
+  const topFill = isVerified ? "rgba(112,112,112,0.98)" : "rgba(90,90,90,0.78)";
+  const frontFill = isVerified ? "rgba(18,18,18,0.98)" : "rgba(36,36,36,0.84)";
+  const sideFill = isVerified ? "rgba(63,63,63,0.98)" : "rgba(72,72,72,0.72)";
+  const bayFill = isVerified ? "rgba(49,49,49,0.98)" : "rgba(68,68,68,0.74)";
+  const outlineStroke = "rgba(9,9,9,0.98)";
+  const accentStroke = isVerified ? "rgba(245,179,1,0.58)" : "rgba(245,239,226,0.26)";
+  const railStroke = "rgba(245,239,226,0.16)";
+  const ventStroke = "rgba(245,239,226,0.42)";
+  const statusFill = isVerified ? "rgba(245,179,1,0.98)" : "rgba(245,239,226,0.74)";
+  const glowFill = isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.07)";
+
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`} aria-hidden="true">
+      <ellipse cx="0.7" cy="6.5" rx="6.8" ry="1.45" fill="rgba(0,0,0,0.44)" />
+      <path
+        d="M-6.1 -6 L2.8 -6 L6.3 -3.2 L-2.7 -3.2 Z"
+        fill={topFill}
+        stroke={outlineStroke}
+        strokeWidth="0.9"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2.8 -6 L6.3 -3.2 L6.3 5.6 L2.8 4.4 Z"
+        fill={sideFill}
+        stroke={outlineStroke}
+        strokeWidth="0.9"
+        strokeLinejoin="round"
+      />
+      <rect x="-6.1" y="-6" width="9.1" height="11" rx="1.9" fill={frontFill} stroke={outlineStroke} strokeWidth="0.9" />
+      <path d="M-5 -4.9 Q-3.6 -5.7 -1.5 -5.4" fill="none" stroke="rgba(245,239,226,0.19)" strokeWidth="0.65" strokeLinecap="round" />
+      <path d="M-4.9 -4.8 L-4.9 3.8 M1.75 -4.8 L1.75 3.8" stroke={railStroke} strokeWidth="0.45" />
+      {[-4.25, -1.35, 1.55].map((bayY) => (
+        <g key={bayY}>
+          <rect x="-4.25" y={bayY} width="5.35" height="1.65" rx="0.58" fill={bayFill} stroke="rgba(245,239,226,0.15)" strokeWidth="0.4" />
+          <path d={`M-3.5 ${bayY + 0.56} L-1.55 ${bayY + 0.56}`} stroke={ventStroke} strokeWidth="0.42" strokeLinecap="round" />
+          <path d={`M-3.5 ${bayY + 1.08} L-2.05 ${bayY + 1.08}`} stroke={ventStroke} strokeWidth="0.42" strokeLinecap="round" />
+          <circle cx="0.25" cy={bayY + 0.82} r="0.39" fill={statusFill} />
+        </g>
+      ))}
+      <path d="M3.85 -3.35 L5.05 -2.4 M3.85 -0.9 L5.05 0.05 M3.85 1.55 L5.05 2.5" stroke="rgba(245,239,226,0.18)" strokeWidth="0.45" strokeLinecap="round" />
+      <rect x="-7.6" y="6.75" width="15.2" height="6.3" rx="2.05" fill="rgba(8,8,8,0.94)" stroke={accentStroke} strokeWidth="0.76" />
+      <rect x="-6.35" y="7.95" width="12.7" height="3.8" rx="1.45" fill={glowFill} />
+      <text
+        x="0"
+        y="11"
+        textAnchor="middle"
+        fill="rgba(245,239,226,0.98)"
+        style={{ fontSize: "4px", fontFamily: "monospace", fontWeight: 900 }}
+      >
+        {countryCode}
+      </text>
+    </g>
+  );
+}
+
 type AsnInsight = {
   key: string;
   label: string;
@@ -775,13 +844,12 @@ export function CrawlerLiveSignal({
                           fill={node.isVerified ? "rgba(245,179,1,0.16)" : "rgba(245,239,226,0.09)"}
                         />
                       ) : null}
-                      <circle
-                        cx={node.x}
-                        cy={node.y}
-                        r={node.isRecent ? 3.8 : 2.8}
-                        fill={node.isVerified ? "rgb(245,179,1)" : "rgba(245,239,226,0.74)"}
-                        stroke={node.isVerified ? "rgba(255,240,197,0.65)" : "rgba(245,239,226,0.26)"}
-                        strokeWidth="1"
+                      <CountryNodeMarker
+                        x={node.x}
+                        y={node.y}
+                        countryCode={node.countryCode}
+                        isVerified={node.isVerified}
+                        isRecent={node.isRecent}
                       />
                     </g>
                   ))}
