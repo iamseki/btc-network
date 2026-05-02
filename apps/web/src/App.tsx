@@ -126,8 +126,6 @@ export function App() {
             items: [
               { id: "overview", title: "Overview" },
               { id: "risk", title: "Risk" },
-              { id: "asn", title: "Top ASNs" },
-              { id: "verification", title: "Verification" },
             ] satisfies { id: NetworkAnalyticsPanel; title: string }[],
           activeItem: networkAnalyticsPanel,
           onSelect: (panel: string) => setNetworkAnalyticsPanel(panel as NetworkAnalyticsPanel),

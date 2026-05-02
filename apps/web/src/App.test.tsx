@@ -273,8 +273,8 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("heading", { name: "Network Analytics" })).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Network Analytics Views" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Risk" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Verification" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Top ASNs" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Verification" })).toBeNull();
     expect(screen.queryByText("Session Log")).toBeNull();
     expect(screen.queryByText(/Frontend loaded\./)).toBeNull();
   });
@@ -454,7 +454,7 @@ describe("App sidebar shell", () => {
     expect(screen.getAllByRole("button", { name: "Network Analytics" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Crawler Runs" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Risk" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Top ASNs" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Top ASNs" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
 
@@ -474,9 +474,6 @@ describe("App sidebar shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Risk" }));
     expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk");
-
-    fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
-    expect(screen.getByTestId("page-subview-label").textContent).toBe("Top ASNs");
 
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
     fireEvent.click(screen.getByRole("button", { name: "Failures" }));

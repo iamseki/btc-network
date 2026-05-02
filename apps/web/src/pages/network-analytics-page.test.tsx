@@ -74,7 +74,7 @@ describe("NetworkAnalyticsPage", () => {
     ).toBeTruthy();
   });
 
-  it("renders a focused overview first, then loads ASN and verification tables on demand", async () => {
+  it("renders a focused overview first, then shows the risk metrics", async () => {
     const client = makeClient({
       listCrawlRuns: vi.fn().mockResolvedValue([
         {
@@ -181,6 +181,8 @@ describe("NetworkAnalyticsPage", () => {
     expect(screen.getByText("Top ASN Distribution")).toBeTruthy();
     expect(screen.getByText("Top Country Distribution")).toBeTruthy();
     expect(screen.queryByText("Node Inventory")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Top ASNs" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Verification" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Risk" }));
     expect(await screen.findByText("Decentralization Score")).toBeTruthy();
@@ -193,18 +195,9 @@ describe("NetworkAnalyticsPage", () => {
     expect(scoreCardValue("Transport Diversity")).toBe("72");
     expect(screen.getByRole("button", { name: "Decentralization Score score explanation" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Eclipse Exposure (Proxy) score explanation" })).toBeTruthy();
-    expect(screen.getByText("What This Means")).toBeTruthy();
-    expect(await screen.findByText("Risk Drivers")).toBeTruthy();
-    expect(screen.getByText("Exchange view")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Top ASNs" }));
-    expect(await screen.findByText("Organization")).toBeTruthy();
-    expect((await screen.findAllByText("Example ASN")).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "Verification" }));
-    expect((await screen.findAllByText("Failed")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("ipv4")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("33.33%")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("What This Means")).toBeNull();
+    expect(screen.queryByText("Risk Drivers")).toBeNull();
+    expect(screen.queryByText("Last-Run Inputs")).toBeNull();
   });
 
   it("shows an error state when analytics loading fails", async () => {
