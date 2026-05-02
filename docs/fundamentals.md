@@ -7,8 +7,8 @@ Bitcoin is not just a Merkle tree and not just a list of transactions.
 
 It is:
 
-> A chain of blocks (linked by hash),  
-> where each block commits to a Merkle tree of transactions,  
+> A chain of blocks (linked by hash),
+> where each block commits to a Merkle tree of transactions,
 > and state is enforced through the UTXO model and consensus rules.
 
 Understanding these layers is essential when implementing or analyzing the Bitcoin P2P protocol.

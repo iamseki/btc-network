@@ -1,5 +1,5 @@
-observed_at,crawl_run_id,observation_id,endpoint,network_type,protocol_version,services,user_agent,start_height,relay,discovered_peer_addresses_count,latency_ms,failure_classification,enrichment_status,asn,asn_organization,country,prefix
-2026-04-03T10:00:00Z,00000000-0000-0000-0000-000000000201,00000000-0000-0000-0000-000000000501,3.3.3.1:8333,ipv4,70016,01,/Satoshi:27.0.0/,900000,true,8,20,,matched,64512,Example ASN,US,3.3.3.0/24
-2026-04-03T10:01:00Z,00000000-0000-0000-0000-000000000201,00000000-0000-0000-0000-000000000502,3.3.3.2:8333,ipv4,70016,01,/Satoshi:27.0.0/,900001,true,8,22,,matched,64512,Example ASN,US,3.3.3.0/24
-2026-04-03T10:02:00Z,00000000-0000-0000-0000-000000000201,00000000-0000-0000-0000-000000000503,3.3.3.3:8333,ipv4,70016,01,/Satoshi:27.0.0/,900002,true,8,24,,matched,,,,
-2026-04-03T10:03:00Z,00000000-0000-0000-0000-000000000201,00000000-0000-0000-0000-000000000504,3.3.3.4:8333,ipv4,70016,01,/Satoshi:27.0.0/,900003,true,8,26,connect,matched,64513,Transit ASN,DE,3.3.3.0/24
+observed_at,crawl_run_id,endpoint,network_type,protocol_version,services,user_agent,start_height,relay,discovered_peer_addresses_count,latency_ms,failure_classification,enrichment_status,asn,asn_organization,country,prefix
+2026-04-03T10:00:00Z,00000000-0000-0000-0000-000000000201,3.3.3.1:8333,ipv4,70016,01,/Satoshi:27.0.0/,900000,true,8,20,,matched,64512,Example ASN,US,3.3.3.0/24
+2026-04-03T10:01:00Z,00000000-0000-0000-0000-000000000201,3.3.3.2:8333,ipv4,70016,01,/Satoshi:27.0.0/,900001,true,8,22,,matched,64512,Example ASN,US,3.3.3.0/24
+2026-04-03T10:02:00Z,00000000-0000-0000-0000-000000000201,3.3.3.3:8333,ipv4,70016,01,/Satoshi:27.0.0/,900002,true,8,24,,matched,,,,
+2026-04-03T10:03:00Z,00000000-0000-0000-0000-000000000201,3.3.3.4:8333,ipv4,70016,01,/Satoshi:27.0.0/,900003,true,8,26,connect,matched,64513,Transit ASN,DE,3.3.3.0/24

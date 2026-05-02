@@ -446,7 +446,7 @@ SELECT
     asn,
     country
 FROM node_observations
-ORDER BY observed_at DESC, observation_id DESC
+ORDER BY observed_at DESC, endpoint ASC
 LIMIT 20;
 ```
 

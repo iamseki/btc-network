@@ -16,7 +16,6 @@ const INSERT_OBSERVATIONS_SQL: &str = "
 INSERT INTO node_observations (
     observed_at,
     crawl_run_id,
-    observation_id,
     endpoint,
     network_type,
     protocol_version,
@@ -66,7 +65,6 @@ fn observation_insert_builder<'a>(
     builder.push_values(observations, |mut row, observation| {
         row.push_bind(observation.raw.observed_at)
             .push_bind(observation.raw.crawl_run_id.as_uuid())
-            .push_bind(observation.observation_id.as_uuid())
             .push_bind(observation.raw.endpoint.canonical.as_str())
             .push_bind(crawl_network_to_str(observation.raw.endpoint.network))
             .push_bind(observation.raw.protocol_version)

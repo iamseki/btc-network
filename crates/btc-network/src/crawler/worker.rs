@@ -8,7 +8,7 @@ use tokio::task::JoinSet;
 use tracing::{info, warn};
 
 use super::FailureClassification;
-use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, ObservationId, RawNodeObservation};
+use super::domain::{CrawlEndpoint, CrawlRunId, IpEnrichment, RawNodeObservation};
 use super::node::NodeProcessor;
 use super::node::connect_retry_delay;
 use super::ports::IpEnrichmentProvider;
@@ -356,7 +356,7 @@ fn build_persisted_observation(
         IpEnrichment::not_applicable()
     };
 
-    raw.into_persisted(ObservationId::now_v7(), enrichment)
+    raw.into_persisted(enrichment)
 }
 
 pub(crate) async fn seed_initial_nodes(

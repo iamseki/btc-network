@@ -10,8 +10,8 @@ use std::{env, fs};
 use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
     CrawlRunMetrics, Crawler, CrawlerAnalyticsReader, CrawlerConfig, CrawlerRepository,
-    IpEnrichment, IpEnrichmentProvider, ObservationId, PersistedNodeObservation,
-    RawNodeObservation, UnreachableNodeUpdate, UnreachableNodeUpdateKind,
+    IpEnrichment, IpEnrichmentProvider, PersistedNodeObservation, RawNodeObservation,
+    UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };
 use btc_network::wire::{self, Command};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
@@ -36,10 +36,6 @@ const TEST_POSTGRES_USER: &str = "postgres";
 
 fn run_id(value: u128) -> CrawlRunId {
     CrawlRunId::from_u128(value)
-}
-
-fn observation_id(value: u128) -> ObservationId {
-    ObservationId::from_u128(value)
 }
 
 struct UnavailableEnrichmentProvider;
@@ -307,7 +303,6 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                101,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
@@ -316,7 +311,6 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.8",
-                102,
                 base_time + Duration::seconds(1),
                 None,
                 None,
@@ -325,13 +319,12 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.9",
-                103,
                 base_time + Duration::seconds(2),
                 Some(64513),
                 Some("Transit ASN"),
                 Some("DE"),
             ),
-            sample_failed_observation(&run_id, "1.1.1.9", 104, base_time + Duration::seconds(3)),
+            sample_failed_observation(&run_id, "1.1.1.9", base_time + Duration::seconds(3)),
         ])
         .await?;
 
@@ -405,14 +398,12 @@ async fn repository_loads_and_updates_unreachable_nodes() -> TestResult {
             sample_connect_failed_observation(
                 &run_id,
                 "1.1.1.10",
-                1201,
                 base_time - Duration::minutes(1),
             ),
-            sample_failed_observation(&run_id, "1.1.1.14", 1203, base_time - Duration::seconds(30)),
+            sample_failed_observation(&run_id, "1.1.1.14", base_time - Duration::seconds(30)),
             sample_verified_observation(
                 &run_id,
                 "1.1.1.11",
-                1202,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
@@ -798,7 +789,6 @@ async fn repository_batches_large_observation_streams() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 &host,
-                10_000 + index as u128,
                 base_time + Duration::milliseconds(index as i64),
                 Some(64512),
                 Some("Example ASN"),
@@ -920,14 +910,12 @@ async fn repository_persists_real_mmdb_enrichment_and_non_routable_not_applicabl
             sample_verified_observation_for_endpoint(
                 &run_id,
                 &public_endpoint,
-                301,
                 observed_at,
                 provider.enrich(&public_endpoint),
             ),
             sample_verified_observation_for_endpoint(
                 &run_id,
                 &private_endpoint,
-                302,
                 observed_at + Duration::seconds(1),
                 provider.enrich(&private_endpoint),
             ),
@@ -1028,13 +1016,12 @@ async fn analytics_reader_returns_run_detail_with_failure_and_network_breakdowns
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                401,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
                 Some("US"),
             ),
-            sample_failed_observation(&run_id, "1.1.1.9", 402, base_time + Duration::seconds(1)),
+            sample_failed_observation(&run_id, "1.1.1.9", base_time + Duration::seconds(1)),
         ])
         .await?;
     repository
@@ -1090,7 +1077,6 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "1.1.1.7",
-                501,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
@@ -1099,7 +1085,6 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
             sample_verified_observation(
                 &run_id,
                 "8.8.8.8",
-                502,
                 base_time + Duration::seconds(1),
                 Some(15169),
                 Some("Google LLC"),
@@ -1130,7 +1115,6 @@ async fn analytics_reader_last_run_aggregations_use_latest_finished_run() -> Tes
             sample_verified_observation(
                 &finished_run_id,
                 "1.1.1.7",
-                601,
                 base_time,
                 Some(64512),
                 Some("Example ASN"),
@@ -1139,7 +1123,6 @@ async fn analytics_reader_last_run_aggregations_use_latest_finished_run() -> Tes
             sample_verified_observation(
                 &finished_run_id,
                 "1.1.1.8",
-                602,
                 base_time + Duration::seconds(1),
                 Some(64512),
                 Some("Example ASN"),
@@ -1148,7 +1131,6 @@ async fn analytics_reader_last_run_aggregations_use_latest_finished_run() -> Tes
             sample_verified_observation(
                 &newer_unfinished_run_id,
                 "8.8.8.8",
-                603,
                 base_time + Duration::seconds(2),
                 Some(15169),
                 Some("Google LLC"),
@@ -1202,7 +1184,6 @@ async fn analytics_reader_lists_last_run_node_rows_for_dashboard_table() -> Test
         .insert_observations_stream(vec![sample_verified_observation(
             &run_id,
             "1.1.1.7",
-            701,
             base_time,
             Some(64512),
             Some("Example ASN"),
@@ -1246,7 +1227,6 @@ fn unique_database_name() -> String {
 fn sample_verified_observation(
     run_id: &CrawlRunId,
     host: &str,
-    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
     asn: Option<u32>,
     asn_organization: Option<&str>,
@@ -1270,21 +1250,17 @@ fn sample_verified_observation(
         latency: Some(std::time::Duration::from_millis(125)),
         failure_classification: None,
     }
-    .into_persisted(
-        observation_id(observation_id_value),
-        IpEnrichment::matched(
-            asn,
-            asn_organization.map(ToString::to_string),
-            country.map(ToString::to_string),
-            asn.map(|_| format!("{host}/24")),
-        ),
-    )
+    .into_persisted(IpEnrichment::matched(
+        asn,
+        asn_organization.map(ToString::to_string),
+        country.map(ToString::to_string),
+        asn.map(|_| format!("{host}/24")),
+    ))
 }
 
 fn sample_verified_observation_for_endpoint(
     run_id: &CrawlRunId,
     endpoint: &CrawlEndpoint,
-    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
     enrichment: IpEnrichment,
 ) -> PersistedNodeObservation {
@@ -1301,13 +1277,12 @@ fn sample_verified_observation_for_endpoint(
         latency: Some(std::time::Duration::from_millis(125)),
         failure_classification: None,
     }
-    .into_persisted(observation_id(observation_id_value), enrichment)
+    .into_persisted(enrichment)
 }
 
 fn sample_failed_observation(
     run_id: &CrawlRunId,
     host: &str,
-    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
 ) -> PersistedNodeObservation {
     RawNodeObservation {
@@ -1328,21 +1303,17 @@ fn sample_failed_observation(
         latency: Some(std::time::Duration::from_millis(300)),
         failure_classification: Some(btc_network::crawler::FailureClassification::Handshake),
     }
-    .into_persisted(
-        observation_id(observation_id_value),
-        IpEnrichment::matched(
-            Some(64513),
-            Some("Transit ASN".to_string()),
-            Some("DE".to_string()),
-            Some(format!("{host}/24")),
-        ),
-    )
+    .into_persisted(IpEnrichment::matched(
+        Some(64513),
+        Some("Transit ASN".to_string()),
+        Some("DE".to_string()),
+        Some(format!("{host}/24")),
+    ))
 }
 
 fn sample_connect_failed_observation(
     run_id: &CrawlRunId,
     host: &str,
-    observation_id_value: u128,
     observed_at: chrono::DateTime<Utc>,
 ) -> PersistedNodeObservation {
     RawNodeObservation {
@@ -1363,15 +1334,12 @@ fn sample_connect_failed_observation(
         latency: Some(std::time::Duration::from_millis(300)),
         failure_classification: Some(btc_network::crawler::FailureClassification::Connect),
     }
-    .into_persisted(
-        observation_id(observation_id_value),
-        IpEnrichment::matched(
-            Some(64513),
-            Some("Transit ASN".to_string()),
-            Some("DE".to_string()),
-            Some(format!("{host}/24")),
-        ),
-    )
+    .into_persisted(IpEnrichment::matched(
+        Some(64513),
+        Some("Transit ASN".to_string()),
+        Some("DE".to_string()),
+        Some(format!("{host}/24")),
+    ))
 }
 
 fn sample_checkpoint(

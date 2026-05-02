@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS node_observations (
     observed_at TIMESTAMPTZ NOT NULL,
     crawl_run_id UUID NOT NULL,
-    observation_id UUID NOT NULL,
     endpoint TEXT NOT NULL,
     network_type TEXT NOT NULL,
     protocol_version INTEGER,
@@ -20,10 +19,10 @@ CREATE TABLE IF NOT EXISTS node_observations (
 );
 
 CREATE INDEX IF NOT EXISTS node_observations_endpoint_latest_idx
-    ON node_observations (endpoint, observed_at DESC, observation_id DESC);
+    ON node_observations (endpoint, observed_at DESC, crawl_run_id DESC);
 
 CREATE INDEX IF NOT EXISTS node_observations_run_observed_idx
-    ON node_observations (crawl_run_id, observed_at DESC, observation_id DESC);
+    ON node_observations (crawl_run_id DESC, observed_at DESC);
 
 CREATE INDEX IF NOT EXISTS node_observations_run_failure_idx
     ON node_observations (crawl_run_id, failure_classification)

@@ -44,43 +44,6 @@ impl Display for CrawlRunId {
     }
 }
 
-/// Stable identifier for one persisted node observation row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ObservationId(Uuid);
-
-impl ObservationId {
-    /// Creates an observation identifier from a caller-provided UUID.
-    pub fn new(value: Uuid) -> Self {
-        Self(value)
-    }
-
-    /// Generates a new time-ordered identifier.
-    pub fn now_v7() -> Self {
-        Self(Uuid::now_v7())
-    }
-
-    /// Parses an observation identifier from its canonical UUID string.
-    pub fn parse_str(value: &str) -> Result<Self, uuid::Error> {
-        Uuid::parse_str(value).map(Self)
-    }
-
-    /// Builds a deterministic identifier from a fixed integer.
-    pub fn from_u128(value: u128) -> Self {
-        Self(Uuid::from_u128(value))
-    }
-
-    /// Returns the identifier as a UUID value.
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-}
-
-impl Display for ObservationId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 /// Lifecycle phase of a crawler run.
 /// The run ends in a terminal `Finished` phase. The reason for ending is
 /// represented separately by `stop_reason` and `failure_reason`.
@@ -442,13 +405,8 @@ impl RawNodeObservation {
         self.endpoint.supports_ip_enrichment()
     }
 
-    pub fn into_persisted(
-        self,
-        observation_id: ObservationId,
-        enrichment: IpEnrichment,
-    ) -> PersistedNodeObservation {
+    pub fn into_persisted(self, enrichment: IpEnrichment) -> PersistedNodeObservation {
         PersistedNodeObservation {
-            observation_id,
             raw: self,
             enrichment,
         }
@@ -457,7 +415,6 @@ impl RawNodeObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedNodeObservation {
-    pub observation_id: ObservationId,
     pub raw: RawNodeObservation,
     pub enrichment: IpEnrichment,
 }
@@ -655,9 +612,8 @@ mod tests {
             Some("198.51.100.0/24".to_string()),
         );
 
-        let persisted = raw.into_persisted(ObservationId::from_u128(1), enrichment.clone());
+        let persisted = raw.into_persisted(enrichment.clone());
 
-        assert_eq!(persisted.observation_id, ObservationId::from_u128(1));
         assert_eq!(persisted.raw.observed_at, observed_at);
         assert_eq!(persisted.raw.crawl_run_id, crawl_run_id);
         assert_eq!(persisted.raw.endpoint, endpoint);

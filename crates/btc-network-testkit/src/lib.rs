@@ -269,7 +269,6 @@ struct CrawlRunCheckpointFixtureRow {
 struct NodeObservationFixtureRow {
     observed_at: DateTime<Utc>,
     crawl_run_id: Uuid,
-    observation_id: Uuid,
     endpoint: String,
     network_type: String,
     protocol_version: Option<i32>,
@@ -342,7 +341,6 @@ async fn insert_node_observations_csv(pool: &PgPool, path: &Path) -> TestkitResu
 INSERT INTO node_observations (
     observed_at,
     crawl_run_id,
-    observation_id,
     endpoint,
     network_type,
     protocol_version,
@@ -360,13 +358,12 @@ INSERT INTO node_observations (
     prefix
 )
 VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 )
 ",
         )
         .bind(row.observed_at)
         .bind(row.crawl_run_id)
-        .bind(row.observation_id)
         .bind(row.endpoint)
         .bind(row.network_type)
         .bind(row.protocol_version)

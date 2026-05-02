@@ -197,7 +197,7 @@ mod tests {
     use crate::crawler::{
         AsnNodeCountItem, CrawlNetwork, CrawlPhase, CrawlRunCheckpointItem, CrawlRunDetail,
         CrawlRunListItem, CrawlRunMetrics, FailureClassificationCount, NetworkOutcomeCount,
-        ObservationId, RawNodeObservation,
+        RawNodeObservation,
     };
     use chrono::Utc;
     use std::net::{IpAddr, Ipv4Addr};
@@ -473,8 +473,7 @@ mod tests {
     #[tokio::test]
     async fn repository_trait_supports_test_double_for_observations_and_checkpoints() {
         let repository: &dyn CrawlerRepository = &InMemoryCrawlerRepository::default();
-        let persisted = sample_raw_observation()
-            .into_persisted(ObservationId::from_u128(1), IpEnrichment::not_applicable());
+        let persisted = sample_raw_observation().into_persisted(IpEnrichment::not_applicable());
         let checkpoint = sample_checkpoint();
 
         repository

@@ -28,7 +28,8 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `frontier_size` means the pending frontier: discovered endpoints that are tracked but not yet attempted by a worker
 - `unique_nodes` counts tracked endpoints, not persisted observations; it can be much larger than completed node visits
 - `scheduled_tasks` is the count of attempted node visits dequeued by workers
-- `crawl_run_id` and `observation_id` are stored as native UUID values and generated as UUIDv7 in the current crawler implementation
+- `crawl_run_id` is stored as a native UUID value and generated as UUIDv7 in the current crawler implementation
+- persisted observations do not carry a standalone `observation_id`; current query/API flows use run, endpoint, and timestamp fields instead
 - persisted observations derive success/failure outcome from whether `failure_classification` is null; there is no separate `confidence_level` column in the current schema
 - persisted observations do not carry a separate `batch_id` column in the current schema
 - failed persisted observations can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage

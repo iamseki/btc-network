@@ -28,7 +28,7 @@ pub use analytics::{
 };
 pub use domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
-    CrawlRunMetrics, FailureClassification, IpEnrichment, IpEnrichmentStatus, ObservationId,
+    CrawlRunMetrics, FailureClassification, IpEnrichment, IpEnrichmentStatus,
     PersistedNodeObservation, RawNodeObservation, StartCrawlRequest, StopCrawlRequest,
     UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };

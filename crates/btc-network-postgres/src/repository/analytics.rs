@@ -107,7 +107,7 @@ FROM (
         asn,
         asn_organization
     FROM node_observations
-    ORDER BY endpoint, observed_at DESC, observation_id DESC
+    ORDER BY endpoint, observed_at DESC, crawl_run_id DESC
 ) latest_by_endpoint
 WHERE failure_classification IS NULL
 GROUP BY asn, asn_organization
@@ -545,7 +545,7 @@ SELECT
 FROM node_observations
 WHERE crawl_run_id = ({LATEST_FINISHED_RUN_ID_SQL})
   AND protocol_version IS NOT NULL
-ORDER BY observed_at DESC, observation_id DESC
+ORDER BY observed_at DESC, endpoint ASC
 LIMIT $1
 "
     ))
