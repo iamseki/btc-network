@@ -35,6 +35,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - failed persisted observations can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
 - normal crawler startup loads active `unreachable_nodes` rows from the configured lookback into an in-memory `HashSet<String>` and skips them before enqueueing seed or discovered work
 - terminal reachable endpoint failures after the retry budget are captured in the dedicated `unreachable_nodes` table; recovery uses the crawler binary's `recover-unreachable` subcommand and soft-deletes rows when peers become reachable again
+- curated node status checks run through the crawler binary's `status-check` subcommand, load explicit targets from config, and persist compact append-only history in `node_status`
 - crawler no longer performs durable startup recovery; after crash or manual restart, operators start a fresh run from seed nodes
 - the crawler deployment model intentionally assumes one active writer per persistence database; this is a design choice that keeps concurrency control inside one process and avoids extra cross-process coordination and contention
 - the default crawler persistence adapter is PostgreSQL in `crates/btc-network-postgres`
@@ -57,6 +58,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - The plain web runtime remains placeholder-backed only for the single-peer flows that still lack a browser-safe backend
 - The public product home now lives on `Network Analytics` overview; header snapshot preview should route there, not to a duplicate crawler-only surface
 - `Network Risk API` is a web-only mocked commercial preview page for now; do not treat it as a live SLA-backed surface yet
+- `Status` is a curated endpoint health surface backed by `GET /api/nodes/status`; freshness is derived in the frontend, not by API request-time handshakes
 - The public product home should stay globe-first, keep `Risk Brief` as the secondary companion panel, and use a full-width `Risk Drivers` strip instead of crawler-internal checkpoint rails
 
 ## Frontend Composition Rule

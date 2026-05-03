@@ -27,6 +27,7 @@ const mockListLastRunAsns = vi.fn();
 const mockListLastRunStartHeights = vi.fn();
 const mockListLastRunAsnOrganizations = vi.fn();
 const mockListLastRunNodes = vi.fn();
+const mockListNodeStatus = vi.fn();
 const mockGetSuggestedBlockDownloadPath = vi.fn();
 const mockGetRecentEvents = vi.fn();
 const originalInnerWidth = window.innerWidth;
@@ -45,6 +46,7 @@ vi.mock("./lib/api", () => ({
     listLastRunStartHeights: mockListLastRunStartHeights,
     listLastRunAsnOrganizations: mockListLastRunAsnOrganizations,
     listLastRunNodes: mockListLastRunNodes,
+    listNodeStatus: mockListNodeStatus,
     handshake: mockHandshake,
     ping: mockPing,
     getAddr: mockGetAddr,
@@ -82,6 +84,7 @@ afterEach(() => {
   mockListLastRunStartHeights.mockReset();
   mockListLastRunAsnOrganizations.mockReset();
   mockListLastRunNodes.mockReset();
+  mockListNodeStatus.mockReset();
   mockGetSuggestedBlockDownloadPath.mockReset();
   mockGetRecentEvents.mockReset();
   mockGetDocsUiConfig.mockReset();
@@ -118,6 +121,7 @@ afterEach(() => {
   mockListLastRunStartHeights.mockResolvedValue([]);
   mockListLastRunAsnOrganizations.mockResolvedValue([]);
   mockListLastRunNodes.mockResolvedValue([]);
+  mockListNodeStatus.mockResolvedValue([]);
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
   );
@@ -139,6 +143,7 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  window.history.replaceState({}, "", "/");
   window.localStorage.clear();
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
@@ -180,6 +185,7 @@ beforeEach(() => {
   mockListLastRunStartHeights.mockResolvedValue([]);
   mockListLastRunAsnOrganizations.mockResolvedValue([]);
   mockListLastRunNodes.mockResolvedValue([]);
+  mockListNodeStatus.mockResolvedValue([]);
   mockGetDocsUiConfig.mockResolvedValue({
     title: "btc-network API",
     version: "0.1.0",
@@ -356,6 +362,37 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
+  });
+
+  it("opens status from the analytics navigation", async () => {
+    mockListNodeStatus.mockResolvedValue([
+      {
+        endpoint: "seed.bitcoin.sipa.be:8333",
+        label: "Sipa DNS Seed",
+        description: "Long-running Bitcoin Core mainnet DNS seed.",
+        status: "healthy",
+        checkedAt: new Date().toISOString(),
+        message: "Handshake succeeded.",
+        history: [{ status: "healthy", checkedAt: new Date().toISOString() }],
+      },
+    ]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Status" }));
+
+    expect(await screen.findByText("Endpoint")).toBeTruthy();
+    expect(window.location.pathname).toBe("/status");
+    expect(await screen.findByText("Sipa DNS Seed")).toBeTruthy();
+  });
+
+  it("opens status directly from /status", async () => {
+    window.history.replaceState({}, "", "/status");
+
+    render(<App />);
+
+    expect(await screen.findByText("No node status rows are available yet.")).toBeTruthy();
+    expect(mockListNodeStatus).toHaveBeenCalled();
   });
 
   it("shows the default Buy Me a Coffee link in the sidebar footer", () => {

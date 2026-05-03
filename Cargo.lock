@@ -431,6 +431,7 @@ dependencies = [
  "btc-network-observability",
  "btc-network-postgres",
  "btc-network-testkit",
+ "chrono",
  "serde",
  "serde_json",
  "tokio",
@@ -461,8 +462,11 @@ dependencies = [
  "btc-network-mmdb",
  "btc-network-observability",
  "btc-network-postgres",
+ "chrono",
  "clap",
+ "serde",
  "tokio",
+ "toml 0.8.2",
  "tracing",
 ]
 

@@ -13,6 +13,7 @@ use super::{
     LastRunNodeSummaryItem, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
     LastRunStartHeightCountItem, LastRunUserAgentCountItem,
 };
+use crate::status::{NodeStatusItem, NodeStatusRecord};
 
 /// Boxed async result type used by crawler storage and analytics ports.
 pub type RepositoryFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -110,6 +111,20 @@ pub trait CrawlerRepository: Send + Sync {
         Box::pin(async { Ok(()) })
     }
 
+    fn insert_node_status<'a>(
+        &'a self,
+        _record: NodeStatusRecord,
+    ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn delete_node_status_older_than<'a>(
+        &'a self,
+        _cutoff: chrono::DateTime<chrono::Utc>,
+    ) -> RepositoryFuture<'a, Result<u64, CrawlerRepositoryError>> {
+        Box::pin(async { Ok(0) })
+    }
+
     fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {
         RepositoryRuntimeMetrics::default()
     }
@@ -189,6 +204,13 @@ pub trait CrawlerAnalyticsReader: Send + Sync {
         &'a self,
         limit: usize,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>;
+
+    /// Returns latest status plus bounded recent history for curated status targets.
+    fn list_node_status<'a>(
+        &'a self,
+    ) -> RepositoryFuture<'a, Result<Vec<NodeStatusItem>, CrawlerRepositoryError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
 }
 
 #[cfg(test)]

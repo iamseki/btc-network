@@ -1,5 +1,6 @@
 pub(crate) mod historical;
 pub(crate) mod last_run;
+pub(crate) mod node_status;
 
 use axum::Json;
 use axum::http::StatusCode;
@@ -22,6 +23,7 @@ pub(crate) use last_run::{
     list_last_run_network_types, list_last_run_nodes, list_last_run_protocol_versions,
     list_last_run_services, list_last_run_start_heights, list_last_run_user_agents,
 };
+pub(crate) use node_status::{NODE_STATUS_PATH, list_node_status};
 
 const DEFAULT_RUN_LIMIT: usize = 10;
 const DEFAULT_ASN_LIMIT: usize = 10;

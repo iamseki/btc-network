@@ -1,4 +1,29 @@
 services:
+  crawler-status:
+    image: btc-network-crawler-local:dev
+    build:
+      context: .
+      dockerfile: apps/crawler/Dockerfile
+      target: runtime
+    container_name: btc-network-crawler-status
+    profiles: ["status"]
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+    environment:
+      BTC_NETWORK_POSTGRES_URL: postgresql://btc_network_dev:btc_network_dev@postgres:5432/btc_network
+      BTC_NETWORK_POSTGRES_MAX_CONNECTIONS: ${BTC_NETWORK_POSTGRES_MAX_CONNECTIONS:-5}
+      BTC_NETWORK_STATUS_CONFIG: ${BTC_NETWORK_STATUS_CONFIG:-/config/status-targets.toml}
+      BTC_NETWORK_STATUS_CHECK_ATTEMPTS: ${BTC_NETWORK_STATUS_CHECK_ATTEMPTS:-5}
+      BTC_NETWORK_STATUS_CONNECT_TIMEOUT_SECS: ${BTC_NETWORK_STATUS_CONNECT_TIMEOUT_SECS:-10}
+      BTC_NETWORK_STATUS_IO_TIMEOUT_SECS: ${BTC_NETWORK_STATUS_IO_TIMEOUT_SECS:-10}
+      BTC_NETWORK_STATUS_RETRY_BACKOFF_MS: ${BTC_NETWORK_STATUS_RETRY_BACKOFF_MS:-250}
+      BTC_NETWORK_STATUS_RETENTION_DAYS: ${BTC_NETWORK_STATUS_RETENTION_DAYS:-30}
+    command: ["status-check"]
+    restart: "no"
+    volumes:
+      - ./config:/config:ro
+
   crawler:
     image: btc-network-crawler-local:dev
     build:

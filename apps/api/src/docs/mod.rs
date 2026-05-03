@@ -9,6 +9,7 @@ use btc_network::crawler::{
     LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
     LastRunUserAgentCountItem,
 };
+use btc_network::status::{NodeStatusHistoryItem, NodeStatusItem};
 use utoipa::openapi::OpenApi as OpenApiDocument;
 use utoipa::{Modify, OpenApi};
 use utoipa_scalar::{Scalar, Servable};
@@ -56,7 +57,8 @@ pub fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
         crate::handlers::last_run::asns::list_last_run_asns_docs,
         crate::handlers::last_run::start_heights::list_last_run_start_heights_docs,
         crate::handlers::last_run::asn_organizations::list_last_run_asn_organizations_docs,
-        crate::handlers::last_run::nodes::list_last_run_nodes_docs
+        crate::handlers::last_run::nodes::list_last_run_nodes_docs,
+        crate::handlers::node_status::list_node_status_docs
     ),
     components(
         schemas(
@@ -72,6 +74,8 @@ pub fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
             RowsResponse<LastRunStartHeightCountItem>,
             RowsResponse<LastRunAsnOrganizationCountItem>,
             RowsResponse<LastRunNodeSummaryItem>,
+            NodeStatusItem,
+            NodeStatusHistoryItem,
             ErrorResponse
         )
     ),

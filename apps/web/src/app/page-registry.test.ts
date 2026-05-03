@@ -7,6 +7,7 @@ describe("appPages", () => {
     expect(appPages.map((page) => page.id)).toEqual([
       "network-analytics",
       "api",
+      "status",
       "crawler-runs",
       "connection",
       "peer-tools",

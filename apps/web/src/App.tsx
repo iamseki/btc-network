@@ -5,6 +5,7 @@ import {
   Coffee,
   Network,
   Radio,
+  RadioTower,
   ShieldCheck,
   Waypoints,
 } from "lucide-react";
@@ -36,6 +37,7 @@ import {
 } from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { ApiPage, type ApiPanel } from "./pages/api-page";
+import { StatusPage } from "./pages/status-page";
 import { getAppClient } from "./lib/api";
 import type {
   AddrResult,
@@ -57,8 +59,18 @@ const DEFAULT_SUPPORT_URL = "https://buymeacoffee.com/chseki";
 const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim() || DEFAULT_SUPPORT_URL;
 const analyticsLabel = analyticsModeLabel();
 
+function pageFromBrowserPath(pathname: string): AppPageId {
+  return pathname === "/status" ? "status" : "network-analytics";
+}
+
+function browserPathForPage(page: AppPageId): string {
+  return page === "status" ? "/status" : "/";
+}
+
 export function App() {
-  const [selectedPage, setSelectedPage] = useState<AppPageId>("network-analytics");
+  const [selectedPage, setSelectedPage] = useState<AppPageId>(() =>
+    pageFromBrowserPath(window.location.pathname),
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
   const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
@@ -70,6 +82,7 @@ export function App() {
     api: ShieldCheck,
     "crawler-runs": Activity,
     "network-analytics": ChartColumn,
+    status: RadioTower,
     connection: Radio,
     "peer-tools": Network,
     headers: Waypoints,
@@ -159,6 +172,14 @@ export function App() {
   const crawlerPreviewPlayback = useCrawlerSignalPlayback(latestCrawlerPreview);
 
   function selectPage(nextPage: AppPageId) {
+    applySelectedPage(nextPage);
+    const nextPath = browserPathForPage(nextPage);
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+  }
+
+  function applySelectedPage(nextPage: AppPageId) {
     setSelectedPage(nextPage);
     setIsCrawlerPreviewOpen(false);
 
@@ -192,6 +213,17 @@ export function App() {
   function clearEvents() {
     setEvents([]);
   }
+
+  useEffect(() => {
+    function handlePopState() {
+      applySelectedPage(pageFromBrowserPath(window.location.pathname));
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,13 +303,11 @@ export function App() {
   }, [isCrawlerPreviewOpen, isCrawlerPreviewRendered]);
 
   function openNetworkAnalyticsFromPreview() {
-    setIsCrawlerPreviewOpen(false);
-    setSelectedPage("network-analytics");
-    setNetworkAnalyticsPanel("overview");
-
-    if (window.innerWidth < 768) {
-      setSidebarCollapsed(true);
+    applySelectedPage("network-analytics");
+    if (window.location.pathname !== "/") {
+      window.history.pushState({}, "", "/");
     }
+    setNetworkAnalyticsPanel("overview");
   }
 
   async function handleHandshake() {
@@ -640,9 +670,12 @@ export function App() {
                   activePanel={networkAnalyticsPanel}
                   onPanelChange={setNetworkAnalyticsPanel}
                   onOpenApiPage={() => selectPage("api")}
+                  onOpenStatusPage={() => selectPage("status")}
                   showPanelNav={false}
                 />
               ) : null}
+
+              {selectedPage === "status" ? <StatusPage client={client} /> : null}
 
               {selectedPage === "api" ? (
                 <ApiPage

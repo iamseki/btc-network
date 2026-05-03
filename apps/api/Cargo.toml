@@ -20,5 +20,6 @@ utoipa-scalar = { version = "0.3", features = ["axum"] }
 
 [dev-dependencies]
 btc-network-testkit = { path = "../../crates/btc-network-testkit" }
+chrono = "0.4.44"
 tower = { version = "0.5", features = ["util"] }
 serde_json = "1"

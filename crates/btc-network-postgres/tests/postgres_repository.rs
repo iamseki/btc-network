@@ -13,6 +13,7 @@ use btc_network::crawler::{
     IpEnrichment, IpEnrichmentProvider, PersistedNodeObservation, RawNodeObservation,
     UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };
+use btc_network::status::{NodeStatus, NodeStatusRecord, NodeStatusTarget};
 use btc_network::wire::{self, Command};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_postgres::{
@@ -249,20 +250,35 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
 
     assert_eq!(
         first_report.applied_versions,
-        vec!["20260404000100", "20260404000200", "20260426000100",]
+        vec![
+            "20260404000100",
+            "20260404000200",
+            "20260426000100",
+            "20260502000100",
+        ]
     );
     assert!(first_report.skipped_versions.is_empty());
     assert!(second_report.applied_versions.is_empty());
     assert_eq!(
         second_report.skipped_versions,
-        vec!["20260404000100", "20260404000200", "20260426000100",]
+        vec![
+            "20260404000100",
+            "20260404000200",
+            "20260426000100",
+            "20260502000100",
+        ]
     );
     assert_eq!(
         applied
             .iter()
             .map(|row| row.version.as_str())
             .collect::<Vec<_>>(),
-        vec!["20260404000100", "20260404000200", "20260426000100",]
+        vec![
+            "20260404000100",
+            "20260404000200",
+            "20260426000100",
+            "20260502000100",
+        ]
     );
 
     let client = db.connect().await?;
@@ -283,6 +299,7 @@ ORDER BY tablename
 
     assert!(table_names.contains(&"crawler_run_checkpoints".to_string()));
     assert!(table_names.contains(&"node_observations".to_string()));
+    assert!(table_names.contains(&"node_status".to_string()));
     assert!(table_names.contains(&"schema_migrations".to_string()));
     assert!(table_names.contains(&"unreachable_nodes".to_string()));
 
@@ -381,6 +398,94 @@ async fn repository_round_trips_live_postgres_state() -> TestResult {
             },
         ]
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn repository_round_trips_node_status_history_and_retention() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+    let target = NodeStatusTarget::new(
+        "seed.bitcoin.sipa.be:8333",
+        "Sipa DNS Seed",
+        "Long-running Bitcoin Core mainnet DNS seed.",
+    )?;
+    let second_target = NodeStatusTarget::new(
+        "seed.bitnodes.io:8333",
+        "Bitnodes Seed",
+        "Bitnodes community seed host used by btc-network for public sampling.",
+    )?;
+    let now = Utc::now();
+
+    repository
+        .insert_node_status(NodeStatusRecord::from_target(
+            &target,
+            NodeStatus::Unknown,
+            now - Duration::days(366),
+            "Status check predates the public history window.",
+        ))
+        .await?;
+    repository
+        .insert_node_status(NodeStatusRecord::from_target(
+            &target,
+            NodeStatus::Failed,
+            now - Duration::seconds(60),
+            "Status check failed after 5 attempts: connect failed",
+        ))
+        .await?;
+    repository
+        .insert_node_status(NodeStatusRecord::from_target(
+            &target,
+            NodeStatus::Healthy,
+            now,
+            "Handshake succeeded.",
+        ))
+        .await?;
+    repository
+        .insert_node_status(NodeStatusRecord::from_target(
+            &second_target,
+            NodeStatus::Unknown,
+            now - Duration::seconds(30),
+            "Status check has not completed yet.",
+        ))
+        .await?;
+
+    let rows = repository.list_node_status().await?;
+    let sipa = rows
+        .iter()
+        .find(|row| row.endpoint == "seed.bitcoin.sipa.be:8333")
+        .expect("sipa row");
+    let bitnodes = rows
+        .iter()
+        .find(|row| row.endpoint == "seed.bitnodes.io:8333")
+        .expect("bitnodes row");
+
+    assert_eq!(rows.len(), 2);
+    assert_eq!(sipa.status, NodeStatus::Healthy);
+    assert_eq!(sipa.history.len(), 2);
+    assert_eq!(sipa.history[0].status, NodeStatus::Healthy);
+    assert_eq!(sipa.history[1].status, NodeStatus::Failed);
+    assert!(sipa.history.iter().all(|item| {
+        item.checked_at
+            .parse::<chrono::DateTime<Utc>>()
+            .expect("valid status history timestamp")
+            >= now - Duration::days(365)
+    }));
+    assert_eq!(bitnodes.status, NodeStatus::Unknown);
+
+    let deleted = repository
+        .delete_node_status_older_than(now - Duration::seconds(45))
+        .await?;
+    assert_eq!(deleted, 2);
+
+    let rows = repository.list_node_status().await?;
+    let sipa = rows
+        .iter()
+        .find(|row| row.endpoint == "seed.bitcoin.sipa.be:8333")
+        .expect("sipa row after retention");
+    assert_eq!(sipa.history.len(), 1);
 
     Ok(())
 }

@@ -45,6 +45,7 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
     listLastRunStartHeights: vi.fn().mockResolvedValue([]),
     listLastRunAsnOrganizations: vi.fn().mockResolvedValue([]),
     listLastRunNodes: vi.fn().mockResolvedValue([]),
+    listNodeStatus: vi.fn().mockResolvedValue([]),
     handshake: vi.fn(),
     ping: vi.fn(),
     getAddr: vi.fn(),

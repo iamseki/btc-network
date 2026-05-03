@@ -20,6 +20,7 @@ import type {
   LastRunCountryCountItem,
   LastRunNetworkTypeCountItem,
   LastRunStartHeightCountItem,
+  NodeStatusItem,
 } from "@/lib/api/types";
 import { isDemoModeEnabled } from "@/lib/runtime-config";
 
@@ -30,6 +31,7 @@ type NetworkAnalyticsPageProps = {
   activePanel?: NetworkAnalyticsPanel;
   onPanelChange?: (panel: NetworkAnalyticsPanel) => void;
   onOpenApiPage?: () => void;
+  onOpenStatusPage?: () => void;
   showPanelNav?: boolean;
 };
 
@@ -38,6 +40,7 @@ export function NetworkAnalyticsPage({
   activePanel: controlledActivePanel,
   onPanelChange,
   onOpenApiPage,
+  onOpenStatusPage,
   showPanelNav = true,
 }: NetworkAnalyticsPageProps) {
   const demoMode = isDemoModeEnabled();
@@ -45,6 +48,7 @@ export function NetworkAnalyticsPage({
   const [lastRunNetworkTypes, setLastRunNetworkTypes] = useState<LastRunNetworkTypeCountItem[]>([]);
   const [lastRunCountries, setLastRunCountries] = useState<LastRunCountryCountItem[]>([]);
   const [lastRunStartHeights, setLastRunStartHeights] = useState<LastRunStartHeightCountItem[]>([]);
+  const [statusRows, setStatusRows] = useState<NodeStatusItem[]>([]);
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [latestDetail, setLatestDetail] = useState<CrawlRunDetail | null>(null);
   const [internalActivePanel, setInternalActivePanel] = useState<NetworkAnalyticsPanel>("overview");
@@ -75,12 +79,14 @@ export function NetworkAnalyticsPage({
         nextLastRunNetworkTypes,
         nextLastRunCountries,
         nextLastRunStartHeights,
+        nextStatusRows,
       ] = await Promise.all([
         client.listCrawlRuns(10),
         client.listLastRunAsns(10),
         client.listLastRunNetworkTypes(10),
         client.listLastRunCountries(10),
         client.listLastRunStartHeights(5),
+        client.listNodeStatus().catch(() => []),
       ]);
       const mostRecentRun = runs.find((run) => run.phase === "finished") ?? runs[0] ?? null;
       const detail = mostRecentRun ? await client.getCrawlRun(mostRecentRun.runId) : null;
@@ -91,6 +97,7 @@ export function NetworkAnalyticsPage({
       setLastRunNetworkTypes(nextLastRunNetworkTypes);
       setLastRunCountries(nextLastRunCountries);
       setLastRunStartHeights(nextLastRunStartHeights);
+      setStatusRows(nextStatusRows);
     } catch (nextError) {
       setLatestRun(null);
       setLatestDetail(null);
@@ -98,6 +105,7 @@ export function NetworkAnalyticsPage({
       setLastRunNetworkTypes([]);
       setLastRunCountries([]);
       setLastRunStartHeights([]);
+      setStatusRows([]);
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setIsLoading(false);
@@ -137,6 +145,7 @@ export function NetworkAnalyticsPage({
   const transportDiversityScore = computeDiversityScore(
     lastRunNetworkTypes.map((row) => row.nodeCount),
   );
+  const statusSummary = summarizeStatusRows(statusRows);
   const transportCentralizationRisk = 100 - transportDiversityScore;
   const persistenceCoveragePct =
     latestRun && latestRun.scheduledTasks > 0
@@ -266,6 +275,38 @@ export function NetworkAnalyticsPage({
                   countries={lastRunCountries}
                   runId={latestRun?.runId ?? null}
                 />
+
+                <section className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
+                  <div className="rounded-[14px] border border-border/80 bg-background/72 p-3 sm:p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="muted">Status</Badge>
+                      <Badge variant="muted">DNS + P2P handshake</Badge>
+                      <Badge variant="muted">Curated targets</Badge>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                      <MiniStatusStat label="Healthy" value={statusSummary.healthy} />
+                      <MiniStatusStat label="Failed" value={statusSummary.failed} />
+                      <MiniStatusStat label="Stale" value={statusSummary.stale} />
+                      <MiniStatusStat label="Unknown" value={statusSummary.unknown} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-3 sm:p-4">
+                    <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+                      Status
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                      Track selected DNS seeders and community endpoints separately from broad crawler analytics.
+                    </p>
+                    <Button
+                      type="button"
+                      className="mt-4 w-full sm:w-auto"
+                      onClick={onOpenStatusPage}
+                    >
+                      Open status
+                    </Button>
+                  </div>
+                </section>
 
                 <section className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
                   <div className="rounded-[16px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-3 shadow-[0_16px_30px_rgba(0,0,0,0.16)] sm:p-4">
@@ -549,6 +590,17 @@ function RiskTooltip({ label, tooltip }: { label: string; tooltip: string }) {
   );
 }
 
+function MiniStatusStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[10px] border border-border/70 bg-background/52 p-3">
+      <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-serif text-2xl text-foreground">{value}</p>
+    </div>
+  );
+}
+
 function StatusPanel({
   message,
   tone = "neutral",
@@ -566,6 +618,25 @@ function StatusPanel({
     >
       {message}
     </div>
+  );
+}
+
+function summarizeStatusRows(rows: NodeStatusItem[]) {
+  return rows.reduce(
+    (summary, row) => {
+      const checkedAtMs = Date.parse(row.checkedAt);
+      if (!Number.isFinite(checkedAtMs) || Date.now() - checkedAtMs > 5 * 60_000) {
+        summary.stale += 1;
+      } else if (row.status === "healthy") {
+        summary.healthy += 1;
+      } else if (row.status === "failed") {
+        summary.failed += 1;
+      } else {
+        summary.unknown += 1;
+      }
+      return summary;
+    },
+    { healthy: 0, failed: 0, stale: 0, unknown: 0 },
   );
 }
 

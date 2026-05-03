@@ -91,6 +91,7 @@ pub fn build_router_with_config(
             handlers::LIST_LAST_RUN_NODES_PATH,
             get(handlers::list_last_run_nodes),
         )
+        .route(handlers::NODE_STATUS_PATH, get(handlers::list_node_status))
         .layer(
             ServiceBuilder::new()
                 .layer(ConcurrencyLimitLayer::new(config.concurrency_limit))
