@@ -19,6 +19,7 @@ import type {
   LastRunServicesCountItem,
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
+  NodeStatusItem,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -38,6 +39,7 @@ export interface BtcAppClient {
   listLastRunStartHeights(limit?: number): Promise<LastRunStartHeightCountItem[]>;
   listLastRunAsnOrganizations(limit?: number): Promise<LastRunAsnOrganizationCountItem[]>;
   listLastRunNodes(limit?: number): Promise<LastRunNodeSummaryItem[]>;
+  listNodeStatus(): Promise<NodeStatusItem[]>;
   handshake(request: ConnectionRequest): Promise<HandshakeResult>;
   ping(node: string): Promise<PingResult>;
   getAddr(node: string): Promise<AddrResult>;

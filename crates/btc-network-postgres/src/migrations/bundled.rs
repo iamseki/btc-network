@@ -15,5 +15,9 @@ pub fn bundled_migrations() -> Vec<Migration> {
             "20260426000100_create_unreachable_nodes.sql",
             include_str!("../../migrations/20260426000100_create_unreachable_nodes.sql"),
         ),
+        Migration::from_filename(
+            "20260502000100_create_node_status.sql",
+            include_str!("../../migrations/20260502000100_create_node_status.sql"),
+        ),
     ]
 }

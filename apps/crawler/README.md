@@ -24,11 +24,40 @@ To retry only nodes currently marked unreachable, run:
 make crawler-unreachable-recovery ARGS="--mmdb-asn-path .dev-data/mmdb/GeoLite2-ASN.mmdb --mmdb-country-path .dev-data/mmdb/GeoLite2-Country.mmdb"
 ```
 
+To check curated DNS seeders and public status targets once, run:
+
+```bash
+make crawler-status
+```
+
+`status-check` reads explicit targets only. It resolves each endpoint and runs a Bitcoin P2P handshake through the shared session layer, records one final row per target in `node_status`, and marks a target `failed` only after the per-cycle retry budget is exhausted.
+
 ## Local Paths
 
 - PostgreSQL data: `.dev-data/postgres/`
 - ASN MMDB: `.dev-data/mmdb/GeoLite2-ASN.mmdb`
 - country MMDB: `.dev-data/mmdb/GeoLite2-Country.mmdb`
+- status target config: `config/status-targets.toml`
+
+## Curated Status Checks
+
+Default status settings:
+
+- config path: `config/status-targets.toml`
+- attempts per target: `5`
+- connect timeout: `10` seconds
+- IO timeout: `10` seconds
+- retry backoff: `250` milliseconds
+- retention: `30` days
+
+Override with CLI flags or environment variables:
+
+- `--status-config` / `BTC_NETWORK_STATUS_CONFIG`
+- `--status-check-attempts` / `BTC_NETWORK_STATUS_CHECK_ATTEMPTS`
+- `--status-connect-timeout-secs` / `BTC_NETWORK_STATUS_CONNECT_TIMEOUT_SECS`
+- `--status-io-timeout-secs` / `BTC_NETWORK_STATUS_IO_TIMEOUT_SECS`
+- `--status-retry-backoff-ms` / `BTC_NETWORK_STATUS_RETRY_BACKOFF_MS`
+- `--status-retention-days` / `BTC_NETWORK_STATUS_RETENTION_DAYS`
 
 ## Download Or Refresh MMDB Files
 
@@ -81,6 +110,7 @@ profiles:
 
 - `crawler` profile: `postgres` + `postgres-migrate` + `tor` + `crawler`
 - `api` profile: `postgres` + `postgres-migrate` + `api`
+- `status` profile: `postgres` + `postgres-migrate` + one `status-check` run
 - both profiles together: `postgres` + `postgres-migrate` + `tor` + `crawler` + `api`
 
 Useful commands from the repository root:
@@ -88,6 +118,7 @@ Useful commands from the repository root:
 ```bash
 docker compose up postgres
 docker compose --profile crawler up
+docker compose --profile status up --abort-on-container-exit --exit-code-from crawler-status crawler-status
 docker compose --profile crawler --profile api up
 docker compose down
 ```
@@ -97,6 +128,7 @@ Equivalent `make` wrappers:
 ```bash
 make infra-postgres-up
 make infra-crawler-up
+make infra-crawler-status-up
 make infra-crawler-api-up
 make infra-compose-down
 ```
@@ -105,6 +137,7 @@ To force local image rebuilds for the profiled services, set `BUILD=1`:
 
 ```bash
 make infra-crawler-up BUILD=1
+make infra-crawler-status-up BUILD=1
 make infra-crawler-api-up BUILD=1
 ```
 

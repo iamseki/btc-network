@@ -12,6 +12,7 @@ import {
   listLastRunServices,
   listLastRunStartHeights,
   listLastRunUserAgents,
+  listNodeStatus,
 } from "./analytics-http";
 import type {
   AddrResult,
@@ -34,6 +35,7 @@ import type {
   LastRunServicesCountItem,
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
+  NodeStatusItem,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -646,6 +648,74 @@ const DEMO_LAST_RUN_NODES: LastRunNodeSummaryItem[] = [
   },
 ];
 
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+function hoursAgo(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60_000).toISOString();
+}
+
+function makeDemoStatusHistory(
+  points: number,
+  intervalHours: number,
+  statusAt: (index: number) => NodeStatusItem["status"],
+): NodeStatusItem["history"] {
+  return Array.from({ length: points }, (_, index) => ({
+    status: statusAt(index),
+    checkedAt: hoursAgo(index * intervalHours + 1),
+  }));
+}
+
+function makeDemoNodeStatus(): NodeStatusItem[] {
+  return [
+    {
+      endpoint: "seed.bitcoin.sipa.be:8333",
+      label: "Sipa DNS Seed",
+      description: "Long-running Bitcoin Core mainnet DNS seed.",
+      status: "healthy",
+      checkedAt: minutesAgo(1),
+      message: "Handshake succeeded.",
+      history: makeDemoStatusHistory(150, 4, (index) =>
+        index === 18 || index === 42 ? "failed" : index === 77 ? "unknown" : "healthy",
+      ),
+    },
+    {
+      endpoint: "dnsseed.bluematt.me:8333",
+      label: "BlueMatt DNS Seed",
+      description: "Bitcoin mainnet DNS seed operated for public peer bootstrapping.",
+      status: "failed",
+      checkedAt: minutesAgo(2),
+      message: "Status check failed after 5 attempts: connect timed out after 10s",
+      history: makeDemoStatusHistory(150, 4, (index) =>
+        index < 3 || index === 30 || index === 31 || index === 88 ? "failed" : "healthy",
+      ),
+    },
+    {
+      endpoint: "seed.bitnodes.io:8333",
+      label: "Bitnodes Seed",
+      description: "Bitnodes community seed host used by btc-network for public sampling.",
+      status: "unknown",
+      checkedAt: minutesAgo(1),
+      message: "Status check has not completed yet.",
+      history: makeDemoStatusHistory(150, 4, (index) =>
+        index < 2 || index === 16 || index === 64 ? "unknown" : index === 45 ? "failed" : "healthy",
+      ),
+    },
+    {
+      endpoint: "seed.bitcoin.sprovoost.nl:8333",
+      label: "Sjors Provoost DNS Seed",
+      description: "Bitcoin mainnet DNS seed from the Bitcoin Core seed list.",
+      status: "healthy",
+      checkedAt: minutesAgo(8),
+      message: "Handshake succeeded.",
+      history: makeDemoStatusHistory(150, 4, (index) =>
+        index === 100 ? "unknown" : "healthy",
+      ),
+    },
+  ];
+}
+
 function cloneRun(run: CrawlRunListItem): CrawlRunListItem {
   return { ...run };
 }
@@ -744,6 +814,12 @@ async function listDemoLastRunNodes(limit = 500): Promise<LastRunNodeSummaryItem
   return delay(result);
 }
 
+async function listDemoNodeStatus(): Promise<NodeStatusItem[]> {
+  const result = makeDemoNodeStatus();
+  pushEvent("info", `Demo mode served ${result.length} curated node status rows.`);
+  return delay(result);
+}
+
 export const webClient: BtcAppClient = {
   listCrawlRuns(limit) {
     if (isDemoModeEnabled()) {
@@ -828,6 +904,13 @@ export const webClient: BtcAppClient = {
     }
 
     return listLastRunNodes(limit);
+  },
+  listNodeStatus() {
+    if (isDemoModeEnabled()) {
+      return listDemoNodeStatus();
+    }
+
+    return listNodeStatus();
   },
   async handshake(request: ConnectionRequest): Promise<HandshakeResult> {
     const seed = seedFromText(request.node);

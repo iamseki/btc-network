@@ -4,3 +4,4 @@ mod historical_runs;
 mod last_run_asns;
 mod last_run_distributions;
 mod last_run_nodes;
+mod node_status;

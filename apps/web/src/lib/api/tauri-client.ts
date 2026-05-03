@@ -12,6 +12,7 @@ import {
   listLastRunStartHeights as listLastRunStartHeightsHttp,
   listLastRunUserAgents as listLastRunUserAgentsHttp,
   listCrawlRuns as listCrawlRunsHttp,
+  listNodeStatus as listNodeStatusHttp,
 } from "./analytics-http";
 import type {
   AddrResult,
@@ -31,6 +32,7 @@ import type {
   LastRunServicesCountItem,
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
+  NodeStatusItem,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -89,6 +91,9 @@ export const tauriClient: BtcAppClient = {
   },
   listLastRunNodes(limit): Promise<LastRunNodeSummaryItem[]> {
     return listLastRunNodesHttp(limit);
+  },
+  listNodeStatus(): Promise<NodeStatusItem[]> {
+    return listNodeStatusHttp();
   },
   handshake(request: ConnectionRequest): Promise<HandshakeResult> {
     return invoke<HandshakeResult>("handshake", { request });

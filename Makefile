@@ -11,6 +11,8 @@
 #
 # Examples:
 # - `make crawler ARGS="--mmdb-asn-path ... --mmdb-country-path ..."`
+# - `make crawler-status`
+# - `make infra-crawler-status-up`
 # - `make crawler-unreachable-recovery ARGS="--mmdb-asn-path ... --mmdb-country-path ..."`
 # - `make postgres-migrate`
 # - `make infra-tf-prod-plan TF_STATE_BUCKET=...`
@@ -26,6 +28,7 @@ MAKEFLAGS += --no-print-directory
 .PHONY: \
 	help \
 	crawler \
+	crawler-status \
 	crawler-unreachable-recovery \
 	postgres-migrate \
 	infra-postgres-up \
@@ -33,6 +36,8 @@ MAKEFLAGS += --no-print-directory
 	infra-postgres-reset \
 	infra-crawler-up \
 	infra-crawler-up-build \
+	infra-crawler-status-up \
+	infra-crawler-status-up-build \
 	infra-api-up \
 	infra-api-up-build \
 	infra-crawler-api-up \
@@ -131,6 +136,9 @@ API_TEST_ENV = \
 crawler: ## Run the crawler binary with local PostgreSQL defaults; pass crawler flags via ARGS="..."
 	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-crawler -- $(ARGS)
 
+crawler-status: ## Run curated node status checks with local PostgreSQL defaults; pass status flags via ARGS="..."
+	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-crawler -- status-check $(ARGS)
+
 crawler-unreachable-recovery: ## Retry only currently unreachable nodes; pass flags via ARGS="..."
 	@$(POSTGRES_LOCAL_ENV) cargo run -p btc-network-crawler -- recover-unreachable $(ARGS)
 
@@ -153,6 +161,10 @@ infra-crawler-up: ## Start postgres, migrations, tor, and the crawler via the cr
 	@mkdir -p .dev-data/postgres
 	@$(DOCKER_COMPOSE) --profile crawler up $(COMPOSE_BUILD_FLAG)
 
+infra-crawler-status-up: ## Start postgres, migrations, and one curated status check via Compose; set BUILD=1 to force image rebuilds
+	@mkdir -p .dev-data/postgres
+	@$(DOCKER_COMPOSE) --profile status up $(COMPOSE_BUILD_FLAG) --abort-on-container-exit --exit-code-from crawler-status crawler-status
+
 infra-api-up: ## Start postgres, migrations, and the API via the api Compose profile; set BUILD=1 to force image rebuilds
 	@mkdir -p .dev-data/postgres
 	@$(DOCKER_COMPOSE) --profile api up $(COMPOSE_BUILD_FLAG)
@@ -164,6 +176,9 @@ infra-crawler-api-up: ## Start postgres, migrations, tor, crawler, and API via b
 infra-crawler-up-build: ## Start postgres, migrations, tor, and crawler with forced image rebuilds
 	@$(MAKE) infra-crawler-up BUILD=1
 
+infra-crawler-status-up-build: ## Start postgres, migrations, and one curated status check with forced image rebuilds
+	@$(MAKE) infra-crawler-status-up BUILD=1
+
 infra-api-up-build: ## Start postgres, migrations, and API with forced image rebuilds
 	@$(MAKE) infra-api-up BUILD=1
 
@@ -171,11 +186,11 @@ infra-crawler-api-up-build: ## Start postgres, migrations, tor, crawler, and API
 	@$(MAKE) infra-crawler-api-up BUILD=1
 
 infra-compose-down: ## Stop and remove all local Compose services in this repository stack
-	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans
+	@$(DOCKER_COMPOSE) --profile crawler --profile api --profile status down --remove-orphans
 
 infra-compose-reset: ## Force-remove local Compose containers and network metadata when Docker state is stale
-	@$(DOCKER_COMPOSE) --profile crawler --profile api down --remove-orphans >/dev/null 2>&1 || true
-	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-tor btc-network-crawler btc-network-api >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) --profile crawler --profile api --profile status down --remove-orphans >/dev/null 2>&1 || true
+	@docker rm -f btc-network-postgres btc-network-postgres-migrate btc-network-tor btc-network-crawler btc-network-crawler-status btc-network-api >/dev/null 2>&1 || true
 	@docker network rm btc-network_default >/dev/null 2>&1 || true
 
 ##@ Hosted Infrastructure

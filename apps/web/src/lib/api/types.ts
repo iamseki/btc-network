@@ -184,6 +184,23 @@ export type LastRunNodeSummaryItem = {
   asnOrganization: string | null;
 };
 
+export type NodeStatusValue = "healthy" | "failed" | "unknown";
+
+export type NodeStatusHistoryItem = {
+  status: NodeStatusValue;
+  checkedAt: string;
+};
+
+export type NodeStatusItem = {
+  endpoint: string;
+  label: string;
+  description: string;
+  status: NodeStatusValue;
+  checkedAt: string;
+  message: string;
+  history: NodeStatusHistoryItem[];
+};
+
 export type CrawlRunDetail = {
   run: CrawlRunListItem;
   checkpoints: CrawlRunCheckpointItem[];

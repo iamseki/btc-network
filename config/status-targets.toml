@@ -1,0 +1,44 @@
+[[targets]]
+endpoint = "seed.bitcoin.sipa.be:8333"
+label = "Sipa DNS Seed"
+description = "Long-running Bitcoin Core mainnet DNS seed."
+
+[[targets]]
+endpoint = "dnsseed.bluematt.me:8333"
+label = "BlueMatt DNS Seed"
+description = "Bitcoin mainnet DNS seed operated for public peer bootstrapping."
+
+[[targets]]
+endpoint = "seed.bitcoin.jonasschnelli.ch:8333"
+label = "Jonas Schnelli DNS Seed"
+description = "Bitcoin mainnet DNS seed from the Bitcoin Core seed list."
+
+[[targets]]
+endpoint = "seed.btc.petertodd.net:8333"
+label = "Peter Todd DNS Seed"
+description = "Bitcoin mainnet DNS seed from the Bitcoin Core seed list."
+
+[[targets]]
+endpoint = "seed.bitcoin.sprovoost.nl:8333"
+label = "Sjors Provoost DNS Seed"
+description = "Bitcoin mainnet DNS seed from the Bitcoin Core seed list."
+
+[[targets]]
+endpoint = "dnsseed.emzy.de:8333"
+label = "Emzy DNS Seed"
+description = "Bitcoin mainnet DNS seed from the Bitcoin Core seed list."
+
+[[targets]]
+endpoint = "seed.bitcoin.wiz.biz:8333"
+label = "Wiz DNS Seed"
+description = "Bitcoin mainnet DNS seed from the Bitcoin Core seed list."
+
+[[targets]]
+endpoint = "seed.mainnet.achownodes.xyz:8333"
+label = "AchoWNodes DNS Seed"
+description = "Bitcoin mainnet DNS seed from the Bitcoin Core seed list."
+
+[[targets]]
+endpoint = "seed.bitnodes.io:8333"
+label = "Bitnodes Seed"
+description = "Bitnodes community seed host used by btc-network for public sampling."

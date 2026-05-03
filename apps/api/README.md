@@ -29,6 +29,7 @@ Default backend:
 - `GET /api/v1/network/last-run/start-heights?limit=<n>`
 - `GET /api/v1/network/last-run/asn-organizations?limit=<n>`
 - `GET /api/v1/network/last-run/nodes?limit=<n>`
+- `GET /api/nodes/status`
 
 ## Environment
 
@@ -65,6 +66,7 @@ Default backend:
 - docs title, version, description, introduction, and public base URL can all be configured at runtime so hosted docs and embedded docs surfaces stay in sync without frontend copy drift
 - the intended web integration path is to fetch `/api/docs/config.json`, then pass `openapiUrl` into a Scalar React reference component or another OpenAPI viewer using the generated spec as the single source of truth
 - last-run endpoints read from the latest finished crawl run only
+- `/api/nodes/status` returns a simple array with latest status plus bounded recent history for curated status targets; database retention controls how much history exists, and the API reads up to one year
 - local development uses the shared PostgreSQL service defined in the repository root `docker-compose.yml`
 - the `api` Compose profile now builds `apps/api/Dockerfile` into a slim runtime image instead of compiling on every container start
 - the shared local PostgreSQL container uses PostgreSQL 18 with `PGDATA=/var/lib/postgresql/18/btc-network`

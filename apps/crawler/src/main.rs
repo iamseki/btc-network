@@ -1,13 +1,17 @@
 use std::error::Error;
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use btc_network::crawler::{Crawler, CrawlerConfig, IpEnrichmentProvider};
+use btc_network::crawler::{Crawler, CrawlerConfig, CrawlerRepository, IpEnrichmentProvider};
+use btc_network::status::{NodeStatus, NodeStatusCheckConfig, NodeStatusChecker, NodeStatusTarget};
 use btc_network_mmdb::{MmdbEnrichmentConfig, MmdbIpEnrichmentProvider};
 use btc_network_observability::init_tracing;
 use btc_network_postgres::{PostgresConnectionConfig, PostgresCrawlerRepository};
+use chrono::{Duration as ChronoDuration, Utc};
 use clap::{Args, Parser, Subcommand};
+use serde::Deserialize;
 use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
@@ -26,12 +30,20 @@ enum CrawlerCommand {
     Crawl(CrawlArgs),
     /// Retry active unreachable-node rows and mark recovered peers.
     RecoverUnreachable(CrawlArgs),
+    /// Check configured DNS seeders and public nodes once.
+    StatusCheck(StatusCheckArgs),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RunMode {
     Crawl,
     RecoverUnreachable,
+}
+
+#[derive(Debug)]
+enum RunRequest {
+    Crawl { mode: RunMode, args: CrawlArgs },
+    StatusCheck(StatusCheckArgs),
 }
 
 /// Runtime knobs for a crawler run.
@@ -212,6 +224,76 @@ struct MmdbArgs {
     mmdb_country_path: Option<PathBuf>,
 }
 
+#[derive(Args, Debug)]
+struct StatusCheckArgs {
+    /// TOML file containing curated status targets.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_STATUS_CONFIG",
+        default_value = "config/status-targets.toml"
+    )]
+    status_config: PathBuf,
+
+    /// Maximum DNS resolution/handshake attempts per target.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_STATUS_CHECK_ATTEMPTS",
+        default_value_t = 5,
+        value_parser = parse_positive_usize
+    )]
+    status_check_attempts: usize,
+
+    /// Timeout for DNS resolution and each TCP connect attempt.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_STATUS_CONNECT_TIMEOUT_SECS",
+        default_value_t = 10,
+        value_parser = parse_positive_u64
+    )]
+    status_connect_timeout_secs: u64,
+
+    /// Timeout for Bitcoin P2P read/write operations after connect.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_STATUS_IO_TIMEOUT_SECS",
+        default_value_t = 10,
+        value_parser = parse_positive_u64
+    )]
+    status_io_timeout_secs: u64,
+
+    /// Backoff in milliseconds between failed status attempts.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_STATUS_RETRY_BACKOFF_MS",
+        default_value_t = 250
+    )]
+    status_retry_backoff_ms: u64,
+
+    /// Days of node_status history to retain.
+    #[arg(
+        long,
+        env = "BTC_NETWORK_STATUS_RETENTION_DAYS",
+        default_value_t = 30,
+        value_parser = parse_positive_u64
+    )]
+    status_retention_days: u64,
+
+    #[command(flatten)]
+    postgres: PostgresArgs,
+}
+
+#[derive(Debug, Deserialize)]
+struct StatusTargetFile {
+    targets: Vec<StatusTargetConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StatusTargetConfig {
+    endpoint: String,
+    label: String,
+    description: String,
+}
+
 fn parse_positive_usize(raw: &str) -> Result<usize, String> {
     let value = raw
         .parse::<usize>()
@@ -240,16 +322,28 @@ fn parse_positive_u64(raw: &str) -> Result<u64, String> {
 async fn main() -> Result<(), Box<dyn Error>> {
     init_tracing();
     let cli = Cli::parse();
-    let (mode, args) = cli.into_run_request();
-    run_crawler(args, mode).await
+    match cli.into_run_request() {
+        RunRequest::Crawl { mode, args } => run_crawler(args, mode).await,
+        RunRequest::StatusCheck(args) => run_status_check(args).await,
+    }
 }
 
 impl Cli {
-    fn into_run_request(self) -> (RunMode, CrawlArgs) {
+    fn into_run_request(self) -> RunRequest {
         match self.command {
-            Some(CrawlerCommand::Crawl(args)) => (RunMode::Crawl, args),
-            Some(CrawlerCommand::RecoverUnreachable(args)) => (RunMode::RecoverUnreachable, args),
-            None => (RunMode::Crawl, self.crawl),
+            Some(CrawlerCommand::Crawl(args)) => RunRequest::Crawl {
+                mode: RunMode::Crawl,
+                args,
+            },
+            Some(CrawlerCommand::RecoverUnreachable(args)) => RunRequest::Crawl {
+                mode: RunMode::RecoverUnreachable,
+                args,
+            },
+            Some(CrawlerCommand::StatusCheck(args)) => RunRequest::StatusCheck(args),
+            None => RunRequest::Crawl {
+                mode: RunMode::Crawl,
+                args: self.crawl,
+            },
         }
     }
 }
@@ -276,6 +370,66 @@ async fn run_crawler(args: CrawlArgs, mode: RunMode) -> Result<(), Box<dyn Error
     info!("elapsed: {:.2?}", summary.elapsed);
 
     Ok(())
+}
+
+async fn run_status_check(args: StatusCheckArgs) -> Result<(), Box<dyn Error>> {
+    let targets = load_status_targets(&args.status_config)?;
+    let repository = PostgresCrawlerRepository::new(&build_postgres_config(&args.postgres))?;
+    let checker = NodeStatusChecker::new(NodeStatusCheckConfig {
+        attempts: args.status_check_attempts,
+        connect_timeout: Duration::from_secs(args.status_connect_timeout_secs),
+        io_timeout: Duration::from_secs(args.status_io_timeout_secs),
+        retry_backoff: Duration::from_millis(args.status_retry_backoff_ms),
+    })?;
+
+    let mut healthy = 0usize;
+    let mut failed = 0usize;
+    let mut unknown = 0usize;
+
+    for target in targets {
+        let record = checker.check_target(&target).await;
+        match record.status {
+            NodeStatus::Healthy => healthy += 1,
+            NodeStatus::Failed => failed += 1,
+            NodeStatus::Unknown => unknown += 1,
+        }
+        info!(
+            endpoint = %record.endpoint,
+            status = record.status.as_storage_str(),
+            "status target checked"
+        );
+        repository.insert_node_status(record).await?;
+    }
+
+    let retention_days = i64::try_from(args.status_retention_days)
+        .map_err(|_| "status retention days is too large")?;
+    let deleted = repository
+        .delete_node_status_older_than(Utc::now() - ChronoDuration::days(retention_days))
+        .await?;
+
+    info!(
+        healthy,
+        failed,
+        unknown,
+        deleted_old_rows = deleted,
+        "Status check finished."
+    );
+    Ok(())
+}
+
+fn load_status_targets(path: &PathBuf) -> Result<Vec<NodeStatusTarget>, Box<dyn Error>> {
+    let raw = fs::read_to_string(path)?;
+    let parsed: StatusTargetFile = toml::from_str(&raw)?;
+    if parsed.targets.is_empty() {
+        return Err("status target config must include at least one target".into());
+    }
+
+    parsed
+        .targets
+        .into_iter()
+        .map(|target| NodeStatusTarget::new(target.endpoint, target.label, target.description))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.into())
 }
 
 fn build_crawler_config(args: &CrawlArgs, mode: RunMode) -> CrawlerConfig {
@@ -385,7 +539,9 @@ mod tests {
     fn cli_defaults_to_normal_crawl_without_subcommand() {
         let cli = Cli::parse_from(["crawler", "--connect-max-attempts", "4"]);
 
-        let (mode, args) = cli.into_run_request();
+        let RunRequest::Crawl { mode, args } = cli.into_run_request() else {
+            panic!("expected crawl request");
+        };
 
         assert_eq!(mode, RunMode::Crawl);
         assert_eq!(args.connect_max_attempts, 4);
@@ -400,10 +556,34 @@ mod tests {
             "2",
         ]);
 
-        let (mode, args) = cli.into_run_request();
+        let RunRequest::Crawl { mode, args } = cli.into_run_request() else {
+            panic!("expected crawl request");
+        };
 
         assert_eq!(mode, RunMode::RecoverUnreachable);
         assert_eq!(args.connect_max_attempts, 2);
+    }
+
+    #[test]
+    fn cli_accepts_status_check_subcommand() {
+        let cli = Cli::parse_from([
+            "crawler",
+            "status-check",
+            "--status-config",
+            "config/status-targets.toml",
+            "--status-check-attempts",
+            "3",
+        ]);
+
+        let RunRequest::StatusCheck(args) = cli.into_run_request() else {
+            panic!("expected status request");
+        };
+
+        assert_eq!(
+            args.status_config,
+            PathBuf::from("config/status-targets.toml")
+        );
+        assert_eq!(args.status_check_attempts, 3);
     }
 
     fn test_crawl_args() -> CrawlArgs {

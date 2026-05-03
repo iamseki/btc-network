@@ -2,6 +2,7 @@ export type AppPageId =
   | "api"
   | "crawler-runs"
   | "network-analytics"
+  | "status"
   | "connection"
   | "peer-tools"
   | "headers"
@@ -28,6 +29,12 @@ export const appPages: AppPage[] = [
     group: "network-analytics",
     title: "API",
     description: "Commercial Bitcoin network analytics API with generated reference docs, onboarding, and productized developer experience.",
+  },
+  {
+    id: "status",
+    group: "network-analytics",
+    title: "Status",
+    description: "Curated Bitcoin DNS seeders and public node endpoint status.",
   },
   {
     id: "crawler-runs",

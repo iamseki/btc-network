@@ -11,6 +11,7 @@ import type {
   LastRunServicesCountItem,
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
+  NodeStatusItem,
 } from "./types";
 import { fetchJson } from "./http";
 
@@ -103,4 +104,8 @@ export async function listLastRunNodes(limit = 500): Promise<LastRunNodeSummaryI
   return fetchRows<LastRunNodeSummaryItem>(
     `/api/v1/network/last-run/nodes?limit=${encodeURIComponent(String(limit))}`,
   );
+}
+
+export async function listNodeStatus(): Promise<NodeStatusItem[]> {
+  return fetchJson<NodeStatusItem[]>("/api/nodes/status");
 }

@@ -6,7 +6,7 @@ services:
       dockerfile: apps/crawler/Dockerfile
       target: runtime
     container_name: btc-network-postgres-migrate
-    profiles: ["crawler", "api"]
+    profiles: ["crawler", "api", "status"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -7,7 +7,11 @@ use crate::{TestResult, empty_app};
 #[tokio::test]
 async fn openapi_route_returns_generated_spec() -> TestResult {
     let app = empty_app("docs_openapi_integration").await?;
-    let response = app.router.clone().oneshot(request("/api/openapi.json")).await?;
+    let response = app
+        .router
+        .clone()
+        .oneshot(request("/api/openapi.json"))
+        .await?;
 
     assert_eq!(response.status(), StatusCode::OK);
 

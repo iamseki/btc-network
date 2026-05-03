@@ -7,6 +7,7 @@ use btc_network::crawler::{
     LastRunUserAgentCountItem, PersistedNodeObservation, RepositoryFuture,
     RepositoryRuntimeMetrics, UnreachableNodeUpdate,
 };
+use btc_network::status::{NodeStatusItem, NodeStatusRecord};
 use chrono::{DateTime, Utc};
 use sqlx_postgres::PgPool;
 
@@ -14,6 +15,7 @@ use crate::config::{PostgresConfigError, PostgresConnectionConfig};
 
 mod analytics;
 mod runs;
+mod status;
 mod unreachable;
 mod writes;
 
@@ -94,6 +96,20 @@ impl CrawlerRepository for PostgresCrawlerRepository {
         Box::pin(
             async move { unreachable::apply_unreachable_node_updates(&self.pool, updates).await },
         )
+    }
+
+    fn insert_node_status<'a>(
+        &'a self,
+        record: NodeStatusRecord,
+    ) -> RepositoryFuture<'a, Result<(), CrawlerRepositoryError>> {
+        Box::pin(async move { status::insert_node_status(&self.pool, record).await })
+    }
+
+    fn delete_node_status_older_than<'a>(
+        &'a self,
+        cutoff: DateTime<Utc>,
+    ) -> RepositoryFuture<'a, Result<u64, CrawlerRepositoryError>> {
+        Box::pin(async move { status::delete_node_status_older_than(&self.pool, cutoff).await })
     }
 
     fn runtime_metrics(&self) -> RepositoryRuntimeMetrics {
@@ -199,6 +215,12 @@ impl CrawlerAnalyticsReader for PostgresCrawlerRepository {
         limit: usize,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>> {
         Box::pin(async move { analytics::list_last_run_nodes(&self.pool, limit).await })
+    }
+
+    fn list_node_status<'a>(
+        &'a self,
+    ) -> RepositoryFuture<'a, Result<Vec<NodeStatusItem>, CrawlerRepositoryError>> {
+        Box::pin(async move { status::list_node_status(&self.pool).await })
     }
 }
 
