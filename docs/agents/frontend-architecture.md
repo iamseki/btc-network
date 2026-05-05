@@ -1,19 +1,15 @@
 # Frontend Architecture
 
-This repository adopts a web-first frontend architecture with a thin Tauri desktop adapter.
+Web-first frontend, thin Tauri desktop adapter.
 
 ## Goals
 
 - Keep the core Bitcoin protocol implementation in Rust
 - Reuse the same page structure across desktop and future web deployment
 - Prevent the frontend from depending directly on Tauri runtime APIs
-- Keep the single-peer workflows aligned with the existing shared Rust client flows while allowing browser-safe analytics pages to grow through the HTTP API
+- Keep single-peer workflows aligned with shared Rust client flows; grow browser-safe analytics through HTTP API
 
 ## Visual Direction
-
-The frontend visual language is intentionally retro while staying clean and readable.
-
-Guidelines:
 
 - Keep the black / carbon base with restrained Bitcoin-gold highlights
 - Prefer a retro instrument-panel or terminal-console feel over a generic SaaS dashboard
@@ -21,18 +17,14 @@ Guidelines:
 - Favor squarer frames, panel borders, subtle glow, and scanline/grid texture only when they support the mood
 - Avoid novelty effects that reduce readability or feel theatrical
 - Preserve the same visual discipline on desktop and web builds
+- Preserve shared shell hover behavior when fixing isolated visual artifacts; prefer targeted overflow, scrollbar, or stacking fixes before changing button color states
+- Sidebar collapsed tooltips intentionally overflow horizontally, while `sidebar-scrollbar` hides the horizontal scrollbar artifact that can appear above the footer during hover
 
 ## shadcn Workflow
-
-Frontend composition should start from shadcn blocks when a matching pattern exists.
-
-Default order:
 
 1. Look for a relevant shadcn block first
 2. Adapt that block to the repository's visual direction and feature needs
 3. Drop to lower-level shadcn primitives only when no suitable block exists or the block is materially heavier than the interface needs
-
-Practical rule:
 
 - Use blocks first for sidebars, app shells, headers, menus, settings/profile chrome, and other common product frames
 - Keep adapted blocks clean by removing extra marketing copy, oversized panels, or dashboard filler
@@ -40,17 +32,17 @@ Practical rule:
 
 ## Analytics UI Rules
 
-- Keep analytics pages focused on one primary story at a time: score-first network risk, ASN concentration, or verification outcomes
+- Keep analytics pages focused on one primary story: score-first network risk, ASN concentration, or verification outcomes
 - Keep run and page status summaries compact in `SectionHeading.actions` when the main content is already visible
 - Avoid repeating the same run context in large boxes below the heading if the header row already carries it
 - Treat `Latest Snapshot` as the primary crawler-facing entry point for hosted demo builds
 - Treat `Network Analytics` overview as the public product home page and keep `Crawler Runs` as the inspection page
-- Treat `Network Risk API` as a mocked commercial preview page in web builds until a real browser-safe API product exists
+- Treat `Network Risk API` as a mocked commercial preview until a real browser-safe API product exists
 - Keep the public home globe-first: snapshot hero first, compact `Risk Brief` second, and full-width `Risk Drivers` beneath the hero row
 - On narrow screens keep the snapshot hero first and the `Risk Brief` second; do not flip that order just to preserve desktop composition
 - Keep `Risk Drivers` product-facing and evidence-oriented; do not reuse crawler-internal checkpoint rails on the public home
-- Prefer product-facing derived signals that are explicitly computed from the current API over decorative KPI filler
-- Prefer lightweight custom charts over chart or map dependencies when the current API only needs simple comparative views
+- Prefer derived signals computed from current API over decorative KPI filler
+- Prefer lightweight custom charts over dependencies for simple comparative views
 
 ## High-Level Shape
 

@@ -425,6 +425,16 @@ describe("App sidebar shell", () => {
     expect(supportLink.getAttribute("href")).toBe("https://buymeacoffee.com/chseki");
   });
 
+  it("suppresses sidebar horizontal hover overflow without changing nav hover styles", () => {
+    render(<App />);
+
+    const networkNav = screen.getByRole("navigation", { name: "Network analytics" });
+    const sidebarScroller = networkNav.closest(".sidebar-scrollbar");
+
+    expect(sidebarScroller).toBeTruthy();
+    expect(sidebarScroller?.className).toContain("overflow-x-visible");
+  });
+
   it("opens and closes the header crawl preview from the pulse in the header rail", async () => {
     mockCrawlerPreviewRun();
 

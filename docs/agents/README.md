@@ -1,6 +1,6 @@
 # Agent Docs
 
-Compact implementation-facing documentation for coding agents and maintainers.
+Compact routing docs for coding agents.
 
 ## Start Here
 
@@ -11,7 +11,7 @@ Compact implementation-facing documentation for coding agents and maintainers.
 ## Task Routing
 
 - Frontend shell or page task: `frontend-architecture.md`, then the specific page or component
-- Analytics UI refinement: `frontend-architecture.md`; read [BNDD-0006](../design_docs/BNDD-0006/BNDD-0006.md) and [BNDD-0007](../design_docs/BNDD-0007/BNDD-0007.md) only when the product shape, deployment behavior, or default storage adapter changes
+- Analytics UI refinement: `frontend-architecture.md`; read [BNDD-0006](../design_docs/BNDD-0006/BNDD-0006.md) and [BNDD-0007](../design_docs/BNDD-0007/BNDD-0007.md) only for product shape, deployment, or storage-adapter changes
 - Frontend API or runtime task: `architecture-decisions.md`, then `apps/web/src/lib/api/`
 - Shared Rust protocol or session task: `architecture-decisions.md`, then the target module and its tests
 - Desktop bridge task: `architecture-decisions.md`, then `apps/desktop/src-tauri/src/commands.rs`
@@ -22,21 +22,21 @@ Compact implementation-facing documentation for coding agents and maintainers.
 
 ## Context Hygiene
 
-- Read the smallest relevant set before scanning the repository.
-- Prefer these docs over rereading large code areas for routine work.
-- Do not read BNDDs unless the task changes architecture, deployment strategy, or another documented decision.
+- Read smallest relevant doc set before repo scans.
+- Prefer these docs over large code rereads.
+- Recent regression: `git status --short`, `git diff --stat`, then `git log --oneline -15`; avoid broad scans until surface is known.
+- UI regression: inspect changed page/shared primitive first; add narrow test near that surface.
+- Read BNDDs only for architecture, deployment, or documented-decision changes.
 - When implementing an accepted BNDD, read its sibling `implementation-plan.md` before coding if one exists.
 - Do not read `apps/crawler/` for frontend work.
 - Do not read `apps/web/` for wire parser work.
-- Do not reread unrelated app surfaces just to confirm boundaries already stated here.
-- When a compact agent doc is stale, update it instead of adding repeated guidance in multiple places.
-- Use `agent-safety.md` to decide whether a command should be inspected, narrowed, or escalated before running it.
+- Do not reread unrelated app surfaces to reconfirm boundaries already stated here.
+- If agent docs are stale, update them; do not duplicate guidance.
+- Use `agent-safety.md` before risky commands.
 
 ## Purpose
 
-- `agent-safety.md` records the repository's execution-safety defaults for agents.
-- `architecture-decisions.md` records compact settled repository decisions.
-- `frontend-architecture.md` records the current web-first frontend direction and boundary rules.
-- `../troubleshooting/` contains shared troubleshooting templates and issue-focused runbooks for humans and agents.
-
-These files are intentionally concise and optimized for implementation guidance rather than broader project narrative.
+- `agent-safety.md`: execution safety defaults
+- `architecture-decisions.md`: settled decisions
+- `frontend-architecture.md`: web-first frontend boundaries
+- `../troubleshooting/`: templates and runbooks
