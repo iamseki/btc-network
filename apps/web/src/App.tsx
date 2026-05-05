@@ -60,11 +60,19 @@ const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim() || DEFAULT_SUPPORT_U
 const analyticsLabel = analyticsModeLabel();
 
 function pageFromBrowserPath(pathname: string): AppPageId {
-  return pathname === "/status" ? "status" : "network-analytics";
+  if (pathname === "/status") {
+    return "status";
+  }
+
+  return "network-analytics";
 }
 
 function browserPathForPage(page: AppPageId): string {
-  return page === "status" ? "/status" : "/";
+  if (page === "status") {
+    return "/status";
+  }
+
+  return "/";
 }
 
 export function App() {
@@ -160,6 +168,7 @@ export function App() {
               label: "API Views",
               items: [
                 { id: "docs", title: "Docs" },
+                { id: "agent-guide", title: "Agent Guide" },
                 { id: "overview", title: "Overview" },
                 { id: "access", title: "Access" },
               ] satisfies { id: ApiPanel; title: string }[],
@@ -670,6 +679,10 @@ export function App() {
                   activePanel={networkAnalyticsPanel}
                   onPanelChange={setNetworkAnalyticsPanel}
                   onOpenApiPage={() => selectPage("api")}
+                  onOpenAgentGuidePage={() => {
+                    selectPage("api");
+                    setApiPanel("agent-guide");
+                  }}
                   onOpenStatusPage={() => selectPage("status")}
                   showPanelNav={false}
                 />

@@ -59,6 +59,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - The public product home now lives on `Network Analytics` overview; header snapshot preview should route there, not to a duplicate crawler-only surface
 - `Network Risk API` is a web-only mocked commercial preview page for now; do not treat it as a live SLA-backed surface yet
 - `Status` is a curated endpoint health surface backed by `GET /api/nodes/status`; freshness is derived in the frontend, not by API request-time handshakes
+- `GET /agents.md` is the API-hosted agent guide for workflow order, cost controls, pagination, caching, and calls to avoid; OpenAPI remains canonical for exact contract details
 - The public product home should stay globe-first, keep `Risk Brief` as the secondary companion panel, and use a full-width `Risk Drivers` strip instead of crawler-internal checkpoint rails
 
 ## Frontend Composition Rule

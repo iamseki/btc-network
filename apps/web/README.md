@@ -62,6 +62,8 @@ Important:
 - local development: set `VITE_SUPPORT_URL` in your shell or a local Vite env file if you want to override the default support link before `npm run dev`
 - local mocked analytics: `make web-dev-demo` is the quickest path when you want `Crawler Runs` and `Network Analytics` to use deterministic browser-side demo data
 - the API docs page still fetches `/api/docs/config.json` and `/api/openapi.json` from the API service in both normal and demo web modes
+- the home page opens an in-app `Agent Guide` page; normal builds load API-hosted `/agents.md`, while demo mode renders the bundled `src` Markdown symlink to the API guide without calling the API
+- `src/lib/api/api-agents.md` is intentionally a symlink to `apps/api/src/docs/agents.md`; update the API-owned file, not a web copy
 - demo deploys: set `VITE_DEMO_MODE=true` in the build environment when you want analytics pages mocked while still pointing API docs at a live API
 - production deploys: set `VITE_SUPPORT_URL` as a GitHub repository variable so the GitHub Actions build injects it into the static site
 

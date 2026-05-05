@@ -1,6 +1,7 @@
 mod config;
 
 use axum::extract::State;
+use axum::http::header;
 use axum::routing::get;
 use axum::{Json, Router};
 use btc_network::crawler::{
@@ -20,13 +21,24 @@ use crate::routes::AppState;
 pub use config::DocsConfig;
 pub(crate) use config::{DOCS_CONFIG_PATH, DocsUiConfigResponse, OPENAPI_PATH, SCALAR_PATH};
 
+pub(crate) const AGENTS_MD_PATH: &str = "/agents.md";
+const AGENTS_MD_BODY: &str = include_str!("agents.md");
+
 pub(super) fn router(docs_config: DocsConfig) -> Router<AppState> {
     let openapi = openapi_document(&docs_config);
 
     Router::new()
+        .route(AGENTS_MD_PATH, get(agents_markdown))
         .route(OPENAPI_PATH, get(openapi_spec))
         .route(DOCS_CONFIG_PATH, get(docs_ui_config))
         .merge(Scalar::with_url(SCALAR_PATH, openapi))
+}
+
+async fn agents_markdown() -> ([(header::HeaderName, &'static str); 1], &'static str) {
+    (
+        [(header::CONTENT_TYPE, "text/markdown; charset=utf-8")],
+        AGENTS_MD_BODY,
+    )
 }
 
 async fn openapi_spec(State(state): State<AppState>) -> Json<OpenApiDocument> {
@@ -117,6 +129,27 @@ mod tests {
             "Network Analytics"
         );
         assert_eq!(json["info"]["version"], env!("CARGO_PKG_VERSION"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn agents_markdown_route_returns_static_guide() -> TestkitResult {
+        let app = FixtureRouterApp::empty("docs_agents_md", build_api_router).await?;
+        let response = app.router.clone().oneshot(request(AGENTS_MD_PATH)).await?;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE),
+            Some(&HeaderValue::from_static("text/markdown; charset=utf-8"))
+        );
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body = std::str::from_utf8(&body)?;
+        assert!(body.contains("OpenAPI"));
+        assert!(body.contains("historical/runs"));
+        assert!(body.contains("limit"));
+        assert!(body.contains("Cache"));
 
         Ok(())
     }

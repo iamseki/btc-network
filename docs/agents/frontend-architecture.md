@@ -147,6 +147,8 @@ Already in place:
 - compact home `Status` section that links to the full curated status page
 - compact analytics header stats aligned with page refresh actions instead of large summary grids
 - lightweight ASN concentration and verification charts built directly from the current analytics API shape
+- home-page API area links to the OpenAPI reference and an in-app `Agent Guide` view under API center navigation, not a sidebar item; normal builds load API-hosted `/agents.md`, while demo mode renders the bundled `src` symlink to the API guide without calling the API
+- `apps/web/src/lib/api/api-agents.md` is intentionally a symlink to `apps/api/src/docs/agents.md`; keep the API guide as the maintained source
 - render tests for the app shell, sidebar behavior, and current page actions
 
 Still intentionally incomplete:

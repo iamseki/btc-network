@@ -48,3 +48,4 @@ Use only the canonical status values below.
 | `BNDD-0011` | `AWS split-VM API, PostgreSQL, and edge deployment strategy` | `accepted` | [BNDD-0011/BNDD-0011.md](./BNDD-0011/BNDD-0011.md) |
 | `BNDD-0012` | `Unreachable-node exclusion and recovery crawler path` | `implemented` | [BNDD-0012/BNDD-0012.md](./BNDD-0012/BNDD-0012.md) |
 | `BNDD-0013` | `Curated Bitcoin node status page` | `implemented` | [BNDD-0013/BNDD-0013.md](./BNDD-0013/BNDD-0013.md) |
+| `BNDD-0014` | `Agent-first API guide` | `accepted` | [BNDD-0014/BNDD-0014.md](./BNDD-0014/BNDD-0014.md) |

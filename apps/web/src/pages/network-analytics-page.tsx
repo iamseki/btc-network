@@ -31,6 +31,7 @@ type NetworkAnalyticsPageProps = {
   activePanel?: NetworkAnalyticsPanel;
   onPanelChange?: (panel: NetworkAnalyticsPanel) => void;
   onOpenApiPage?: () => void;
+  onOpenAgentGuidePage?: () => void;
   onOpenStatusPage?: () => void;
   showPanelNav?: boolean;
 };
@@ -40,6 +41,7 @@ export function NetworkAnalyticsPage({
   activePanel: controlledActivePanel,
   onPanelChange,
   onOpenApiPage,
+  onOpenAgentGuidePage,
   onOpenStatusPage,
   showPanelNav = true,
 }: NetworkAnalyticsPageProps) {
@@ -308,46 +310,41 @@ export function NetworkAnalyticsPage({
                   </div>
                 </section>
 
-                <section className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
-                  <div className="rounded-[16px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-3 shadow-[0_16px_30px_rgba(0,0,0,0.16)] sm:p-4">
+                <section className="rounded-[16px] border border-border/80 bg-background/72 p-3 shadow-[0_16px_30px_rgba(0,0,0,0.16)] sm:p-4">
+                  <div className="rounded-[14px] border border-primary/20 bg-[linear-gradient(135deg,rgba(245,179,1,0.1),rgba(245,179,1,0.02))] p-3 sm:p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="muted">API product</Badge>
                       <Badge variant="muted">OpenAPI generated</Badge>
+                      <Badge variant="muted">Agent guide</Badge>
                       <Badge variant="muted">Scalar reference</Badge>
                     </div>
                     <div className="mt-4 space-y-3">
                       <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                        Build on the snapshot
+                        Integration Docs
                       </p>
                       <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                        Turn the live crawler snapshot into a sellable integration surface with one generated OpenAPI contract,
-                        hosted reference docs, and a cleaner path from analytics preview to production API usage.
+                        Pair the generated OpenAPI contract with a small agent guide that explains cheap first calls,
+                        pagination discipline, cache posture, and when to drill into exact schemas.
                       </p>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full sm:w-auto"
-                        onClick={onOpenApiPage}
-                      >
-                        Explore API docs
-                      </Button>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          onClick={onOpenApiPage}
+                        >
+                          Open API spec
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="w-full border border-primary/20 bg-background/45"
+                          onClick={onOpenAgentGuidePage}
+                        >
+                          Open agent guide
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="rounded-[16px] border border-border/80 bg-background/72 p-3 sm:p-4">
-                    <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-                      Next step
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                      Open the API page for docs, packaging, and commercial access framing built around the same generated spec.
-                    </p>
-                    <Button
-                      type="button"
-                      className="mt-4 w-full sm:w-auto"
-                      onClick={onOpenApiPage}
-                    >
-                      Explore API
-                    </Button>
                   </div>
                 </section>
 

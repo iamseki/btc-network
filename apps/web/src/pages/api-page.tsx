@@ -11,8 +11,9 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import type { BtcAppClient } from "@/lib/api/client";
 import { getDocsUiConfig, getOpenApiDocument } from "@/lib/api/docs-http";
 import type { AsnNodeCountItem, CrawlRunListItem, DocsUiConfig } from "@/lib/api/types";
+import { AgentGuidePage } from "./agent-guide-page";
 
-export type ApiPanel = "overview" | "access" | "docs";
+export type ApiPanel = "overview" | "access" | "docs" | "agent-guide";
 
 const ScalarApiReference = lazy(async () => {
   const module = await import("@scalar/api-reference-react");
@@ -118,6 +119,8 @@ export function ApiPage({
   const panelDescription =
     activePanel === "overview"
       ? "Operational Bitcoin network intelligence for resilience, concentration, and verification analysis."
+      : activePanel === "agent-guide"
+        ? "Markdown-first workflow guidance for agents and automation clients."
       : "Project access, API keys, and subscription controls for production teams.";
   const headerStats = [
     {
@@ -215,6 +218,10 @@ export function ApiPage({
         error={docsError}
       />
     );
+  }
+
+  if (activePanel === "agent-guide") {
+    return <AgentGuidePage />;
   }
 
   return (

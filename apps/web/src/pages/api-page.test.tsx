@@ -24,6 +24,8 @@ vi.mock("@/lib/api/docs-http", () => ({
     info: { title: "btc-network API", version: "0.1.0" },
     paths: {},
   }),
+  getAgentsGuideMarkdown: vi.fn().mockResolvedValue("# btc-network Agent Guide\n\nUse OpenAPI."),
+  getAgentsGuideUrl: vi.fn(() => "http://127.0.0.1:8080/agents.md"),
 }));
 
 vi.mock("@scalar/api-reference-react", () => ({

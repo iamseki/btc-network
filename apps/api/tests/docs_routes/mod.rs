@@ -27,6 +27,27 @@ async fn openapi_route_returns_generated_spec() -> TestResult {
 }
 
 #[tokio::test]
+async fn agents_markdown_route_returns_static_guide() -> TestResult {
+    let app = empty_app("docs_agents_md_integration").await?;
+    let response = app.router.clone().oneshot(request("/agents.md")).await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers().get(header::CONTENT_TYPE),
+        Some(&HeaderValue::from_static("text/markdown; charset=utf-8"))
+    );
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await?;
+    let body = std::str::from_utf8(&body)?;
+    assert!(body.contains("OpenAPI"));
+    assert!(body.contains("historical/runs"));
+    assert!(body.contains("limit"));
+    assert!(body.contains("Cache"));
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn docs_config_route_returns_scalar_ui_config() -> TestResult {
     let app = empty_app("docs_config_integration").await?;
     let response = app

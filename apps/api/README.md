@@ -17,6 +17,7 @@ Default backend:
 - `GET /api/openapi.json`
 - `GET /api/docs/config.json`
 - `GET /docs`
+- `GET /agents.md`
 - `GET /api/v1/network/historical/runs?limit=<n>`
 - `GET /api/v1/network/historical/runs/:run_id`
 - `GET /api/v1/network/historical/asns?limit=<n>`
@@ -62,6 +63,7 @@ Default backend:
 
 - this app is intentionally read-only in the current slice
 - OpenAPI is generated from Rust handlers and shared response models via `utoipa`; Scalar UI is served from the same app via `utoipa-scalar`
+- `/agents.md` serves a hand-authored agent-first Markdown guide for cheap workflow order, pagination discipline, caching, and calls to avoid; OpenAPI remains the exact contract source
 - `/api/docs/config.json` exposes shared docs metadata, intro copy, and the canonical OpenAPI URL so the web app can render the same API reference without duplicating config
 - docs title, version, description, introduction, and public base URL can all be configured at runtime so hosted docs and embedded docs surfaces stay in sync without frontend copy drift
 - the intended web integration path is to fetch `/api/docs/config.json`, then pass `openapiUrl` into a Scalar React reference component or another OpenAPI viewer using the generated spec as the single source of truth

@@ -213,7 +213,7 @@ describe("NetworkAnalyticsPage", () => {
     ).toBeTruthy();
   });
 
-  it("routes the home-page API call to action through the provided callback", async () => {
+  it("renders the home-page API spec and agent guide actions", async () => {
     const client = makeClient({
       listCrawlRuns: vi.fn().mockResolvedValue([
         {
@@ -241,14 +241,25 @@ describe("NetworkAnalyticsPage", () => {
       listLastRunNodes: vi.fn().mockResolvedValue([]),
     });
     const onOpenApiPage = vi.fn();
+    const onOpenAgentGuidePage = vi.fn();
 
-    render(<NetworkAnalyticsPage client={client} onOpenApiPage={onOpenApiPage} />);
+    render(
+      <NetworkAnalyticsPage
+        client={client}
+        onOpenApiPage={onOpenApiPage}
+        onOpenAgentGuidePage={onOpenAgentGuidePage}
+      />,
+    );
 
-    expect(await screen.findByText("Build on the snapshot")).toBeTruthy();
+    expect(await screen.findByText("Integration Docs")).toBeTruthy();
+    expect(screen.queryByText("agents.md")).toBeNull();
+    expect(screen.queryByText(/Start with latest run, then drill down/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Explore API" }));
-
+    fireEvent.click(screen.getByRole("button", { name: "Open API spec" }));
     expect(onOpenApiPage).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open agent guide" }));
+    expect(onOpenAgentGuidePage).toHaveBeenCalledTimes(1);
   });
 });
 

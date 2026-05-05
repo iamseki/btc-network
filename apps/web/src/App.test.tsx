@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
-const { mockGetDocsUiConfig, mockGetOpenApiDocument } = vi.hoisted(() => ({
+const { mockGetAgentsGuideMarkdown, mockGetDocsUiConfig, mockGetOpenApiDocument } = vi.hoisted(() => ({
+  mockGetAgentsGuideMarkdown: vi.fn(),
   mockGetDocsUiConfig: vi.fn(),
   mockGetOpenApiDocument: vi.fn(),
 }));
@@ -61,6 +62,8 @@ vi.mock("./lib/api", () => ({
 vi.mock("./lib/api/docs-http", () => ({
   getDocsUiConfig: mockGetDocsUiConfig,
   getOpenApiDocument: mockGetOpenApiDocument,
+  getAgentsGuideUrl: () => "http://127.0.0.1:8080/agents.md",
+  getAgentsGuideMarkdown: mockGetAgentsGuideMarkdown,
 }));
 
 afterEach(() => {
@@ -89,6 +92,7 @@ afterEach(() => {
   mockGetRecentEvents.mockReset();
   mockGetDocsUiConfig.mockReset();
   mockGetOpenApiDocument.mockReset();
+  mockGetAgentsGuideMarkdown.mockReset();
   mockListCrawlRuns.mockResolvedValue([]);
   mockGetCrawlRun.mockResolvedValue({
     run: {
@@ -140,6 +144,7 @@ afterEach(() => {
     info: { title: "btc-network API", version: "0.1.0" },
     paths: {},
   });
+  mockGetAgentsGuideMarkdown.mockResolvedValue("# btc-network Agent Guide\n\nUse OpenAPI.");
 });
 
 beforeEach(() => {
@@ -201,6 +206,7 @@ beforeEach(() => {
     info: { title: "btc-network API", version: "0.1.0" },
     paths: {},
   });
+  mockGetAgentsGuideMarkdown.mockResolvedValue("# btc-network Agent Guide\n\nUse OpenAPI.");
 });
 
 function setViewportWidth(width: number) {
@@ -362,6 +368,23 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Access" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Docs" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Agent Guide" })).toBeTruthy();
+  });
+
+  it("opens the agent guide page from the analytics navigation", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "API" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agent Guide" }));
+
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Agent Guide");
+    expect(screen.queryByRole("heading", { name: "agents.md" })).toBeNull();
+    expect(await screen.findByText(/Use OpenAPI/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy markdown" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Raw" }).getAttribute("href")).toBe(
+      "http://127.0.0.1:8080/agents.md",
+    );
+    expect(window.location.pathname).toBe("/");
   });
 
   it("opens status from the analytics navigation", async () => {
