@@ -46,7 +46,7 @@ export function SidebarHeader({ className, ...props }: HTMLAttributes<HTMLDivEle
 }
 
 export function SidebarContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("panel-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-visible px-2 py-3", className)} {...props} />;
+  return <div className={cn("panel-scrollbar sidebar-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-visible px-2 py-3", className)} {...props} />;
 }
 
 export function SidebarGroup({

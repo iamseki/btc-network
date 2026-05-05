@@ -121,6 +121,14 @@
     scrollbar-width: thin;
   }
 
+  .sidebar-scrollbar::-webkit-scrollbar:horizontal {
+    height: 0;
+  }
+
+  .sidebar-scrollbar {
+    scrollbar-width: none;
+  }
+
   .fx-ambient-panel {
     background-image:
       radial-gradient(circle at 12% 18%, rgba(245, 179, 1, 0.14), transparent 24%),
