@@ -3,6 +3,8 @@ use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 
+use chrono::{DateTime, Utc};
+
 use super::domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunId, IpEnrichment,
     PersistedNodeObservation, UnreachableNodeUpdate,
@@ -10,8 +12,8 @@ use super::domain::{
 use super::{
     AsnNodeCountItem, CrawlRunDetail, CrawlRunListItem, LastRunAsnCountItem,
     LastRunAsnOrganizationCountItem, LastRunCountryCountItem, LastRunNetworkTypeCountItem,
-    LastRunNodeSummaryItem, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
-    LastRunStartHeightCountItem, LastRunUserAgentCountItem,
+    LastRunNodePageCursor, LastRunNodeSummaryPage, LastRunProtocolVersionCountItem,
+    LastRunServicesCountItem, LastRunStartHeightCountItem, LastRunUserAgentCountItem,
 };
 use crate::status::{NodeStatusItem, NodeStatusRecord};
 
@@ -145,9 +147,11 @@ pub trait CrawlerAnalyticsReader: Send + Sync {
         checkpoint_limit: usize,
     ) -> RepositoryFuture<'a, Result<Option<CrawlRunDetail>, CrawlerRepositoryError>>;
 
-    /// Returns latest verified-node counts grouped by ASN for analytics views.
+    /// Returns verified-node counts grouped by ASN inside a bounded observation window.
     fn count_nodes_by_asn<'a>(
         &'a self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
         limit: usize,
     ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>>;
 
@@ -203,7 +207,8 @@ pub trait CrawlerAnalyticsReader: Send + Sync {
     fn list_last_run_nodes<'a>(
         &'a self,
         limit: usize,
-    ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>;
+        cursor: Option<LastRunNodePageCursor>,
+    ) -> RepositoryFuture<'a, Result<LastRunNodeSummaryPage, CrawlerRepositoryError>>;
 
     /// Returns latest status plus bounded recent history for curated status targets.
     fn list_node_status<'a>(
@@ -341,6 +346,8 @@ mod tests {
 
         fn count_nodes_by_asn<'a>(
             &'a self,
+            _start: DateTime<Utc>,
+            _end: DateTime<Utc>,
             _limit: usize,
         ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>> {
             Box::pin(async move {
@@ -426,9 +433,14 @@ mod tests {
         fn list_last_run_nodes<'a>(
             &'a self,
             _limit: usize,
-        ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>>
-        {
-            Box::pin(async move { Ok(Vec::new()) })
+            _cursor: Option<LastRunNodePageCursor>,
+        ) -> RepositoryFuture<'a, Result<LastRunNodeSummaryPage, CrawlerRepositoryError>> {
+            Box::pin(async move {
+                Ok(LastRunNodeSummaryPage {
+                    items: Vec::new(),
+                    next_cursor: None,
+                })
+            })
         }
     }
 

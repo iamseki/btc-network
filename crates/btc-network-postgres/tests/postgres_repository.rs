@@ -255,6 +255,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
             "20260404000200",
             "20260426000100",
             "20260502000100",
+            "20260505000100",
         ]
     );
     assert!(first_report.skipped_versions.is_empty());
@@ -266,6 +267,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
             "20260404000200",
             "20260426000100",
             "20260502000100",
+            "20260505000100",
         ]
     );
     assert_eq!(
@@ -278,6 +280,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
             "20260404000200",
             "20260426000100",
             "20260502000100",
+            "20260505000100",
         ]
     );
 
@@ -1198,7 +1201,13 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
         ])
         .await?;
 
-    let counts = CrawlerAnalyticsReader::count_nodes_by_asn(&repository, 1).await?;
+    let counts = CrawlerAnalyticsReader::count_nodes_by_asn(
+        &repository,
+        base_time - Duration::seconds(1),
+        base_time + Duration::seconds(2),
+        1,
+    )
+    .await?;
 
     assert_eq!(counts.len(), 1);
     assert_eq!(counts[0].verified_nodes, 1);
@@ -1305,9 +1314,11 @@ async fn analytics_reader_lists_last_run_node_rows_for_dashboard_table() -> Test
         ))
         .await?;
 
-    let rows = CrawlerAnalyticsReader::list_last_run_nodes(&repository, 10).await?;
+    let page = CrawlerAnalyticsReader::list_last_run_nodes(&repository, 10, None).await?;
+    let rows = page.items;
 
     assert_eq!(rows.len(), 1);
+    assert!(page.next_cursor.is_none());
     assert_eq!(rows[0].endpoint, "1.1.1.7:8333");
     assert_eq!(rows[0].network_type, "ipv4");
     assert_eq!(rows[0].protocol_version, 70016);

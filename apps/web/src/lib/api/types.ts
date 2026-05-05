@@ -131,6 +131,16 @@ export type AsnNodeCountItem = {
   verifiedNodes: number;
 };
 
+export type HistoricalWindow = {
+  start: string;
+  end: string;
+};
+
+export type PageResponse<T> = {
+  items: T[];
+  nextPageToken: string | null;
+};
+
 export type LastRunServicesCountItem = {
   services: string;
   nodeCount: number;

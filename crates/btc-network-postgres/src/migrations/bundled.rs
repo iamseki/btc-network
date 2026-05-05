@@ -19,5 +19,9 @@ pub fn bundled_migrations() -> Vec<Migration> {
             "20260502000100_create_node_status.sql",
             include_str!("../../migrations/20260502000100_create_node_status.sql"),
         ),
+        Migration::from_filename(
+            "20260505000100_add_node_observation_id.sql",
+            include_str!("../../migrations/20260505000100_add_node_observation_id.sql"),
+        ),
     ]
 }

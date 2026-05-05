@@ -224,6 +224,21 @@ pub struct LastRunNodeSummaryItem {
     pub asn_organization: Option<String>,
 }
 
+/// Internal keyset cursor for the latest finished-run verified-node table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LastRunNodePageCursor {
+    pub observed_at: DateTime<Utc>,
+    pub endpoint: String,
+    pub node_observation_id: i64,
+}
+
+/// Page returned by analytics adapters for latest finished-run verified nodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LastRunNodeSummaryPage {
+    pub items: Vec<LastRunNodeSummaryItem>,
+    pub next_cursor: Option<LastRunNodePageCursor>,
+}
+
 /// Full crawl-run payload returned by analytics detail APIs.
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]

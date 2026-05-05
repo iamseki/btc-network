@@ -32,10 +32,18 @@ const MAX_PAGE_LIMIT: usize = 100;
 const DEFAULT_LAST_RUN_BUCKET_LIMIT: usize = 100;
 const DEFAULT_LAST_RUN_NODE_LIMIT: usize = 500;
 const MAX_LAST_RUN_NODE_LIMIT: usize = 1_000;
+const MAX_HISTORICAL_ASN_WINDOW_DAYS: i64 = 31;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct PaginationQuery {
     pub(crate) limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PageTokenQuery {
+    pub(crate) limit: Option<usize>,
+    #[serde(rename = "pageToken")]
+    pub(crate) page_token: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -49,6 +57,14 @@ pub(crate) struct CrawlRunsResponse {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RowsResponse<T> {
     pub(crate) rows: Vec<T>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[schema(bound = "T: utoipa::ToSchema")]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PageResponse<T> {
+    pub(crate) items: Vec<T>,
+    pub(crate) next_page_token: Option<String>,
 }
 
 pub(crate) fn parse_limit(value: Option<usize>, default_value: usize) -> Result<usize, ApiError> {

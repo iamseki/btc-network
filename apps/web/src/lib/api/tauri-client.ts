@@ -33,6 +33,7 @@ import type {
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
   NodeStatusItem,
+  PageResponse,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -62,8 +63,8 @@ export const tauriClient: BtcAppClient = {
   getCrawlRun(runId) {
     return getCrawlRunHttp(runId);
   },
-  countNodesByAsn(limit) {
-    return countNodesByAsnHttp(limit);
+  countNodesByAsn(limit, window) {
+    return countNodesByAsnHttp(limit, window);
   },
   listLastRunServices(limit): Promise<LastRunServicesCountItem[]> {
     return listLastRunServicesHttp(limit);
@@ -89,8 +90,8 @@ export const tauriClient: BtcAppClient = {
   listLastRunAsnOrganizations(limit): Promise<LastRunAsnOrganizationCountItem[]> {
     return listLastRunAsnOrganizationsHttp(limit);
   },
-  listLastRunNodes(limit): Promise<LastRunNodeSummaryItem[]> {
-    return listLastRunNodesHttp(limit);
+  listLastRunNodes(limit, pageToken): Promise<PageResponse<LastRunNodeSummaryItem>> {
+    return listLastRunNodesHttp(limit, pageToken);
   },
   listNodeStatus(): Promise<NodeStatusItem[]> {
     return listNodeStatusHttp();

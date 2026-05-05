@@ -44,7 +44,7 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
     listLastRunAsns: vi.fn().mockResolvedValue([]),
     listLastRunStartHeights: vi.fn().mockResolvedValue([]),
     listLastRunAsnOrganizations: vi.fn().mockResolvedValue([]),
-    listLastRunNodes: vi.fn().mockResolvedValue([]),
+    listLastRunNodes: vi.fn().mockResolvedValue({ items: [], nextPageToken: null }),
     listNodeStatus: vi.fn().mockResolvedValue([]),
     handshake: vi.fn(),
     ping: vi.fn(),
@@ -123,19 +123,22 @@ describe("NetworkAnalyticsPage", () => {
         { startHeight: 899999, nodeCount: 10 },
         { startHeight: 900001, nodeCount: 5 },
       ]),
-      listLastRunNodes: vi.fn().mockResolvedValue([
-        {
-          endpoint: "1.1.1.7:8333",
-          networkType: "ipv4",
-          protocolVersion: 70016,
-          userAgent: "/Satoshi:27.0.0/",
-          services: "1033",
-          startHeight: 900000,
-          country: "US",
-          asn: 64512,
-          asnOrganization: "Example ASN",
-        },
-      ]),
+      listLastRunNodes: vi.fn().mockResolvedValue({
+        items: [
+          {
+            endpoint: "1.1.1.7:8333",
+            networkType: "ipv4",
+            protocolVersion: 70016,
+            userAgent: "/Satoshi:27.0.0/",
+            services: "1033",
+            startHeight: 900000,
+            country: "US",
+            asn: 64512,
+            asnOrganization: "Example ASN",
+          },
+        ],
+        nextPageToken: null,
+      }),
       getCrawlRun: vi.fn().mockResolvedValue({
         run: {
           runId: "crawl-7",
@@ -238,7 +241,7 @@ describe("NetworkAnalyticsPage", () => {
       listLastRunNetworkTypes: vi.fn().mockResolvedValue([{ networkType: "ipv4", nodeCount: 24 }]),
       listLastRunCountries: vi.fn().mockResolvedValue([{ country: "US", nodeCount: 14 }]),
       listLastRunStartHeights: vi.fn().mockResolvedValue([{ startHeight: 900000, nodeCount: 15 }]),
-      listLastRunNodes: vi.fn().mockResolvedValue([]),
+      listLastRunNodes: vi.fn().mockResolvedValue({ items: [], nextPageToken: null }),
     });
     const onOpenApiPage = vi.fn();
     const onOpenAgentGuidePage = vi.fn();

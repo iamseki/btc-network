@@ -124,7 +124,7 @@ afterEach(() => {
   mockListLastRunAsns.mockResolvedValue([]);
   mockListLastRunStartHeights.mockResolvedValue([]);
   mockListLastRunAsnOrganizations.mockResolvedValue([]);
-  mockListLastRunNodes.mockResolvedValue([]);
+  mockListLastRunNodes.mockResolvedValue({ items: [], nextPageToken: null });
   mockListNodeStatus.mockResolvedValue([]);
   mockGetSuggestedBlockDownloadPath.mockResolvedValue(
     "downloads/blk-00000000-8ce26f.dat",
@@ -189,7 +189,7 @@ beforeEach(() => {
   mockListLastRunAsns.mockResolvedValue([]);
   mockListLastRunStartHeights.mockResolvedValue([]);
   mockListLastRunAsnOrganizations.mockResolvedValue([]);
-  mockListLastRunNodes.mockResolvedValue([]);
+  mockListLastRunNodes.mockResolvedValue({ items: [], nextPageToken: null });
   mockListNodeStatus.mockResolvedValue([]);
   mockGetDocsUiConfig.mockResolvedValue({
     title: "btc-network API",

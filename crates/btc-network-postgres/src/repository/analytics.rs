@@ -2,9 +2,11 @@ use btc_network::crawler::{
     AsnNodeCountItem, CountNodesByAsnRow, CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunId,
     CrawlRunListItem, CrawlerRepositoryError, FailureClassificationCount, LastRunAsnCountItem,
     LastRunAsnOrganizationCountItem, LastRunCountryCountItem, LastRunNetworkTypeCountItem,
-    LastRunNodeSummaryItem, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
-    LastRunStartHeightCountItem, LastRunUserAgentCountItem, NetworkOutcomeCount,
+    LastRunNodePageCursor, LastRunNodeSummaryItem, LastRunNodeSummaryPage,
+    LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
+    LastRunUserAgentCountItem, NetworkOutcomeCount,
 };
+use chrono::{DateTime, Utc};
 use sqlx_core::{query::query, row::Row};
 use sqlx_postgres::{PgPool, Postgres};
 
@@ -34,9 +36,11 @@ pub(super) async fn count_nodes_by_asn(
 
 pub(super) async fn count_nodes_by_asn_limited(
     pool: &PgPool,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
     limit: usize,
 ) -> Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError> {
-    query_count_nodes_by_asn(pool, Some(limit))
+    query_count_nodes_by_asn_window(pool, start, end, limit)
         .await
         .map(|rows| {
             rows.into_iter()
@@ -119,6 +123,63 @@ LIMIT $1
     .fetch_all(pool)
     .await
     .map_err(|err| map_postgres_err("count nodes by ASN", err))?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |row| -> Result<CountNodesByAsnDbRow, CrawlerRepositoryError> {
+                Ok(CountNodesByAsnDbRow {
+                    asn: row
+                        .try_get("asn")
+                        .map_err(|err| map_postgres_err("decode asn", err))?,
+                    asn_organization: row
+                        .try_get("asn_organization")
+                        .map_err(|err| map_postgres_err("decode asn_organization", err))?,
+                    verified_nodes: row
+                        .try_get("verified_nodes")
+                        .map_err(|err| map_postgres_err("decode verified_nodes", err))?,
+                })
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()?)
+}
+
+async fn query_count_nodes_by_asn_window(
+    pool: &PgPool,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    limit: usize,
+) -> Result<Vec<CountNodesByAsnDbRow>, CrawlerRepositoryError> {
+    let limit = limit.min(i64::MAX as usize) as i64;
+    let rows = query::<Postgres>(
+        "
+SELECT
+    asn,
+    asn_organization,
+    COUNT(*) AS verified_nodes
+FROM (
+    SELECT DISTINCT ON (endpoint)
+        endpoint,
+        failure_classification,
+        asn,
+        asn_organization
+    FROM node_observations
+    WHERE observed_at >= $1
+      AND observed_at < $2
+    ORDER BY endpoint, observed_at DESC, crawl_run_id DESC
+) latest_by_endpoint
+WHERE failure_classification IS NULL
+GROUP BY asn, asn_organization
+ORDER BY verified_nodes DESC, asn ASC NULLS FIRST
+LIMIT $3
+",
+    )
+    .bind(start)
+    .bind(end)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(|err| map_postgres_err("count nodes by ASN in window", err))?;
 
     Ok(rows
         .into_iter()
@@ -528,11 +589,17 @@ pub(super) async fn list_last_run_asn_organizations(
 pub(super) async fn list_last_run_nodes(
     pool: &PgPool,
     limit: usize,
-) -> Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError> {
-    let limit = limit.min(i64::MAX as usize) as i64;
+    cursor: Option<LastRunNodePageCursor>,
+) -> Result<LastRunNodeSummaryPage, CrawlerRepositoryError> {
+    let query_limit = limit.saturating_add(1).min(i64::MAX as usize) as i64;
+    let cursor_observed_at = cursor.as_ref().map(|value| value.observed_at);
+    let cursor_endpoint = cursor.as_ref().map(|value| value.endpoint.clone());
+    let cursor_id = cursor.as_ref().map(|value| value.node_observation_id);
     let rows = query::<Postgres>(&format!(
         "
 SELECT
+    node_observation_id,
+    observed_at,
     endpoint,
     network_type,
     protocol_version,
@@ -545,16 +612,50 @@ SELECT
 FROM node_observations
 WHERE crawl_run_id = ({LATEST_FINISHED_RUN_ID_SQL})
   AND protocol_version IS NOT NULL
-ORDER BY observed_at DESC, endpoint ASC
+  AND (
+    $2::TIMESTAMPTZ IS NULL
+    OR observed_at < $2
+    OR (observed_at = $2 AND endpoint > $3)
+    OR (observed_at = $2 AND endpoint = $3 AND node_observation_id < $4)
+  )
+ORDER BY observed_at DESC, endpoint ASC, node_observation_id DESC
 LIMIT $1
 "
     ))
-    .bind(limit)
+    .bind(query_limit)
+    .bind(cursor_observed_at)
+    .bind(cursor_endpoint)
+    .bind(cursor_id)
     .fetch_all(pool)
     .await
     .map_err(|err| map_postgres_err("list last-run nodes", err))?;
 
-    rows.into_iter()
+    let has_next_page = rows.len() > limit;
+    let rows = rows.into_iter().take(limit).collect::<Vec<_>>();
+    let next_cursor = if has_next_page {
+        rows.last()
+            .map(
+                |row| -> Result<LastRunNodePageCursor, CrawlerRepositoryError> {
+                    Ok(LastRunNodePageCursor {
+                        observed_at: row
+                            .try_get("observed_at")
+                            .map_err(|err| map_postgres_err("decode observed_at", err))?,
+                        endpoint: row
+                            .try_get("endpoint")
+                            .map_err(|err| map_postgres_err("decode endpoint", err))?,
+                        node_observation_id: row
+                            .try_get("node_observation_id")
+                            .map_err(|err| map_postgres_err("decode node_observation_id", err))?,
+                    })
+                },
+            )
+            .transpose()?
+    } else {
+        None
+    };
+
+    let items = rows
+        .into_iter()
         .map(
             |row| -> Result<LastRunNodeSummaryItem, CrawlerRepositoryError> {
                 let db_row = LastRunNodeSummaryDbRow {
@@ -600,7 +701,9 @@ LIMIT $1
                 })
             },
         )
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(LastRunNodeSummaryPage { items, next_cursor })
 }
 
 async fn query_last_run_string_distribution(

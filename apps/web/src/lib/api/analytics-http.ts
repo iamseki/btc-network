@@ -2,6 +2,7 @@ import type {
   AsnNodeCountItem,
   CrawlRunDetail,
   CrawlRunListItem,
+  HistoricalWindow,
   LastRunAsnCountItem,
   LastRunAsnOrganizationCountItem,
   LastRunCountryCountItem,
@@ -12,6 +13,7 @@ import type {
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
   NodeStatusItem,
+  PageResponse,
 } from "./types";
 import { fetchJson } from "./http";
 
@@ -22,6 +24,17 @@ type CrawlRunsResponse = {
 type RowsResponse<T> = {
   rows: T[];
 };
+
+function defaultHistoricalWindow(): HistoricalWindow {
+  const end = new Date();
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 31);
+
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
 
 export async function listCrawlRuns(limit = 10): Promise<CrawlRunListItem[]> {
   const response = await fetchJson<CrawlRunsResponse>(
@@ -35,8 +48,13 @@ export async function getCrawlRun(runId: string): Promise<CrawlRunDetail> {
   return fetchJson<CrawlRunDetail>(`/api/v1/network/historical/runs/${encodeURIComponent(runId)}`);
 }
 
-export async function countNodesByAsn(limit = 10): Promise<AsnNodeCountItem[]> {
-  return fetchRows<AsnNodeCountItem>(`/api/v1/network/historical/asns?limit=${encodeURIComponent(String(limit))}`);
+export async function countNodesByAsn(
+  limit = 10,
+  window: HistoricalWindow = defaultHistoricalWindow(),
+): Promise<AsnNodeCountItem[]> {
+  return fetchRows<AsnNodeCountItem>(
+    `/api/v1/network/historical/asns?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}&limit=${encodeURIComponent(String(limit))}`,
+  );
 }
 
 async function fetchRows<T>(path: string): Promise<T[]> {
@@ -100,9 +118,18 @@ export async function listLastRunAsnOrganizations(
   );
 }
 
-export async function listLastRunNodes(limit = 500): Promise<LastRunNodeSummaryItem[]> {
-  return fetchRows<LastRunNodeSummaryItem>(
-    `/api/v1/network/last-run/nodes?limit=${encodeURIComponent(String(limit))}`,
+export async function listLastRunNodes(
+  limit = 500,
+  pageToken?: string,
+): Promise<PageResponse<LastRunNodeSummaryItem>> {
+  const params = new URLSearchParams({ limit: String(limit) });
+
+  if (pageToken) {
+    params.set("pageToken", pageToken);
+  }
+
+  return fetchJson<PageResponse<LastRunNodeSummaryItem>>(
+    `/api/v1/network/last-run/nodes?${params.toString()}`,
   );
 }
 

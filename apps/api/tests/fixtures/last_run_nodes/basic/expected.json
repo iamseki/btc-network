@@ -1,5 +1,5 @@
 {
-  "rows": [
+  "items": [
     {
       "endpoint": "2.2.2.3:8333",
       "networkType": "ipv4",
@@ -33,5 +33,6 @@
       "asn": 64512,
       "asnOrganization": "Example ASN"
     }
-  ]
+  ],
+  "nextPageToken": null
 }

@@ -6,6 +6,7 @@ import {
   countNodesByAsn,
   getCrawlRun,
   listCrawlRuns,
+  listLastRunNodes,
   listLastRunNetworkTypes,
 } from "./analytics-http";
 
@@ -93,7 +94,39 @@ describe("analytics-http", () => {
       }),
     );
 
-    await expect(countNodesByAsn()).rejects.toThrow("crawler analytics backend failed");
+    await expect(
+      countNodesByAsn(10, {
+        start: "2026-04-01T00:00:00.000Z",
+        end: "2026-04-30T00:00:00.000Z",
+      }),
+    ).rejects.toThrow("crawler analytics backend failed");
+  });
+
+  it("loads historical ASN rows with an explicit time window", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          {
+            asn: 64512,
+            asnOrganization: "Example ASN",
+            verifiedNodes: 2,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rows = await countNodesByAsn(5, {
+      start: "2026-04-01T00:00:00.000Z",
+      end: "2026-04-30T00:00:00.000Z",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8080/api/v1/network/historical/asns?start=2026-04-01T00%3A00%3A00.000Z&end=2026-04-30T00%3A00%3A00.000Z&limit=5",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(rows).toEqual([{ asn: 64512, asnOrganization: "Example ASN", verifiedNodes: 2 }]);
   });
 
   it("loads last-run network type rows from the explicit last-run endpoint", async () => {
@@ -117,5 +150,37 @@ describe("analytics-http", () => {
       expect.objectContaining({ method: "GET" }),
     );
     expect(rows).toEqual([{ networkType: "ipv4", nodeCount: 42 }]);
+  });
+
+  it("loads last-run node pages from the page envelope", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            endpoint: "1.1.1.1:8333",
+            networkType: "ipv4",
+            protocolVersion: 70016,
+            userAgent: "/Satoshi:27.0.0/",
+            services: "1",
+            startHeight: 900000,
+            country: "US",
+            asn: 64512,
+            asnOrganization: "Example ASN",
+          },
+        ],
+        nextPageToken: "next-token",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const page = await listLastRunNodes(5, "cursor-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8080/api/v1/network/last-run/nodes?limit=5&pageToken=cursor-token",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(page.nextPageToken).toBe("next-token");
+    expect(page.items[0]?.endpoint).toBe("1.1.1.1:8333");
   });
 });

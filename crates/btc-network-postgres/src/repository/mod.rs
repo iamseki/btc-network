@@ -2,10 +2,10 @@ use btc_network::crawler::{
     AsnNodeCountItem, CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunDetail,
     CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader, CrawlerRepository,
     CrawlerRepositoryError, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
-    LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
-    LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
-    LastRunUserAgentCountItem, PersistedNodeObservation, RepositoryFuture,
-    RepositoryRuntimeMetrics, UnreachableNodeUpdate,
+    LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodePageCursor,
+    LastRunNodeSummaryPage, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
+    LastRunStartHeightCountItem, LastRunUserAgentCountItem, PersistedNodeObservation,
+    RepositoryFuture, RepositoryRuntimeMetrics, UnreachableNodeUpdate,
 };
 use btc_network::status::{NodeStatusItem, NodeStatusRecord};
 use chrono::{DateTime, Utc};
@@ -145,9 +145,13 @@ impl CrawlerAnalyticsReader for PostgresCrawlerRepository {
 
     fn count_nodes_by_asn<'a>(
         &'a self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
         limit: usize,
     ) -> RepositoryFuture<'a, Result<Vec<AsnNodeCountItem>, CrawlerRepositoryError>> {
-        Box::pin(async move { analytics::count_nodes_by_asn_limited(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::count_nodes_by_asn_limited(&self.pool, start, end, limit).await
+        })
     }
 
     fn list_last_run_services<'a>(
@@ -213,8 +217,9 @@ impl CrawlerAnalyticsReader for PostgresCrawlerRepository {
     fn list_last_run_nodes<'a>(
         &'a self,
         limit: usize,
-    ) -> RepositoryFuture<'a, Result<Vec<LastRunNodeSummaryItem>, CrawlerRepositoryError>> {
-        Box::pin(async move { analytics::list_last_run_nodes(&self.pool, limit).await })
+        cursor: Option<LastRunNodePageCursor>,
+    ) -> RepositoryFuture<'a, Result<LastRunNodeSummaryPage, CrawlerRepositoryError>> {
+        Box::pin(async move { analytics::list_last_run_nodes(&self.pool, limit, cursor).await })
     }
 
     fn list_node_status<'a>(

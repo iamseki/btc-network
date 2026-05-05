@@ -8,6 +8,7 @@ import type {
   CrawlRunDetail,
   CrawlRunListItem,
   HandshakeResult,
+  HistoricalWindow,
   LastRunAsnCountItem,
   LastRunAsnOrganizationCountItem,
   LastBlockHeightProgress,
@@ -20,6 +21,7 @@ import type {
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
   NodeStatusItem,
+  PageResponse,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -29,7 +31,7 @@ export type LastBlockHeightProgressListener = (progress: LastBlockHeightProgress
 export interface BtcAppClient {
   listCrawlRuns(limit?: number): Promise<CrawlRunListItem[]>;
   getCrawlRun(runId: string): Promise<CrawlRunDetail>;
-  countNodesByAsn(limit?: number): Promise<AsnNodeCountItem[]>;
+  countNodesByAsn(limit?: number, window?: HistoricalWindow): Promise<AsnNodeCountItem[]>;
   listLastRunServices(limit?: number): Promise<LastRunServicesCountItem[]>;
   listLastRunProtocolVersions(limit?: number): Promise<LastRunProtocolVersionCountItem[]>;
   listLastRunUserAgents(limit?: number): Promise<LastRunUserAgentCountItem[]>;
@@ -38,7 +40,7 @@ export interface BtcAppClient {
   listLastRunAsns(limit?: number): Promise<LastRunAsnCountItem[]>;
   listLastRunStartHeights(limit?: number): Promise<LastRunStartHeightCountItem[]>;
   listLastRunAsnOrganizations(limit?: number): Promise<LastRunAsnOrganizationCountItem[]>;
-  listLastRunNodes(limit?: number): Promise<LastRunNodeSummaryItem[]>;
+  listLastRunNodes(limit?: number, pageToken?: string): Promise<PageResponse<LastRunNodeSummaryItem>>;
   listNodeStatus(): Promise<NodeStatusItem[]>;
   handshake(request: ConnectionRequest): Promise<HandshakeResult>;
   ping(node: string): Promise<PingResult>;

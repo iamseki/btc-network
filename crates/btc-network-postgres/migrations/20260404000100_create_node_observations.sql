@@ -1,4 +1,5 @@
 CREATE TABLE IF NOT EXISTS node_observations (
+    node_observation_id BIGSERIAL PRIMARY KEY,
     observed_at TIMESTAMPTZ NOT NULL,
     crawl_run_id UUID NOT NULL,
     endpoint TEXT NOT NULL,

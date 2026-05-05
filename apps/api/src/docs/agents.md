@@ -24,7 +24,8 @@ Do not infer fields from this guide. Use OpenAPI for contract details.
    - `GET /api/v1/network/last-run/services?limit=10`
    - `GET /api/v1/network/last-run/start-heights?limit=10`
    - `GET /api/v1/network/last-run/user-agents?limit=10`
-4. Use `GET /api/nodes/status` for curated DNS seeder and public endpoint health.
+4. Use `GET /api/v1/network/historical/asns?start=<RFC3339>&end=<RFC3339>&limit=10` only when a bounded historical ASN window is needed.
+5. Use `GET /api/nodes/status` for curated DNS seeder and public endpoint health.
 
 ## Cheap Workflow
 
@@ -39,19 +40,21 @@ Prefer compact distribution endpoints over broad node inventory reads.
 
 ## Pagination And Limits
 
-The current API uses bounded `limit` query parameters, not cursor pagination.
+Most compact endpoints use bounded `limit` query parameters only.
 
 Start with low limits such as `5`, `10`, or `20`. Increase only when the task needs more rows.
 
 Use `/api/openapi.json` for endpoint-specific defaults and maximums. Do not guess them.
 
-Avoid frequent broad reads such as:
+Use `pageToken` only on row-level inventory scans:
 
 ```text
 GET /api/v1/network/last-run/nodes?limit=1000
 ```
 
-That endpoint is useful for endpoint inventory, but it is wider than distribution reads.
+Follow `nextPageToken` only when endpoint-level inventory is required. Do not auto-scan all pages for summaries.
+
+Use explicit `start` and `end` bounds on historical aggregate endpoints. Keep windows small; the current maximum historical ASN window is 31 days.
 
 ## Caching
 

@@ -29,7 +29,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `unique_nodes` counts tracked endpoints, not persisted observations; it can be much larger than completed node visits
 - `scheduled_tasks` is the count of attempted node visits dequeued by workers
 - `crawl_run_id` is stored as a native UUID value and generated as UUIDv7 in the current crawler implementation
-- persisted observations do not carry a standalone `observation_id`; current query/API flows use run, endpoint, and timestamp fields instead
+- persisted observations carry `node_observation_id` as a surrogate key for targeted keyset pagination; domain identity still comes from run, endpoint, and timestamp fields
 - persisted observations derive success/failure outcome from whether `failure_classification` is null; there is no separate `confidence_level` column in the current schema
 - persisted observations do not carry a separate `batch_id` column in the current schema
 - failed persisted observations can reflect connect, handshake, or peer-discovery failure, so use `failure_classification` for the exact stage
@@ -60,6 +60,7 @@ Compact decision index for agents. Read this before rediscovering settled struct
 - `Network Risk API` is a web-only mocked commercial preview page for now; do not treat it as a live SLA-backed surface yet
 - `Status` is a curated endpoint health surface backed by `GET /api/nodes/status`; freshness is derived in the frontend, not by API request-time handshakes
 - `GET /agents.md` is the API-hosted agent guide for workflow order, cost controls, pagination, caching, and calls to avoid; OpenAPI remains canonical for exact contract details
+- Accepted API pagination direction is targeted: keyset `pageToken` / `nextPageToken` only for row scans, date/run bounds for historical aggregates, no offset pagination
 - The public product home should stay globe-first, keep `Risk Brief` as the secondary companion panel, and use a full-width `Risk Drivers` strip instead of crawler-internal checkpoint rails
 
 ## Frontend Composition Rule
