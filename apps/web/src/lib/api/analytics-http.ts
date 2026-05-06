@@ -16,6 +16,7 @@ import type {
   PageResponse,
 } from "./types";
 import { fetchJson } from "./http";
+import type { CrawlRunPhaseFilterOptions } from "./client";
 
 type CrawlRunsResponse = {
   runs: CrawlRunListItem[];
@@ -62,59 +63,77 @@ async function fetchRows<T>(path: string): Promise<T[]> {
   return response.rows;
 }
 
-export async function listLastRunServices(limit = 100): Promise<LastRunServicesCountItem[]> {
-  return fetchRows<LastRunServicesCountItem>(
-    `/api/v1/network/last-run/services?limit=${encodeURIComponent(String(limit))}`,
-  );
+function lastRunDistributionPath(path: string, limit: number, options: CrawlRunPhaseFilterOptions): string {
+  const params = new URLSearchParams({ limit: String(limit) });
+
+  if (options.phase) {
+    params.set("phase", Array.isArray(options.phase) ? options.phase.join(",") : options.phase);
+  }
+
+  return `/api/v1/network/last-run/${path}?${params.toString()}`;
+}
+
+export async function listLastRunServices(
+  limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
+): Promise<LastRunServicesCountItem[]> {
+  return fetchRows<LastRunServicesCountItem>(lastRunDistributionPath("services", limit, options));
 }
 
 export async function listLastRunProtocolVersions(
   limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
 ): Promise<LastRunProtocolVersionCountItem[]> {
   return fetchRows<LastRunProtocolVersionCountItem>(
-    `/api/v1/network/last-run/protocol-versions?limit=${encodeURIComponent(String(limit))}`,
+    lastRunDistributionPath("protocol-versions", limit, options),
   );
 }
 
-export async function listLastRunUserAgents(limit = 100): Promise<LastRunUserAgentCountItem[]> {
-  return fetchRows<LastRunUserAgentCountItem>(
-    `/api/v1/network/last-run/user-agents?limit=${encodeURIComponent(String(limit))}`,
-  );
+export async function listLastRunUserAgents(
+  limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
+): Promise<LastRunUserAgentCountItem[]> {
+  return fetchRows<LastRunUserAgentCountItem>(lastRunDistributionPath("user-agents", limit, options));
 }
 
 export async function listLastRunNetworkTypes(
   limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
 ): Promise<LastRunNetworkTypeCountItem[]> {
   return fetchRows<LastRunNetworkTypeCountItem>(
-    `/api/v1/network/last-run/network-types?limit=${encodeURIComponent(String(limit))}`,
+    lastRunDistributionPath("network-types", limit, options),
   );
 }
 
-export async function listLastRunCountries(limit = 100): Promise<LastRunCountryCountItem[]> {
-  return fetchRows<LastRunCountryCountItem>(
-    `/api/v1/network/last-run/countries?limit=${encodeURIComponent(String(limit))}`,
-  );
+export async function listLastRunCountries(
+  limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
+): Promise<LastRunCountryCountItem[]> {
+  return fetchRows<LastRunCountryCountItem>(lastRunDistributionPath("countries", limit, options));
 }
 
-export async function listLastRunAsns(limit = 100): Promise<LastRunAsnCountItem[]> {
-  return fetchRows<LastRunAsnCountItem>(
-    `/api/v1/network/last-run/asns?limit=${encodeURIComponent(String(limit))}`,
-  );
+export async function listLastRunAsns(
+  limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
+): Promise<LastRunAsnCountItem[]> {
+  return fetchRows<LastRunAsnCountItem>(lastRunDistributionPath("asns", limit, options));
 }
 
 export async function listLastRunStartHeights(
   limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
 ): Promise<LastRunStartHeightCountItem[]> {
   return fetchRows<LastRunStartHeightCountItem>(
-    `/api/v1/network/last-run/start-heights?limit=${encodeURIComponent(String(limit))}`,
+    lastRunDistributionPath("start-heights", limit, options),
   );
 }
 
 export async function listLastRunAsnOrganizations(
   limit = 100,
+  options: CrawlRunPhaseFilterOptions = {},
 ): Promise<LastRunAsnOrganizationCountItem[]> {
   return fetchRows<LastRunAsnOrganizationCountItem>(
-    `/api/v1/network/last-run/asn-organizations?limit=${encodeURIComponent(String(limit))}`,
+    lastRunDistributionPath("asn-organizations", limit, options),
   );
 }
 

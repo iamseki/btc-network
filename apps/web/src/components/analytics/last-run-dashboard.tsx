@@ -52,12 +52,12 @@ export const LastRunSidebarCharts = memo(function LastRunSidebarCharts({
     <div className="space-y-4 sm:space-y-6">
       <AnalyticsCard
         title="Network Type Distribution"
-        subtitle="Latest finished run transport mix"
-        tooltip="Shows which transport families verified nodes used in the last finished crawl. Larger slices mean a bigger share of reachable peers on that transport."
+        subtitle="Latest run transport mix"
+        tooltip="Shows which transport families verified nodes used in the latest crawl snapshot. Larger slices mean a bigger share of reachable peers on that transport."
         badge={`${networkTypes.length} buckets`}
       >
         {networkTypes.length === 0 ? (
-          <DashboardEmpty message="No verified network-type buckets were returned for the latest finished run." />
+          <DashboardEmpty message="No verified network-type buckets were returned for the latest run." />
         ) : (
           <NetworkTypePieChart compact={compact} rows={networkTypes} />
         )}
@@ -70,7 +70,7 @@ export const LastRunSidebarCharts = memo(function LastRunSidebarCharts({
         badge={`${consensusHeights.length} heights`}
       >
         {consensusHeights.length === 0 ? (
-          <DashboardEmpty message="No start-height buckets were returned for the latest finished run." />
+          <DashboardEmpty message="No start-height buckets were returned for the latest run." />
         ) : (
           <StartHeightRadarChart compact={compact} rows={consensusHeights} />
         )}
@@ -94,11 +94,11 @@ export const LastRunDashboard = memo(function LastRunDashboard({
         <AnalyticsCard
           title="Top ASN Distribution"
           subtitle="Verified nodes by network operator"
-          tooltip="Highlights which networks host the most verified peers in the latest finished run. Higher bars mean more concentration inside one operator footprint."
-          badge={runId ?? "Latest finished run"}
+          tooltip="Highlights which networks host the most verified peers in the latest crawl snapshot. Higher bars mean more concentration inside one operator footprint."
+          badge={runId ?? "Latest run"}
         >
           {topAsns.length === 0 ? (
-            <DashboardEmpty message="No ASN buckets were returned for the latest finished run." />
+            <DashboardEmpty message="No ASN buckets were returned for the latest run." />
           ) : (
             <AsnHorizontalBarChart compact={compact} rows={topAsns} />
           )}
@@ -107,11 +107,11 @@ export const LastRunDashboard = memo(function LastRunDashboard({
         <AnalyticsCard
           title="Top Country Distribution"
           subtitle="Verified nodes by country code"
-          tooltip="Shows where the latest finished run found verified nodes. Hover or tap a bar to compare top countries and read exact counts quickly."
+          tooltip="Shows where the latest crawl snapshot found verified nodes. Hover or tap a bar to compare top countries and read exact counts quickly."
           badge={`${topCountries.length} countries`}
         >
           {topCountries.length === 0 ? (
-            <DashboardEmpty message="No country buckets were returned for the latest finished run." />
+            <DashboardEmpty message="No country buckets were returned for the latest run." />
           ) : (
             <CountryInteractiveBarChart compact={compact} rows={topCountries} />
           )}

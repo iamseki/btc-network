@@ -4,6 +4,10 @@ import { apiBaseUrl, fetchJson } from "./http";
 import type { DocsUiConfig } from "./types";
 import { isDemoModeEnabled } from "@/lib/runtime-config";
 
+type OpenApiDocument = Record<string, unknown> & {
+  servers?: unknown;
+};
+
 export async function getDocsUiConfig(): Promise<DocsUiConfig> {
   const docsUiConfig = await fetchJson<DocsUiConfig>("/api/docs/config.json");
 
@@ -15,8 +19,13 @@ export async function getDocsUiConfig(): Promise<DocsUiConfig> {
   };
 }
 
-export async function getOpenApiDocument(path = "/api/openapi.json"): Promise<Record<string, unknown>> {
-  return fetchJson<Record<string, unknown>>(path);
+export async function getOpenApiDocument(
+  pathOrUrl = "/api/openapi.json",
+  options: { baseServerUrl?: string | null } = {},
+): Promise<Record<string, unknown>> {
+  const document = await fetchJson<OpenApiDocument>(pathOrUrl);
+
+  return withConfiguredServer(document, options.baseServerUrl);
 }
 
 export function getAgentsGuideUrl(path = "/agents.md"): string {
@@ -49,4 +58,57 @@ export async function getAgentsGuideMarkdown(path = "/agents.md"): Promise<strin
 
 function resolveApiAssetUrl(pathOrUrl: string): string {
   return new URL(pathOrUrl, `${apiBaseUrl()}/`).toString();
+}
+
+function withConfiguredServer(
+  document: OpenApiDocument,
+  baseServerUrl: string | null | undefined,
+): OpenApiDocument {
+  const normalizedBaseServerUrl = normalizeBaseServerUrl(baseServerUrl);
+
+  if (!normalizedBaseServerUrl) {
+    return document;
+  }
+
+  const existingServers = Array.isArray(document.servers) ? document.servers : [];
+  const serverUrls = new Set<string>();
+  const servers = [{ url: normalizedBaseServerUrl }];
+  serverUrls.add(normalizedBaseServerUrl);
+
+  for (const server of existingServers) {
+    if (!isOpenApiServer(server) || serverUrls.has(server.url)) {
+      continue;
+    }
+
+    serverUrls.add(server.url);
+    servers.push(server);
+  }
+
+  return {
+    ...document,
+    servers,
+  };
+}
+
+function normalizeBaseServerUrl(baseServerUrl: string | null | undefined): string | null {
+  const trimmed = baseServerUrl?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmed).toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function isOpenApiServer(server: unknown): server is { url: string } {
+  return (
+    typeof server === "object" &&
+    server !== null &&
+    "url" in server &&
+    typeof server.url === "string"
+  );
 }

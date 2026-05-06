@@ -39,8 +39,8 @@ use lifecycle::{
 };
 use node::{DefaultNodeProcessor, NodeProcessor, resolve_seed_nodes};
 pub use ports::{
-    CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError, IpEnrichmentProvider,
-    RepositoryFuture, RepositoryRuntimeMetrics,
+    CrawlRunPhaseFilter, CrawlerAnalyticsReader, CrawlerRepository, CrawlerRepositoryError,
+    IpEnrichmentProvider, RepositoryFuture, RepositoryRuntimeMetrics,
 };
 use types::QueuedNode;
 use types::{CrawlState, CrawlerStats, PersistedNodeRecord, UnreachableNodeAction};

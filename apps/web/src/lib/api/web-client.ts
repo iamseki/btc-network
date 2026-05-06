@@ -854,61 +854,61 @@ export const webClient: BtcAppClient = {
 
     return countNodesByAsn(limit, window);
   },
-  listLastRunServices(limit) {
+  listLastRunServices(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunServices(limit);
     }
 
-    return listLastRunServices(limit);
+    return listLastRunServices(limit, options);
   },
-  listLastRunProtocolVersions(limit) {
+  listLastRunProtocolVersions(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunProtocolVersions(limit);
     }
 
-    return listLastRunProtocolVersions(limit);
+    return listLastRunProtocolVersions(limit, options);
   },
-  listLastRunUserAgents(limit) {
+  listLastRunUserAgents(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunUserAgents(limit);
     }
 
-    return listLastRunUserAgents(limit);
+    return listLastRunUserAgents(limit, options);
   },
-  listLastRunNetworkTypes(limit) {
+  listLastRunNetworkTypes(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunNetworkTypes(limit);
     }
 
-    return listLastRunNetworkTypes(limit);
+    return listLastRunNetworkTypes(limit, options);
   },
-  listLastRunCountries(limit) {
+  listLastRunCountries(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunCountries(limit);
     }
 
-    return listLastRunCountries(limit);
+    return listLastRunCountries(limit, options);
   },
-  listLastRunAsns(limit) {
+  listLastRunAsns(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunAsns(limit);
     }
 
-    return listLastRunAsns(limit);
+    return listLastRunAsns(limit, options);
   },
-  listLastRunStartHeights(limit) {
+  listLastRunStartHeights(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunStartHeights(limit);
     }
 
-    return listLastRunStartHeights(limit);
+    return listLastRunStartHeights(limit, options);
   },
-  listLastRunAsnOrganizations(limit) {
+  listLastRunAsnOrganizations(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunAsnOrganizations(limit);
     }
 
-    return listLastRunAsnOrganizations(limit);
+    return listLastRunAsnOrganizations(limit, options);
   },
   listLastRunNodes(limit, pageToken) {
     if (isDemoModeEnabled()) {

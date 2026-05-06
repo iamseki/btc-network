@@ -97,6 +97,61 @@ async fn last_run_countries_returns_fixture_payload() -> TestResult {
 }
 
 #[tokio::test]
+async fn last_run_countries_phase_any_returns_newest_run_payload_even_when_unfinished() -> TestResult
+{
+    let app = fixture_app("last_run_distributions/basic").await?;
+    let response = app
+        .router
+        .clone()
+        .oneshot(request(
+            "/api/v1/network/last-run/countries?limit=10&phase=any",
+        ))
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await?,
+        app.expected_json("countries_any_phase.expected.json")?
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn last_run_countries_accepts_comma_separated_phase_filter() -> TestResult {
+    let app = fixture_app("last_run_distributions/basic").await?;
+    let response = app
+        .router
+        .clone()
+        .oneshot(request(
+            "/api/v1/network/last-run/countries?limit=10&phase=finished,crawling",
+        ))
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(response).await?,
+        app.expected_json("countries_any_phase.expected.json")?
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn last_run_countries_rejects_unknown_phase_filter() -> TestResult {
+    let app = fixture_app("last_run_distributions/basic").await?;
+    let response = app
+        .router
+        .clone()
+        .oneshot(request("/api/v1/network/last-run/countries?phase=unknown"))
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn last_run_start_heights_returns_fixture_payload() -> TestResult {
     let app = fixture_app("last_run_distributions/basic").await?;
     let response = app

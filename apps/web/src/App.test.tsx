@@ -273,6 +273,16 @@ function mockCrawlerPreviewRun() {
     failureCounts: [],
     networkOutcomes: [],
   });
+  mockListLastRunCountries.mockImplementation((_limit, options) => {
+    if (options?.phase === "any") {
+      return Promise.resolve([
+        { country: "US", nodeCount: 24 },
+        { country: "DE", nodeCount: 16 },
+      ]);
+    }
+
+    return Promise.resolve([]);
+  });
 }
 
 describe("App sidebar shell", () => {
@@ -362,7 +372,9 @@ describe("App sidebar shell", () => {
 
     await waitFor(() => {
       expect(mockGetDocsUiConfig).toHaveBeenCalledTimes(1);
-      expect(mockGetOpenApiDocument).toHaveBeenCalledWith("/api/openapi.json");
+      expect(mockGetOpenApiDocument).toHaveBeenCalledWith("http://127.0.0.1:8080/api/openapi.json", {
+        baseServerUrl: "http://127.0.0.1:8080",
+      });
     });
     expect(screen.getByRole("navigation", { name: "API Views" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
@@ -449,6 +461,9 @@ describe("App sidebar shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show latest snapshot preview" }));
     expect(await screen.findByText("Crawler Snapshot")).toBeTruthy();
+    expect(mockListLastRunCountries).toHaveBeenCalledWith(32, { phase: "any" });
+    expect((await screen.findAllByText("US")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Seattle")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Close latest snapshot preview" }));
     await waitFor(() => {
@@ -501,6 +516,24 @@ describe("App sidebar shell", () => {
     await waitFor(() => {
       expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
     });
+  });
+
+  it("restores the selected page and section after an app remount", async () => {
+    const firstRender = render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Checkpoints" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Checkpoints");
+
+    firstRender.unmount();
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Checkpoints");
   });
 
   it("keeps crawler runs focused on inspection while the snapshot stays in the header preview", async () => {

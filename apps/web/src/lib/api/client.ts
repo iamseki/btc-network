@@ -27,19 +27,32 @@ import type {
 } from "./types";
 
 export type LastBlockHeightProgressListener = (progress: LastBlockHeightProgress) => void;
+export type CrawlRunPhaseFilter = "any" | "bootstrap" | "crawling" | "draining" | "finished";
+export type CrawlRunPhaseFilterOptions = {
+  phase?: CrawlRunPhaseFilter | CrawlRunPhaseFilter[];
+};
 
 export interface BtcAppClient {
   listCrawlRuns(limit?: number): Promise<CrawlRunListItem[]>;
   getCrawlRun(runId: string): Promise<CrawlRunDetail>;
   countNodesByAsn(limit?: number, window?: HistoricalWindow): Promise<AsnNodeCountItem[]>;
-  listLastRunServices(limit?: number): Promise<LastRunServicesCountItem[]>;
-  listLastRunProtocolVersions(limit?: number): Promise<LastRunProtocolVersionCountItem[]>;
-  listLastRunUserAgents(limit?: number): Promise<LastRunUserAgentCountItem[]>;
-  listLastRunNetworkTypes(limit?: number): Promise<LastRunNetworkTypeCountItem[]>;
-  listLastRunCountries(limit?: number): Promise<LastRunCountryCountItem[]>;
-  listLastRunAsns(limit?: number): Promise<LastRunAsnCountItem[]>;
-  listLastRunStartHeights(limit?: number): Promise<LastRunStartHeightCountItem[]>;
-  listLastRunAsnOrganizations(limit?: number): Promise<LastRunAsnOrganizationCountItem[]>;
+  listLastRunServices(limit?: number, options?: CrawlRunPhaseFilterOptions): Promise<LastRunServicesCountItem[]>;
+  listLastRunProtocolVersions(
+    limit?: number,
+    options?: CrawlRunPhaseFilterOptions,
+  ): Promise<LastRunProtocolVersionCountItem[]>;
+  listLastRunUserAgents(limit?: number, options?: CrawlRunPhaseFilterOptions): Promise<LastRunUserAgentCountItem[]>;
+  listLastRunNetworkTypes(
+    limit?: number,
+    options?: CrawlRunPhaseFilterOptions,
+  ): Promise<LastRunNetworkTypeCountItem[]>;
+  listLastRunCountries(limit?: number, options?: CrawlRunPhaseFilterOptions): Promise<LastRunCountryCountItem[]>;
+  listLastRunAsns(limit?: number, options?: CrawlRunPhaseFilterOptions): Promise<LastRunAsnCountItem[]>;
+  listLastRunStartHeights(limit?: number, options?: CrawlRunPhaseFilterOptions): Promise<LastRunStartHeightCountItem[]>;
+  listLastRunAsnOrganizations(
+    limit?: number,
+    options?: CrawlRunPhaseFilterOptions,
+  ): Promise<LastRunAsnOrganizationCountItem[]>;
   listLastRunNodes(limit?: number, pageToken?: string): Promise<PageResponse<LastRunNodeSummaryItem>>;
   listNodeStatus(): Promise<NodeStatusItem[]>;
   handshake(request: ConnectionRequest): Promise<HandshakeResult>;

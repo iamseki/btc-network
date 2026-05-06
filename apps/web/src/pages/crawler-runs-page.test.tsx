@@ -261,6 +261,49 @@ describe("CrawlerRunsPage", () => {
     expect((await screen.findAllByText("handshake")).length).toBeGreaterThan(0);
   });
 
+  it("keeps the selected panel when crawler run data refreshes", async () => {
+    const run = {
+      runId: "crawl-1",
+      phase: "completed",
+      startedAt: "2026-03-30T12:00:00Z",
+      lastCheckpointedAt: "2026-03-30T12:10:00Z",
+      stopReason: "idle timeout",
+      failureReason: null,
+      scheduledTasks: 90,
+      successfulHandshakes: 30,
+      failedTasks: 60,
+      uniqueNodes: 110,
+      persistedObservationRows: 90,
+      successPct: 33.33,
+      scheduledPct: 81.82,
+      unscheduledGap: 20,
+    };
+    const client = makeClient({
+      listCrawlRuns: vi.fn().mockResolvedValue([run]),
+      getCrawlRun: vi.fn().mockResolvedValue({
+        run,
+        checkpoints: [],
+        failureCounts: [{ classification: "connect", observations: 10 }],
+        networkOutcomes: [],
+      }),
+    });
+
+    render(<CrawlerRunsPage client={client} />);
+
+    await waitFor(() => {
+      expect(client.getCrawlRun).toHaveBeenCalledWith("crawl-1");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Failures" }));
+    expect(await screen.findByText("Failure Mix")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh crawler runs" }));
+
+    await waitFor(() => {
+      expect(client.listCrawlRuns).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText("Failure Mix")).toBeTruthy();
+  });
+
   it("keeps crawler runs focused on run inspection without a duplicate snapshot section", async () => {
     const getRun = vi.fn().mockResolvedValue({
       run: {

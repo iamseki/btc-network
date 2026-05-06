@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BtcAppClient } from "@/lib/api/client";
+import type { CrawlRunListItem } from "@/lib/api/types";
 
-import { NetworkAnalyticsPage } from "./network-analytics-page";
+import {
+  NETWORK_ANALYTICS_LIVE_POLL_INTERVAL_MS,
+  NetworkAnalyticsPage,
+} from "./network-analytics-page";
 
 afterEach(() => {
   cleanup();
@@ -73,6 +77,169 @@ describe("NetworkAnalyticsPage", () => {
     expect(
       await screen.findByText(/No crawler analytics are available yet\./i),
     ).toBeTruthy();
+  });
+
+  it("shows the latest active run on the globe even before a finished snapshot exists", async () => {
+    const getCrawlRun = vi.fn().mockResolvedValue({
+      run: {
+        runId: "crawl-local-active",
+        phase: "crawling",
+        startedAt: "2026-05-06T00:02:34Z",
+        lastCheckpointedAt: "2026-05-06T00:17:34Z",
+        stopReason: null,
+        failureReason: null,
+        scheduledTasks: 34257,
+        successfulHandshakes: 1378,
+        failedTasks: 22879,
+        uniqueNodes: 231684,
+        persistedObservationRows: 1481,
+        successPct: 4.02,
+        scheduledPct: 14.79,
+        unscheduledGap: 197427,
+      },
+      checkpoints: [],
+      failureCounts: [],
+      networkOutcomes: [],
+    });
+    const client = makeClient({
+      listCrawlRuns: vi.fn().mockResolvedValue([
+        {
+          runId: "crawl-local-active",
+          phase: "crawling",
+          startedAt: "2026-05-06T00:02:34Z",
+          lastCheckpointedAt: "2026-05-06T00:17:34Z",
+          stopReason: null,
+          failureReason: null,
+          scheduledTasks: 34257,
+          successfulHandshakes: 1378,
+          failedTasks: 22879,
+          uniqueNodes: 231684,
+          persistedObservationRows: 1481,
+          successPct: 4.02,
+          scheduledPct: 14.79,
+          unscheduledGap: 197427,
+        },
+        {
+          runId: "crawl-older-finished",
+          phase: "finished",
+          startedAt: "2026-05-05T00:02:34Z",
+          lastCheckpointedAt: "2026-05-05T00:17:34Z",
+          stopReason: "idle timeout",
+          failureReason: null,
+          scheduledTasks: 100,
+          successfulHandshakes: 30,
+          failedTasks: 70,
+          uniqueNodes: 130,
+          persistedObservationRows: 100,
+          successPct: 30,
+          scheduledPct: 76.92,
+          unscheduledGap: 30,
+        },
+      ]),
+      listLastRunAsns: vi.fn().mockImplementation((_limit, options) => {
+        if (options?.phase === "any") {
+          return Promise.resolve([
+            { asn: 64512, asnOrganization: "Active ASN", nodeCount: 27 },
+          ]);
+        }
+
+        return Promise.resolve([]);
+      }),
+      listLastRunCountries: vi.fn().mockImplementation((_limit, options) => {
+        if (options?.phase === "any") {
+          return Promise.resolve([
+            { country: "US", nodeCount: 323 },
+            { country: "DE", nodeCount: 115 },
+          ]);
+        }
+
+        return Promise.resolve([]);
+      }),
+      getCrawlRun,
+    });
+
+    render(<NetworkAnalyticsPage client={client} />);
+
+    expect(await screen.findByRole("img", { name: /Interactive 3D globe/i })).toBeTruthy();
+    expect(await screen.findByText("Background sweep active")).toBeTruthy();
+    await waitFor(() => expect(getCrawlRun).toHaveBeenCalledWith("crawl-local-active"));
+    expect(screen.queryByText("Crawler data warming up")).toBeNull();
+    expect(screen.queryByText("Latest Finished Snapshot Not Ready")).toBeNull();
+    expect(screen.getByText("Top ASN Distribution")).toBeTruthy();
+    expect(screen.getByText("Top Country Distribution")).toBeTruthy();
+  });
+
+  it("polls only the latest-run snapshot surface", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const listCrawlRuns = vi
+        .fn()
+        .mockResolvedValueOnce([
+          makeRunSummary({ runId: "crawl-active-1", scheduledTasks: 10, successfulHandshakes: 2 }),
+        ])
+        .mockResolvedValueOnce([
+          makeRunSummary({ runId: "crawl-active-2", scheduledTasks: 20, successfulHandshakes: 4 }),
+        ]);
+      const getCrawlRun = vi.fn().mockImplementation((runId: string) =>
+        Promise.resolve({
+          run: makeRunSummary({ runId }),
+          checkpoints: [],
+          failureCounts: [],
+          networkOutcomes: [],
+        }),
+      );
+      const listLastRunAsns = vi.fn().mockImplementation((_limit, options) => {
+        if (options?.phase === "any") {
+          return Promise.resolve([
+            { asn: 64512, asnOrganization: "Active ASN", nodeCount: 9 },
+          ]);
+        }
+
+        return Promise.resolve([{ asn: 64513, asnOrganization: "Finished ASN", nodeCount: 4 }]);
+      });
+      const listLastRunCountries = vi.fn().mockImplementation((limit, options) => {
+        if (options?.phase === "any") {
+          return Promise.resolve([
+            { country: "US", nodeCount: limit === 32 ? 12 : 7 },
+            { country: "DE", nodeCount: 5 },
+          ]);
+        }
+
+        return Promise.resolve([{ country: "GB", nodeCount: 3 }]);
+      });
+      const listLastRunNetworkTypes = vi.fn().mockResolvedValue([{ networkType: "ipv4", nodeCount: 4 }]);
+      const client = makeClient({
+        listCrawlRuns,
+        getCrawlRun,
+        listLastRunAsns,
+        listLastRunCountries,
+        listLastRunNetworkTypes,
+        listLastRunStartHeights: vi.fn().mockResolvedValue([{ startHeight: 900000, nodeCount: 4 }]),
+      });
+
+      render(<NetworkAnalyticsPage client={client} />);
+
+      await flushAsyncWork();
+      expect(getCrawlRun).toHaveBeenCalledWith("crawl-active-1");
+      expect(screen.getByText("crawl-active-1")).toBeTruthy();
+      expect(listLastRunNetworkTypes).toHaveBeenCalledWith(10, { phase: "any" });
+      expect(listLastRunNetworkTypes).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(NETWORK_ANALYTICS_LIVE_POLL_INTERVAL_MS);
+      });
+      await flushAsyncWork();
+
+      expect(getCrawlRun).toHaveBeenCalledWith("crawl-active-2");
+      expect(screen.getByText("crawl-active-2")).toBeTruthy();
+      expect(listLastRunAsns).toHaveBeenCalledWith(10, { phase: "any" });
+      expect(listLastRunNetworkTypes).toHaveBeenCalledWith(10, { phase: "any" });
+      expect(listLastRunCountries).toHaveBeenCalledWith(32, { phase: "any" });
+      expect(listLastRunNetworkTypes).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders a focused overview first, then shows the risk metrics", async () => {
@@ -276,4 +443,32 @@ function scoreCardValue(label: string): string {
 
   const values = within(card).getAllByText(/^\d+$/);
   return values[0]?.textContent ?? "";
+}
+
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+function makeRunSummary(overrides: Partial<CrawlRunListItem> = {}): CrawlRunListItem {
+  return {
+    runId: "crawl-active",
+    phase: "crawling",
+    startedAt: "2026-05-06T00:02:34Z",
+    lastCheckpointedAt: "2026-05-06T00:17:34Z",
+    stopReason: null,
+    failureReason: null,
+    scheduledTasks: 10,
+    successfulHandshakes: 2,
+    failedTasks: 8,
+    uniqueNodes: 20,
+    persistedObservationRows: 10,
+    successPct: 20,
+    scheduledPct: 50,
+    unscheduledGap: 10,
+    ...overrides,
+  };
 }

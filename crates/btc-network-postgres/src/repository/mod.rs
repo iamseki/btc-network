@@ -1,6 +1,6 @@
 use btc_network::crawler::{
     AsnNodeCountItem, CountNodesByAsnRow, CrawlEndpoint, CrawlRunCheckpoint, CrawlRunDetail,
-    CrawlRunId, CrawlRunListItem, CrawlerAnalyticsReader, CrawlerRepository,
+    CrawlRunId, CrawlRunListItem, CrawlRunPhaseFilter, CrawlerAnalyticsReader, CrawlerRepository,
     CrawlerRepositoryError, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
     LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodePageCursor,
     LastRunNodeSummaryPage, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
@@ -157,61 +157,85 @@ impl CrawlerAnalyticsReader for PostgresCrawlerRepository {
     fn list_last_run_services<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError>> {
-        Box::pin(async move { analytics::list_last_run_services(&self.pool, limit).await })
+        Box::pin(
+            async move { analytics::list_last_run_services(&self.pool, limit, phase_filter).await },
+        )
     }
 
     fn list_last_run_protocol_versions<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError>>
     {
-        Box::pin(async move { analytics::list_last_run_protocol_versions(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::list_last_run_protocol_versions(&self.pool, limit, phase_filter).await
+        })
     }
 
     fn list_last_run_user_agents<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError>> {
-        Box::pin(async move { analytics::list_last_run_user_agents(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::list_last_run_user_agents(&self.pool, limit, phase_filter).await
+        })
     }
 
     fn list_last_run_network_types<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError>>
     {
-        Box::pin(async move { analytics::list_last_run_network_types(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::list_last_run_network_types(&self.pool, limit, phase_filter).await
+        })
     }
 
     fn list_last_run_countries<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError>> {
-        Box::pin(async move { analytics::list_last_run_countries(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::list_last_run_countries(&self.pool, limit, phase_filter).await
+        })
     }
 
     fn list_last_run_asns<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError>> {
-        Box::pin(async move { analytics::list_last_run_asns(&self.pool, limit).await })
+        Box::pin(
+            async move { analytics::list_last_run_asns(&self.pool, limit, phase_filter).await },
+        )
     }
 
     fn list_last_run_start_heights<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError>>
     {
-        Box::pin(async move { analytics::list_last_run_start_heights(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::list_last_run_start_heights(&self.pool, limit, phase_filter).await
+        })
     }
 
     fn list_last_run_asn_organizations<'a>(
         &'a self,
         limit: usize,
+        phase_filter: CrawlRunPhaseFilter,
     ) -> RepositoryFuture<'a, Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError>>
     {
-        Box::pin(async move { analytics::list_last_run_asn_organizations(&self.pool, limit).await })
+        Box::pin(async move {
+            analytics::list_last_run_asn_organizations(&self.pool, limit, phase_filter).await
+        })
     }
 
     fn list_last_run_nodes<'a>(

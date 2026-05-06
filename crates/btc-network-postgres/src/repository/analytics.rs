@@ -1,10 +1,11 @@
 use btc_network::crawler::{
-    AsnNodeCountItem, CountNodesByAsnRow, CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunId,
-    CrawlRunListItem, CrawlerRepositoryError, FailureClassificationCount, LastRunAsnCountItem,
-    LastRunAsnOrganizationCountItem, LastRunCountryCountItem, LastRunNetworkTypeCountItem,
-    LastRunNodePageCursor, LastRunNodeSummaryItem, LastRunNodeSummaryPage,
-    LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
-    LastRunUserAgentCountItem, NetworkOutcomeCount,
+    AsnNodeCountItem, CountNodesByAsnRow, CrawlPhase, CrawlRunCheckpointItem, CrawlRunDetail,
+    CrawlRunId, CrawlRunListItem, CrawlRunPhaseFilter, CrawlerRepositoryError,
+    FailureClassificationCount, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
+    LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodePageCursor,
+    LastRunNodeSummaryItem, LastRunNodeSummaryPage, LastRunProtocolVersionCountItem,
+    LastRunServicesCountItem, LastRunStartHeightCountItem, LastRunUserAgentCountItem,
+    NetworkOutcomeCount,
 };
 use chrono::{DateTime, Utc};
 use sqlx_core::{query::query, row::Row};
@@ -427,88 +428,120 @@ impl I32DistributionColumn {
 pub(super) async fn list_last_run_services(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunServicesCountItem>, CrawlerRepositoryError> {
-    query_last_run_string_distribution(pool, StringDistributionColumn::Services, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunServicesCountItem {
-                    services: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_string_distribution(
+        pool,
+        StringDistributionColumn::Services,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunServicesCountItem {
+                services: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_protocol_versions(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunProtocolVersionCountItem>, CrawlerRepositoryError> {
-    query_last_run_i32_distribution(pool, I32DistributionColumn::ProtocolVersion, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunProtocolVersionCountItem {
-                    protocol_version: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_i32_distribution(
+        pool,
+        I32DistributionColumn::ProtocolVersion,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunProtocolVersionCountItem {
+                protocol_version: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_user_agents(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunUserAgentCountItem>, CrawlerRepositoryError> {
-    query_last_run_string_distribution(pool, StringDistributionColumn::UserAgent, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunUserAgentCountItem {
-                    user_agent: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_string_distribution(
+        pool,
+        StringDistributionColumn::UserAgent,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunUserAgentCountItem {
+                user_agent: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_network_types(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunNetworkTypeCountItem>, CrawlerRepositoryError> {
-    query_last_run_string_distribution(pool, StringDistributionColumn::NetworkType, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunNetworkTypeCountItem {
-                    network_type: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_string_distribution(
+        pool,
+        StringDistributionColumn::NetworkType,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunNetworkTypeCountItem {
+                network_type: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_countries(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunCountryCountItem>, CrawlerRepositoryError> {
-    query_last_run_string_distribution(pool, StringDistributionColumn::Country, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunCountryCountItem {
-                    country: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_string_distribution(
+        pool,
+        StringDistributionColumn::Country,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunCountryCountItem {
+                country: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_asns(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunAsnCountItem>, CrawlerRepositoryError> {
     let limit = limit.min(i64::MAX as usize) as i64;
+    let run_id_sql = latest_run_id_sql(&phase_filter);
     let rows = query::<Postgres>(&format!(
         "
 SELECT
@@ -516,7 +549,7 @@ SELECT
     asn_organization,
     COUNT(*) AS node_count
 FROM node_observations
-WHERE crawl_run_id = ({LATEST_FINISHED_RUN_ID_SQL})
+WHERE crawl_run_id = ({run_id_sql})
   AND protocol_version IS NOT NULL
   AND asn IS NOT NULL
 GROUP BY asn, asn_organization
@@ -557,33 +590,45 @@ LIMIT $1
 pub(super) async fn list_last_run_start_heights(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunStartHeightCountItem>, CrawlerRepositoryError> {
-    query_last_run_i32_distribution(pool, I32DistributionColumn::StartHeight, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunStartHeightCountItem {
-                    start_height: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_i32_distribution(
+        pool,
+        I32DistributionColumn::StartHeight,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunStartHeightCountItem {
+                start_height: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_asn_organizations(
     pool: &PgPool,
     limit: usize,
+    phase_filter: CrawlRunPhaseFilter,
 ) -> Result<Vec<LastRunAsnOrganizationCountItem>, CrawlerRepositoryError> {
-    query_last_run_string_distribution(pool, StringDistributionColumn::AsnOrganization, limit)
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| LastRunAsnOrganizationCountItem {
-                    asn_organization: row.value,
-                    node_count: row.node_count.max(0) as u64,
-                })
-                .collect()
-        })
+    query_run_string_distribution(
+        pool,
+        StringDistributionColumn::AsnOrganization,
+        latest_run_id_sql(&phase_filter),
+        limit,
+    )
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(|row| LastRunAsnOrganizationCountItem {
+                asn_organization: row.value,
+                node_count: row.node_count.max(0) as u64,
+            })
+            .collect()
+    })
 }
 
 pub(super) async fn list_last_run_nodes(
@@ -706,9 +751,10 @@ LIMIT $1
     Ok(LastRunNodeSummaryPage { items, next_cursor })
 }
 
-async fn query_last_run_string_distribution(
+async fn query_run_string_distribution(
     pool: &PgPool,
     column: StringDistributionColumn,
+    run_id_sql: String,
     limit: usize,
 ) -> Result<Vec<StringCountDbRow>, CrawlerRepositoryError> {
     let select_expr = column.select_expr();
@@ -718,7 +764,7 @@ SELECT
     {select_expr} AS value,
     COUNT(*) AS node_count
 FROM node_observations
-WHERE crawl_run_id = ({LATEST_FINISHED_RUN_ID_SQL})
+WHERE crawl_run_id = ({run_id_sql})
   AND protocol_version IS NOT NULL
   AND {select_expr} IS NOT NULL
 GROUP BY {select_expr}
@@ -747,9 +793,48 @@ LIMIT $1
         .collect()
 }
 
-async fn query_last_run_i32_distribution(
+fn latest_run_id_sql(phase_filter: &CrawlRunPhaseFilter) -> String {
+    let where_clause = match phase_filter {
+        CrawlRunPhaseFilter::Finished => "WHERE phase = 'finished'".to_string(),
+        CrawlRunPhaseFilter::Any => String::new(),
+        CrawlRunPhaseFilter::OneOf(phases) => {
+            let phases = phases
+                .iter()
+                .map(|phase| format!("'{}'", crawl_phase_sql_value(*phase)))
+                .collect::<Vec<_>>();
+
+            if phases.is_empty() {
+                "WHERE phase = 'finished'".to_string()
+            } else {
+                format!("WHERE phase IN ({})", phases.join(", "))
+            }
+        }
+    };
+
+    format!(
+        "
+SELECT run_id
+FROM crawler_run_checkpoints
+{where_clause}
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+LIMIT 1
+"
+    )
+}
+
+fn crawl_phase_sql_value(phase: CrawlPhase) -> &'static str {
+    match phase {
+        CrawlPhase::Bootstrap => "bootstrap",
+        CrawlPhase::Crawling => "crawling",
+        CrawlPhase::Draining => "draining",
+        CrawlPhase::Finished => "finished",
+    }
+}
+
+async fn query_run_i32_distribution(
     pool: &PgPool,
     column: I32DistributionColumn,
+    run_id_sql: String,
     limit: usize,
 ) -> Result<Vec<I32CountDbRow>, CrawlerRepositoryError> {
     let select_expr = column.select_expr();
@@ -759,7 +844,7 @@ SELECT
     {select_expr} AS value,
     COUNT(*) AS node_count
 FROM node_observations
-WHERE crawl_run_id = ({LATEST_FINISHED_RUN_ID_SQL})
+WHERE crawl_run_id = ({run_id_sql})
   AND protocol_version IS NOT NULL
   AND {select_expr} IS NOT NULL
 GROUP BY {select_expr}

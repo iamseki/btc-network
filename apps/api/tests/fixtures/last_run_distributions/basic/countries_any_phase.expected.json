@@ -1,0 +1,12 @@
+{
+  "rows": [
+    {
+      "country": "JP",
+      "nodeCount": 2
+    },
+    {
+      "country": "US",
+      "nodeCount": 1
+    }
+  ]
+}

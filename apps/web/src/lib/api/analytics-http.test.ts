@@ -6,6 +6,7 @@ import {
   countNodesByAsn,
   getCrawlRun,
   listCrawlRuns,
+  listLastRunCountries,
   listLastRunNodes,
   listLastRunNetworkTypes,
 } from "./analytics-http";
@@ -150,6 +151,29 @@ describe("analytics-http", () => {
       expect.objectContaining({ method: "GET" }),
     );
     expect(rows).toEqual([{ networkType: "ipv4", nodeCount: 42 }]);
+  });
+
+  it("loads country rows with a phase filter for live snapshot views", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          {
+            country: "US",
+            nodeCount: 42,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rows = await listLastRunCountries(5, { phase: "any" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8080/api/v1/network/last-run/countries?limit=5&phase=any",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(rows).toEqual([{ country: "US", nodeCount: 42 }]);
   });
 
   it("loads last-run node pages from the page envelope", async () => {
