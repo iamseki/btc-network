@@ -13,9 +13,10 @@ Do not infer fields from this guide. Use OpenAPI for contract details.
 ## Start Here
 
 1. Call `GET /api/v1/network/historical/runs?limit=1` first.
-   This finds the latest finished network snapshot cheaply.
+   This finds the newest crawler run cheaply, even when it is still crawling.
 2. Call `GET /api/v1/network/historical/runs/{run_id}` only when you need run detail, checkpoints, failure counts, or network outcomes for a specific run.
-3. Use last-run distribution endpoints for compact current analytics:
+3. Add `phase=any` or a comma-separated `phase=finished,crawling` filter to last-run distribution endpoints when a live view needs the newest matching run instead of only the latest finished run.
+4. Use last-run distribution endpoints without `phase` for compact analytics pinned to the latest finished run:
    - `GET /api/v1/network/last-run/asns?limit=10`
    - `GET /api/v1/network/last-run/asn-organizations?limit=10`
    - `GET /api/v1/network/last-run/countries?limit=10`
@@ -24,7 +25,8 @@ Do not infer fields from this guide. Use OpenAPI for contract details.
    - `GET /api/v1/network/last-run/services?limit=10`
    - `GET /api/v1/network/last-run/start-heights?limit=10`
    - `GET /api/v1/network/last-run/user-agents?limit=10`
-4. Use `GET /api/nodes/status` for curated DNS seeder and public endpoint health.
+5. Use `GET /api/v1/network/historical/asns?start=<RFC3339>&end=<RFC3339>&limit=10` only when a bounded historical ASN window is needed.
+6. Use `GET /api/nodes/status` for curated DNS seeder and public endpoint health.
 
 ## Cheap Workflow
 
@@ -39,19 +41,21 @@ Prefer compact distribution endpoints over broad node inventory reads.
 
 ## Pagination And Limits
 
-The current API uses bounded `limit` query parameters, not cursor pagination.
+Most compact endpoints use bounded `limit` query parameters only.
 
 Start with low limits such as `5`, `10`, or `20`. Increase only when the task needs more rows.
 
 Use `/api/openapi.json` for endpoint-specific defaults and maximums. Do not guess them.
 
-Avoid frequent broad reads such as:
+Use `pageToken` only on row-level inventory scans:
 
 ```text
 GET /api/v1/network/last-run/nodes?limit=1000
 ```
 
-That endpoint is useful for endpoint inventory, but it is wider than distribution reads.
+Follow `nextPageToken` only when endpoint-level inventory is required. Do not auto-scan all pages for summaries.
+
+Use explicit `start` and `end` bounds on historical aggregate endpoints. Keep windows small; the current maximum historical ASN window is 31 days.
 
 ## Caching
 
@@ -62,7 +66,7 @@ Cache these aggressively until deployment changes:
 
 Cache historical run detail by `run_id`; finished runs are stable historical snapshots.
 
-Cache latest-run distribution responses briefly. Refresh them only after `GET /api/v1/network/historical/runs?limit=1` shows a newer `runId`.
+Cache latest-run and last-run distribution responses briefly. Refresh them only after `GET /api/v1/network/historical/runs?limit=1` shows a newer `runId` or newer checkpoint time.
 
 Treat `GET /api/nodes/status` as short-lived status data.
 

@@ -49,3 +49,4 @@ Use only the canonical status values below.
 | `BNDD-0012` | `Unreachable-node exclusion and recovery crawler path` | `implemented` | [BNDD-0012/BNDD-0012.md](./BNDD-0012/BNDD-0012.md) |
 | `BNDD-0013` | `Curated Bitcoin node status page` | `implemented` | [BNDD-0013/BNDD-0013.md](./BNDD-0013/BNDD-0013.md) |
 | `BNDD-0014` | `Agent-first API guide` | `accepted` | [BNDD-0014/BNDD-0014.md](./BNDD-0014/BNDD-0014.md) |
+| `BNDD-0015` | `Bounded scans and targeted keyset pagination` | `implemented` | [BNDD-0015/BNDD-0015.md](./BNDD-0015/BNDD-0015.md) |

@@ -61,7 +61,9 @@ export function ApiPage({
 
       try {
         const nextDocsUiConfig = await getDocsUiConfig();
-        const nextOpenApiDocument = await getOpenApiDocument(nextDocsUiConfig.openapiPath);
+        const nextOpenApiDocument = await getOpenApiDocument(nextDocsUiConfig.openapiUrl, {
+          baseServerUrl: nextDocsUiConfig.baseServerUrl,
+        });
 
         if (!cancelled) {
           setDocsUiConfig(nextDocsUiConfig);

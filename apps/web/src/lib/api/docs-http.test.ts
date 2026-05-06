@@ -42,17 +42,40 @@ describe("getDocsUiConfig", () => {
 });
 
 describe("getOpenApiDocument", () => {
-  it("fetches the generated OpenAPI document through the shared API helper", async () => {
+  it("fetches the generated OpenAPI document and injects the configured server", async () => {
     vi.mocked(fetchJson).mockResolvedValueOnce({
       openapi: "3.1.0",
       info: { title: "btc-network API", version: "0.1.0" },
       paths: {},
     });
 
-    const document = await getOpenApiDocument("/api/openapi.json");
+    const document = await getOpenApiDocument("http://127.0.0.1:8080/api/openapi.json", {
+      baseServerUrl: "http://127.0.0.1:8080",
+    });
 
-    expect(fetchJson).toHaveBeenCalledWith("/api/openapi.json");
-    expect(document).toMatchObject({ openapi: "3.1.0" });
+    expect(fetchJson).toHaveBeenCalledWith("http://127.0.0.1:8080/api/openapi.json");
+    expect(document).toMatchObject({
+      openapi: "3.1.0",
+      servers: [{ url: "http://127.0.0.1:8080" }],
+    });
+  });
+
+  it("keeps existing OpenAPI servers after the configured web API server", async () => {
+    vi.mocked(fetchJson).mockResolvedValueOnce({
+      openapi: "3.1.0",
+      info: { title: "btc-network API", version: "0.1.0" },
+      servers: [{ url: "https://api.btcnetwork.info" }],
+      paths: {},
+    });
+
+    const document = await getOpenApiDocument("/api/openapi.json", {
+      baseServerUrl: "http://127.0.0.1:8080/",
+    });
+
+    expect(document.servers).toEqual([
+      { url: "http://127.0.0.1:8080" },
+      { url: "https://api.btcnetwork.info" },
+    ]);
   });
 });
 

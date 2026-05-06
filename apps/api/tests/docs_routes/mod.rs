@@ -22,6 +22,67 @@ async fn openapi_route_returns_generated_spec() -> TestResult {
         "Network Analytics"
     );
     assert_eq!(json["info"]["version"], env!("CARGO_PKG_VERSION"));
+    let last_run_nodes_params =
+        json["paths"]["/api/v1/network/last-run/nodes"]["get"]["parameters"]
+            .as_array()
+            .expect("last-run nodes parameters");
+    assert!(
+        last_run_nodes_params
+            .iter()
+            .any(|param| param["name"] == "pageToken")
+    );
+    let historical_asns_params =
+        json["paths"]["/api/v1/network/historical/asns"]["get"]["parameters"]
+            .as_array()
+            .expect("historical asns parameters");
+    assert!(
+        historical_asns_params
+            .iter()
+            .any(|param| param["name"] == "start")
+    );
+    assert!(
+        historical_asns_params
+            .iter()
+            .any(|param| param["name"] == "end")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn openapi_keeps_pagination_parameters_targeted() -> TestResult {
+    let app = empty_app("docs_openapi_pagination_guardrails").await?;
+    let response = app
+        .router
+        .clone()
+        .oneshot(request("/api/openapi.json"))
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let json = json_body(response).await?;
+    let paths = json["paths"].as_object().expect("paths object");
+
+    for (path, path_item) in paths {
+        let Some(parameters) = path_item["get"]["parameters"].as_array() else {
+            continue;
+        };
+        let names = parameters
+            .iter()
+            .filter_map(|param| param["name"].as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names.contains(&"pageToken"),
+            path == "/api/v1/network/last-run/nodes",
+            "{path}"
+        );
+        assert_eq!(
+            names.contains(&"start") || names.contains(&"end"),
+            path == "/api/v1/network/historical/asns",
+            "{path}"
+        );
+    }
 
     Ok(())
 }

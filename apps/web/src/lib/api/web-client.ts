@@ -24,6 +24,7 @@ import type {
   CrawlRunDetail,
   CrawlRunListItem,
   HandshakeResult,
+  HistoricalWindow,
   LastBlockHeightProgress,
   LastBlockHeightResult,
   LastRunAsnCountItem,
@@ -36,6 +37,7 @@ import type {
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
   NodeStatusItem,
+  PageResponse,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -746,7 +748,7 @@ async function getDemoRunDetail(runId: string): Promise<CrawlRunDetail> {
   return delay(cloneRunDetail(detail));
 }
 
-async function countDemoNodesByAsn(limit = 10): Promise<AsnNodeCountItem[]> {
+async function countDemoNodesByAsn(limit = 10, _window?: HistoricalWindow): Promise<AsnNodeCountItem[]> {
   const result = DEMO_ASN_ROWS.slice(0, limit).map((row) => ({ ...row }));
   pushEvent("info", `Demo mode served ${result.length} ASN rows from the embedded dataset.`);
   return delay(result);
@@ -808,10 +810,20 @@ async function listDemoLastRunAsnOrganizations(
   return delay(result);
 }
 
-async function listDemoLastRunNodes(limit = 500): Promise<LastRunNodeSummaryItem[]> {
-  const result = DEMO_LAST_RUN_NODES.slice(0, limit).map((row) => ({ ...row }));
+async function listDemoLastRunNodes(
+  limit = 500,
+  pageToken?: string,
+): Promise<PageResponse<LastRunNodeSummaryItem>> {
+  const offset = pageToken ? Number.parseInt(pageToken.replace(/^demo-last-run-nodes:/, ""), 10) : 0;
+  const safeOffset = Number.isFinite(offset) && offset > 0 ? offset : 0;
+  const result = DEMO_LAST_RUN_NODES.slice(safeOffset, safeOffset + limit).map((row) => ({ ...row }));
+  const nextOffset = safeOffset + result.length;
   pushEvent("info", `Demo mode served ${result.length} last-run node rows.`);
-  return delay(result);
+  return delay({
+    items: result,
+    nextPageToken:
+      nextOffset < DEMO_LAST_RUN_NODES.length ? `demo-last-run-nodes:${nextOffset}` : null,
+  });
 }
 
 async function listDemoNodeStatus(): Promise<NodeStatusItem[]> {
@@ -835,75 +847,75 @@ export const webClient: BtcAppClient = {
 
     return getCrawlRun(runId);
   },
-  countNodesByAsn(limit) {
+  countNodesByAsn(limit, window) {
     if (isDemoModeEnabled()) {
-      return countDemoNodesByAsn(limit);
+      return countDemoNodesByAsn(limit, window);
     }
 
-    return countNodesByAsn(limit);
+    return countNodesByAsn(limit, window);
   },
-  listLastRunServices(limit) {
+  listLastRunServices(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunServices(limit);
     }
 
-    return listLastRunServices(limit);
+    return listLastRunServices(limit, options);
   },
-  listLastRunProtocolVersions(limit) {
+  listLastRunProtocolVersions(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunProtocolVersions(limit);
     }
 
-    return listLastRunProtocolVersions(limit);
+    return listLastRunProtocolVersions(limit, options);
   },
-  listLastRunUserAgents(limit) {
+  listLastRunUserAgents(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunUserAgents(limit);
     }
 
-    return listLastRunUserAgents(limit);
+    return listLastRunUserAgents(limit, options);
   },
-  listLastRunNetworkTypes(limit) {
+  listLastRunNetworkTypes(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunNetworkTypes(limit);
     }
 
-    return listLastRunNetworkTypes(limit);
+    return listLastRunNetworkTypes(limit, options);
   },
-  listLastRunCountries(limit) {
+  listLastRunCountries(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunCountries(limit);
     }
 
-    return listLastRunCountries(limit);
+    return listLastRunCountries(limit, options);
   },
-  listLastRunAsns(limit) {
+  listLastRunAsns(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunAsns(limit);
     }
 
-    return listLastRunAsns(limit);
+    return listLastRunAsns(limit, options);
   },
-  listLastRunStartHeights(limit) {
+  listLastRunStartHeights(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunStartHeights(limit);
     }
 
-    return listLastRunStartHeights(limit);
+    return listLastRunStartHeights(limit, options);
   },
-  listLastRunAsnOrganizations(limit) {
+  listLastRunAsnOrganizations(limit, options) {
     if (isDemoModeEnabled()) {
       return listDemoLastRunAsnOrganizations(limit);
     }
 
-    return listLastRunAsnOrganizations(limit);
+    return listLastRunAsnOrganizations(limit, options);
   },
-  listLastRunNodes(limit) {
+  listLastRunNodes(limit, pageToken) {
     if (isDemoModeEnabled()) {
-      return listDemoLastRunNodes(limit);
+      return listDemoLastRunNodes(limit, pageToken);
     }
 
-    return listLastRunNodes(limit);
+    return listLastRunNodes(limit, pageToken);
   },
   listNodeStatus() {
     if (isDemoModeEnabled()) {

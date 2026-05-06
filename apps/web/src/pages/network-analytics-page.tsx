@@ -25,6 +25,9 @@ import type {
 import { isDemoModeEnabled } from "@/lib/runtime-config";
 
 export type NetworkAnalyticsPanel = "overview" | "risk";
+export const NETWORK_ANALYTICS_LIVE_POLL_INTERVAL_MS = 15_000;
+
+const LATEST_RUN_PHASE_FILTER = { phase: "any" as const };
 
 type NetworkAnalyticsPageProps = {
   client: BtcAppClient;
@@ -49,6 +52,10 @@ export function NetworkAnalyticsPage({
   const [lastRunAsns, setLastRunAsns] = useState<LastRunAsnCountItem[]>([]);
   const [lastRunNetworkTypes, setLastRunNetworkTypes] = useState<LastRunNetworkTypeCountItem[]>([]);
   const [lastRunCountries, setLastRunCountries] = useState<LastRunCountryCountItem[]>([]);
+  const [latestRunAsns, setLatestRunAsns] = useState<LastRunAsnCountItem[]>([]);
+  const [latestRunNetworkTypes, setLatestRunNetworkTypes] = useState<LastRunNetworkTypeCountItem[]>([]);
+  const [latestRunCountries, setLatestRunCountries] = useState<LastRunCountryCountItem[]>([]);
+  const [latestRunStartHeights, setLatestRunStartHeights] = useState<LastRunStartHeightCountItem[]>([]);
   const [lastRunStartHeights, setLastRunStartHeights] = useState<LastRunStartHeightCountItem[]>([]);
   const [statusRows, setStatusRows] = useState<NodeStatusItem[]>([]);
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
@@ -60,8 +67,18 @@ export function NetworkAnalyticsPage({
   const activePanel = controlledActivePanel ?? internalActivePanel;
 
   useEffect(() => {
-    void refreshAnalytics();
-  }, []);
+    let cancelled = false;
+
+    void refreshAnalytics(() => cancelled);
+    const interval = window.setInterval(() => {
+      void refreshLatestRunSnapshot(() => cancelled);
+    }, NETWORK_ANALYTICS_LIVE_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [client]);
 
   function selectPanel(panel: NetworkAnalyticsPanel) {
     onPanelChange?.(panel);
@@ -70,48 +87,107 @@ export function NetworkAnalyticsPage({
     }
   }
 
-  async function refreshAnalytics() {
+  async function refreshAnalytics(isCancelled: () => boolean = () => false) {
     setIsLoading(true);
     setError(null);
 
     try {
       const [
-        runs,
+        latestRunSnapshot,
         nextLastRunAsns,
         nextLastRunNetworkTypes,
         nextLastRunCountries,
         nextLastRunStartHeights,
         nextStatusRows,
       ] = await Promise.all([
-        client.listCrawlRuns(10),
+        loadLatestRunSnapshot(),
         client.listLastRunAsns(10),
         client.listLastRunNetworkTypes(10),
         client.listLastRunCountries(10),
         client.listLastRunStartHeights(5),
         client.listNodeStatus().catch(() => []),
       ]);
-      const mostRecentRun = runs.find((run) => run.phase === "finished") ?? runs[0] ?? null;
-      const detail = mostRecentRun ? await client.getCrawlRun(mostRecentRun.runId) : null;
 
-      setLatestRun(mostRecentRun);
-      setLatestDetail(detail);
+      if (isCancelled()) {
+        return;
+      }
+
+      applyLatestRunSnapshot(latestRunSnapshot);
       setLastRunAsns(nextLastRunAsns);
       setLastRunNetworkTypes(nextLastRunNetworkTypes);
       setLastRunCountries(nextLastRunCountries);
       setLastRunStartHeights(nextLastRunStartHeights);
       setStatusRows(nextStatusRows);
     } catch (nextError) {
+      if (isCancelled()) {
+        return;
+      }
+
       setLatestRun(null);
       setLatestDetail(null);
       setLastRunAsns([]);
       setLastRunNetworkTypes([]);
       setLastRunCountries([]);
+      setLatestRunAsns([]);
+      setLatestRunNetworkTypes([]);
+      setLatestRunCountries([]);
+      setLatestRunStartHeights([]);
       setLastRunStartHeights([]);
       setStatusRows([]);
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
-      setIsLoading(false);
+      if (!isCancelled()) {
+        setIsLoading(false);
+      }
     }
+  }
+
+  async function refreshLatestRunSnapshot(isCancelled: () => boolean = () => false) {
+    try {
+      const latestRunSnapshot = await loadLatestRunSnapshot();
+
+      if (!isCancelled()) {
+        applyLatestRunSnapshot(latestRunSnapshot);
+      }
+    } catch {
+      // Keep last good snapshot during background polling failures.
+    }
+  }
+
+  async function loadLatestRunSnapshot() {
+    const [
+      runs,
+      nextLatestRunAsns,
+      nextLatestRunNetworkTypes,
+      nextLatestRunCountries,
+      nextLatestRunStartHeights,
+    ] = await Promise.all([
+      client.listCrawlRuns(1),
+      client.listLastRunAsns(10, LATEST_RUN_PHASE_FILTER),
+      client.listLastRunNetworkTypes(10, LATEST_RUN_PHASE_FILTER),
+      client.listLastRunCountries(32, LATEST_RUN_PHASE_FILTER),
+      client.listLastRunStartHeights(5, LATEST_RUN_PHASE_FILTER),
+    ]);
+    const mostRecentRun = runs[0] ?? null;
+    const detail = mostRecentRun ? await client.getCrawlRun(mostRecentRun.runId) : null;
+
+    return {
+      run: mostRecentRun,
+      detail,
+      asns: nextLatestRunAsns,
+      networkTypes: nextLatestRunNetworkTypes,
+      countries: nextLatestRunCountries,
+      startHeights: nextLatestRunStartHeights,
+    };
+  }
+
+  function applyLatestRunSnapshot(snapshot: Awaited<ReturnType<typeof loadLatestRunSnapshot>>) {
+    setLatestRun(snapshot.run);
+    setLatestDetail(snapshot.detail);
+    setLatestRunAsns(snapshot.asns);
+    setLatestRunNetworkTypes(snapshot.networkTypes);
+    setLatestRunCountries(snapshot.countries);
+    setLatestRunStartHeights(snapshot.startHeights);
   }
 
   const networkOutcomes = latestDetail?.networkOutcomes ?? [];
@@ -119,9 +195,18 @@ export function NetworkAnalyticsPage({
     lastRunAsns.length > 0 ||
     lastRunNetworkTypes.length > 0 ||
     lastRunCountries.length > 0 ||
+    latestRunAsns.length > 0 ||
+    latestRunNetworkTypes.length > 0 ||
+    latestRunCountries.length > 0 ||
+    latestRunStartHeights.length > 0 ||
     lastRunStartHeights.length > 0 ||
     networkOutcomes.length > 0 ||
     latestRun !== null;
+  const hasLatestRunDistributions =
+    latestRunAsns.length > 0 ||
+    latestRunNetworkTypes.length > 0 ||
+    latestRunCountries.length > 0 ||
+    latestRunStartHeights.length > 0;
   const leadAsn = lastRunAsns[0] ?? null;
   const dominantNetwork =
     [...lastRunNetworkTypes].sort((left, right) => right.nodeCount - left.nodeCount)[0] ?? null;
@@ -174,7 +259,7 @@ export function NetworkAnalyticsPage({
     activePanel === "overview"
       ? demoMode
         ? "Public home dashboard from the hosted demo snapshot."
-        : "Public home dashboard from the latest finished read-only crawler snapshot."
+        : "Public home dashboard with latest-run globe replay and latest finished-run analytics."
       : demoMode
         ? "Inspect the demo risk brief and derived resilience signals without changing the live snapshot surface."
         : "Inspect derived resilience signals and risk brief context from the latest finished crawl run.";
@@ -254,9 +339,9 @@ export function NetworkAnalyticsPage({
               <div className="space-y-4 sm:space-y-6">
                 <section className="grid gap-4 sm:gap-6 xl:grid-cols-[minmax(0,1.58fr)_minmax(16.5rem,0.52fr)] xl:items-stretch">
                   <div className="order-1 h-full xl:order-1">
-                    {lastRunCountries.length > 0 ? (
+                    {latestRunCountries.length > 0 ? (
                       <CountryGlobe
-                        countries={lastRunCountries}
+                        countries={latestRunCountries}
                         playback={playback}
                       />
                     ) : (
@@ -266,17 +351,19 @@ export function NetworkAnalyticsPage({
 
                   <div className="order-2 xl:order-2">
                     <LastRunSidebarCharts
-                      networkTypes={lastRunNetworkTypes}
-                      startHeights={lastRunStartHeights}
+                      networkTypes={latestRunNetworkTypes}
+                      startHeights={latestRunStartHeights}
                     />
                   </div>
                 </section>
 
-                <LastRunDashboard
-                  asns={lastRunAsns}
-                  countries={lastRunCountries}
-                  runId={latestRun?.runId ?? null}
-                />
+                {hasLatestRunDistributions ? (
+                  <LastRunDashboard
+                    asns={latestRunAsns}
+                    countries={latestRunCountries}
+                    runId={latestRun?.runId ?? null}
+                  />
+                ) : null}
 
                 <section className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1.14fr)_minmax(15rem,0.86fr)]">
                   <div className="rounded-[14px] border border-border/80 bg-background/72 p-3 sm:p-4">
@@ -593,7 +680,7 @@ function MiniStatusStat({ label, value }: { label: string; value: number }) {
       <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 font-serif text-2xl text-foreground">{value}</p>
+      <p className="mt-1 font-serif text-2xl text-foreground">{value.toLocaleString()}</p>
     </div>
   );
 }

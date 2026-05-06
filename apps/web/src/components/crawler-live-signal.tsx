@@ -1,10 +1,16 @@
 import type { ReactNode } from "react";
 import { Activity, Eye } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { CountryGlobe } from "@/components/analytics/country-globe";
-import type { CrawlRunCheckpointItem, CrawlRunDetail, CrawlRunListItem } from "@/lib/api/types";
+import type {
+  CrawlRunCheckpointItem,
+  CrawlRunDetail,
+  CrawlRunListItem,
+  LastRunCountryCountItem,
+} from "@/lib/api/types";
 import {
+  getCountryGeoAnchor,
   getCountryVisualAnchor,
   projectCountryNode,
   worldMap,
@@ -30,41 +36,6 @@ type WorldNodeSeed = {
   asnLabel: string;
   nodeCount: number;
 };
-
-const GLOBE_NODE_SEEDS: readonly WorldNodeSeed[] = [
-  { lat: 56, lon: -122, city: "Seattle", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit", nodeCount: 420 },
-  { lat: 48, lon: -78, city: "Toronto", countryCode: "CA", countryName: "Canada", asnLabel: "Northern Relay", nodeCount: 280 },
-  { lat: 42, lon: -12, city: "Lisbon", countryCode: "PT", countryName: "Portugal", asnLabel: "Atlantic Fiber", nodeCount: 170 },
-  { lat: 34, lon: 18, city: "Tunis", countryCode: "TN", countryName: "Tunisia", asnLabel: "Mediterranean Core", nodeCount: 120 },
-  { lat: 28, lon: 77, city: "Delhi", countryCode: "IN", countryName: "India", asnLabel: "Monsoon Carrier", nodeCount: 480 },
-  { lat: 21, lon: 114, city: "Hong Kong", countryCode: "HK", countryName: "Hong Kong", asnLabel: "Harbour Exchange", nodeCount: 320 },
-  { lat: 12, lon: 103, city: "Bangkok", countryCode: "TH", countryName: "Thailand", asnLabel: "Mekong Transit", nodeCount: 190 },
-  { lat: 5, lon: -74, city: "Bogota", countryCode: "CO", countryName: "Colombia", asnLabel: "Andean Link", nodeCount: 150 },
-  { lat: -7, lon: -53, city: "Brasilia", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit", nodeCount: 220 },
-  { lat: -16, lon: 28, city: "Lusaka", countryCode: "ZM", countryName: "Zambia", asnLabel: "Copper Route", nodeCount: 90 },
-  { lat: -22, lon: 133, city: "Adelaide", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange", nodeCount: 140 },
-  { lat: -33, lon: 18, city: "Cape Town", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone", nodeCount: 180 },
-  { lat: -35, lon: -58, city: "Buenos Aires", countryCode: "AR", countryName: "Argentina", asnLabel: "SouthMesh Transit", nodeCount: 160 },
-  { lat: 61, lon: 37, city: "Moscow", countryCode: "RU", countryName: "Russia", asnLabel: "Volga Networks", nodeCount: 260 },
-  { lat: 52, lon: 14, city: "Berlin", countryCode: "DE", countryName: "Germany", asnLabel: "Atlas Backbone", nodeCount: 340 },
-  { lat: 40, lon: 139, city: "Tokyo", countryCode: "JP", countryName: "Japan", asnLabel: "Kanto Transit", nodeCount: 520 },
-  { lat: 31, lon: -97, city: "Dallas", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit", nodeCount: 380 },
-  { lat: 19, lon: -99, city: "Mexico City", countryCode: "MX", countryName: "Mexico", asnLabel: "Aztec Route", nodeCount: 230 },
-  { lat: 14, lon: 121, city: "Manila", countryCode: "PH", countryName: "Philippines", asnLabel: "Pacific Relay", nodeCount: 140 },
-  { lat: 2, lon: 32, city: "Kampala", countryCode: "UG", countryName: "Uganda", asnLabel: "Equator Net", nodeCount: 80 },
-  { lat: -1, lon: 36, city: "Nairobi", countryCode: "KE", countryName: "Kenya", asnLabel: "Rift Fiber", nodeCount: 110 },
-  { lat: -12, lon: -77, city: "Lima", countryCode: "PE", countryName: "Peru", asnLabel: "Pacific Andes", nodeCount: 130 },
-  { lat: -23, lon: -46, city: "Sao Paulo", countryCode: "BR", countryName: "Brazil", asnLabel: "SouthMesh Transit", nodeCount: 280 },
-  { lat: 64, lon: -19, city: "Reykjavik", countryCode: "IS", countryName: "Iceland", asnLabel: "North Atlantic", nodeCount: 70 },
-  { lat: 59, lon: 18, city: "Stockholm", countryCode: "SE", countryName: "Sweden", asnLabel: "Atlas Backbone", nodeCount: 160 },
-  { lat: 50, lon: -1, city: "London", countryCode: "GB", countryName: "United Kingdom", asnLabel: "Atlas Backbone", nodeCount: 260 },
-  { lat: 37, lon: -122, city: "San Francisco", countryCode: "US", countryName: "United States", asnLabel: "NorthGrid Transit", nodeCount: 300 },
-  { lat: 35, lon: 51, city: "Tehran", countryCode: "IR", countryName: "Iran", asnLabel: "Silk Route", nodeCount: 210 },
-  { lat: 25, lon: 55, city: "Dubai", countryCode: "AE", countryName: "United Arab Emirates", asnLabel: "Gulf Exchange", nodeCount: 240 },
-  { lat: -34, lon: 151, city: "Sydney", countryCode: "AU", countryName: "Australia", asnLabel: "Southern Cross Exchange", nodeCount: 110 },
-  { lat: -26, lon: 28, city: "Johannesburg", countryCode: "ZA", countryName: "South Africa", asnLabel: "Cape Backbone", nodeCount: 140 },
-  { lat: 1, lon: 104, city: "Singapore", countryCode: "SG", countryName: "Singapore", asnLabel: "Southern Cross Exchange", nodeCount: 210 },
-] as const;
 
 type VisibleMapNode = ReturnType<typeof projectCountryNode> & {
   key: string;
@@ -417,12 +388,14 @@ export function useCrawlerSignalPlayback(detail: CrawlRunDetail | null): Crawler
 export function CrawlerLiveSignal({
   detail,
   playback,
+  countries = [],
   variant = "default",
   hideHeroHeader = false,
   heroFooter,
 }: {
   detail: CrawlRunDetail;
   playback?: CrawlerSignalPlayback | null;
+  countries?: LastRunCountryCountItem[];
   variant?: "default" | "hero";
   hideHeroHeader?: boolean;
   heroFooter?: ReactNode;
@@ -433,31 +406,38 @@ export function CrawlerLiveSignal({
   const [pinnedLocationKey, setPinnedLocationKey] = useState<string | null>(null);
   const playbackSnapshot = signalPlayback?.playbackSnapshot ?? null;
   const finalSnapshot = signalPlayback?.finalSnapshot ?? null;
+  const replayNodeSeeds = useMemo(() => buildReplayNodeSeeds(countries), [countries]);
   const loopRatio = signalPlayback?.loopRatio ?? 0;
   const visualLoopRatio = signalPlayback?.visualLoopRatio ?? 0;
   const discoveredNodeCount =
-    playbackSnapshot && finalSnapshot
-      ? clampCount(
-          Math.round(
-            progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * GLOBE_NODE_SEEDS.length,
+    playbackSnapshot && finalSnapshot && replayNodeSeeds.length > 0
+      ? Math.max(
+          1,
+          Math.min(
+            replayNodeSeeds.length,
+            Math.round(progressRatio(playbackSnapshot.uniqueNodes, finalSnapshot.uniqueNodes) * replayNodeSeeds.length),
           ),
         )
       : 0;
   const verifiedNodeCount =
-    playbackSnapshot && finalSnapshot
+    playbackSnapshot && finalSnapshot && replayNodeSeeds.length > 0
       ? Math.min(
           discoveredNodeCount,
-          clampCount(
-            Math.round(
-              progressRatio(playbackSnapshot.successfulHandshakes, finalSnapshot.successfulHandshakes) *
-                GLOBE_NODE_SEEDS.length,
+          Math.max(
+            1,
+            Math.min(
+              replayNodeSeeds.length,
+              Math.round(
+                progressRatio(playbackSnapshot.successfulHandshakes, finalSnapshot.successfulHandshakes) *
+                  replayNodeSeeds.length,
+              ),
             ),
           ),
         )
       : 0;
   const scanX = 26 + visualLoopRatio * 332;
   const visibleNodes: VisibleMapNode[] = playbackSnapshot
-    ? GLOBE_NODE_SEEDS.map((seed, index) => {
+    ? replayNodeSeeds.map((seed, index) => {
         if (index >= discoveredNodeCount) {
           return null;
         }
@@ -1234,10 +1214,6 @@ function progressRatio(current: number, total: number): number {
   return Math.max(0, Math.min(1, current / total));
 }
 
-function clampCount(value: number): number {
-  return Math.max(1, Math.min(GLOBE_NODE_SEEDS.length, value));
-}
-
 function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
   locations: LocationInsight[];
   asns: AsnInsight[];
@@ -1353,6 +1329,30 @@ function summarizeVisibleNodes(visibleNodes: VisibleMapNode[]): {
     );
 
   return { locations, asns };
+}
+
+function buildReplayNodeSeeds(countries: LastRunCountryCountItem[]): WorldNodeSeed[] {
+  return countries
+    .map((country) => {
+      const countryCode = country.country.trim().toUpperCase();
+      const anchor = getCountryGeoAnchor(countryCode);
+
+      if (!anchor || country.nodeCount <= 0) {
+        return null;
+      }
+
+      return {
+        lat: anchor.lat,
+        lon: anchor.lon,
+        city: countryCode,
+        countryCode,
+        countryName: countryCode,
+        asnLabel: "Observed peers",
+        nodeCount: country.nodeCount,
+      };
+    })
+    .filter((seed) => seed !== null)
+    .sort((left, right) => right.nodeCount - left.nodeCount || left.countryCode.localeCompare(right.countryCode));
 }
 
 function buildFlowArcPath(fromX: number, fromY: number, toX: number, toY: number): string {

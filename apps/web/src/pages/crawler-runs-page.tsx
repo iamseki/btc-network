@@ -69,7 +69,6 @@ export function CrawlerRunsPage({
       setSelectedRunId(nextSelectedRunId);
       setSelectedDetail(null);
       setDetailError(null);
-      selectPanel("overview");
 
       if (nextSelectedRunId) {
         await loadRunDetail(nextSelectedRunId);
@@ -88,7 +87,6 @@ export function CrawlerRunsPage({
     setIsLoadingDetail(true);
     setDetailError(null);
     setSelectedRunId(runId);
-    selectPanel("overview");
 
     try {
       const detail = await client.getCrawlRun(runId);

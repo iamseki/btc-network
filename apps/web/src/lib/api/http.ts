@@ -13,7 +13,7 @@ function resolveApiBaseUrl(): string {
 }
 
 export async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${resolveApiBaseUrl()}${path}`, {
+  const response = await fetch(resolveApiRequestUrl(path), {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -44,4 +44,8 @@ export async function fetchJson<T>(path: string): Promise<T> {
 
 export function apiBaseUrl(): string {
   return resolveApiBaseUrl();
+}
+
+function resolveApiRequestUrl(pathOrUrl: string): string {
+  return new URL(pathOrUrl, `${resolveApiBaseUrl()}/`).toString();
 }

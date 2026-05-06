@@ -9,9 +9,9 @@ use std::{env, fs};
 
 use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
-    CrawlRunMetrics, Crawler, CrawlerAnalyticsReader, CrawlerConfig, CrawlerRepository,
-    IpEnrichment, IpEnrichmentProvider, PersistedNodeObservation, RawNodeObservation,
-    UnreachableNodeUpdate, UnreachableNodeUpdateKind,
+    CrawlRunMetrics, CrawlRunPhaseFilter, Crawler, CrawlerAnalyticsReader, CrawlerConfig,
+    CrawlerRepository, IpEnrichment, IpEnrichmentProvider, PersistedNodeObservation,
+    RawNodeObservation, UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };
 use btc_network::status::{NodeStatus, NodeStatusRecord, NodeStatusTarget};
 use btc_network::wire::{self, Command};
@@ -255,6 +255,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
             "20260404000200",
             "20260426000100",
             "20260502000100",
+            "20260505000100",
         ]
     );
     assert!(first_report.skipped_versions.is_empty());
@@ -266,6 +267,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
             "20260404000200",
             "20260426000100",
             "20260502000100",
+            "20260505000100",
         ]
     );
     assert_eq!(
@@ -278,6 +280,7 @@ async fn migrations_apply_idempotently_and_create_expected_tables() -> TestResul
             "20260404000200",
             "20260426000100",
             "20260502000100",
+            "20260505000100",
         ]
     );
 
@@ -1198,7 +1201,13 @@ async fn analytics_reader_limits_asn_counts() -> TestResult {
         ])
         .await?;
 
-    let counts = CrawlerAnalyticsReader::count_nodes_by_asn(&repository, 1).await?;
+    let counts = CrawlerAnalyticsReader::count_nodes_by_asn(
+        &repository,
+        base_time - Duration::seconds(1),
+        base_time + Duration::seconds(2),
+        1,
+    )
+    .await?;
 
     assert_eq!(counts.len(), 1);
     assert_eq!(counts[0].verified_nodes, 1);
@@ -1263,8 +1272,30 @@ async fn analytics_reader_last_run_aggregations_use_latest_finished_run() -> Tes
         ))
         .await?;
 
-    let asn_rows = CrawlerAnalyticsReader::list_last_run_asns(&repository, 10).await?;
-    let network_rows = CrawlerAnalyticsReader::list_last_run_network_types(&repository, 10).await?;
+    let asn_rows =
+        CrawlerAnalyticsReader::list_last_run_asns(&repository, 10, CrawlRunPhaseFilter::Finished)
+            .await?;
+    let network_rows = CrawlerAnalyticsReader::list_last_run_network_types(
+        &repository,
+        10,
+        CrawlRunPhaseFilter::Finished,
+    )
+    .await?;
+    let any_asn_rows =
+        CrawlerAnalyticsReader::list_last_run_asns(&repository, 10, CrawlRunPhaseFilter::Any)
+            .await?;
+    let any_protocol_rows = CrawlerAnalyticsReader::list_last_run_protocol_versions(
+        &repository,
+        10,
+        CrawlRunPhaseFilter::Any,
+    )
+    .await?;
+    let one_of_asn_rows = CrawlerAnalyticsReader::list_last_run_asns(
+        &repository,
+        10,
+        CrawlRunPhaseFilter::OneOf(vec![CrawlPhase::Finished, CrawlPhase::Crawling]),
+    )
+    .await?;
 
     assert_eq!(asn_rows.len(), 1);
     assert_eq!(asn_rows[0].asn, 64512);
@@ -1273,6 +1304,17 @@ async fn analytics_reader_last_run_aggregations_use_latest_finished_run() -> Tes
     assert_eq!(network_rows.len(), 1);
     assert_eq!(network_rows[0].network_type, "ipv4");
     assert_eq!(network_rows[0].node_count, 2);
+    assert_eq!(any_asn_rows.len(), 1);
+    assert_eq!(any_asn_rows[0].asn, 15169);
+    assert_eq!(
+        any_asn_rows[0].asn_organization.as_deref(),
+        Some("Google LLC")
+    );
+    assert_eq!(any_asn_rows[0].node_count, 1);
+    assert_eq!(any_protocol_rows.len(), 1);
+    assert_eq!(any_protocol_rows[0].protocol_version, 70016);
+    assert_eq!(any_protocol_rows[0].node_count, 1);
+    assert_eq!(one_of_asn_rows, any_asn_rows);
 
     Ok(())
 }
@@ -1305,9 +1347,11 @@ async fn analytics_reader_lists_last_run_node_rows_for_dashboard_table() -> Test
         ))
         .await?;
 
-    let rows = CrawlerAnalyticsReader::list_last_run_nodes(&repository, 10).await?;
+    let page = CrawlerAnalyticsReader::list_last_run_nodes(&repository, 10, None).await?;
+    let rows = page.items;
 
     assert_eq!(rows.len(), 1);
+    assert!(page.next_cursor.is_none());
     assert_eq!(rows[0].endpoint, "1.1.1.7:8333");
     assert_eq!(rows[0].network_type, "ipv4");
     assert_eq!(rows[0].protocol_version, 70016);

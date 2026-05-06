@@ -15,7 +15,7 @@ use utoipa::openapi::OpenApi as OpenApiDocument;
 use utoipa::{Modify, OpenApi};
 use utoipa_scalar::{Scalar, Servable};
 
-use crate::handlers::{CrawlRunsResponse, ErrorResponse, RowsResponse};
+use crate::handlers::{CrawlRunsResponse, ErrorResponse, PageResponse, RowsResponse};
 use crate::routes::AppState;
 
 pub use config::DocsConfig;
@@ -85,7 +85,7 @@ pub fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
             RowsResponse<LastRunAsnCountItem>,
             RowsResponse<LastRunStartHeightCountItem>,
             RowsResponse<LastRunAsnOrganizationCountItem>,
-            RowsResponse<LastRunNodeSummaryItem>,
+            PageResponse<LastRunNodeSummaryItem>,
             NodeStatusItem,
             NodeStatusHistoryItem,
             ErrorResponse

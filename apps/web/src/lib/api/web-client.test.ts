@@ -59,8 +59,9 @@ describe("webClient", () => {
     expect(detail.networkOutcomes.length).toBeGreaterThan(0);
     expect(asnRows).toHaveLength(3);
     expect(networkTypes[0]?.networkType).toBe("ipv4");
-    expect(lastRunNodes).toHaveLength(2);
-    expect(lastRunNodes[0]?.protocolVersion).toBeGreaterThan(0);
+    expect(lastRunNodes.items).toHaveLength(2);
+    expect(lastRunNodes.items[0]?.protocolVersion).toBeGreaterThan(0);
+    expect(lastRunNodes.nextPageToken).not.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

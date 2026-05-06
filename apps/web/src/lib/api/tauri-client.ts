@@ -1,4 +1,4 @@
-import type { BtcAppClient } from "./client";
+import type { BtcAppClient, CrawlRunPhaseFilterOptions } from "./client";
 import {
   countNodesByAsn as countNodesByAsnHttp,
   getCrawlRun as getCrawlRunHttp,
@@ -33,6 +33,7 @@ import type {
   LastRunStartHeightCountItem,
   LastRunUserAgentCountItem,
   NodeStatusItem,
+  PageResponse,
   PingResult,
   UiLogEvent,
 } from "./types";
@@ -62,35 +63,59 @@ export const tauriClient: BtcAppClient = {
   getCrawlRun(runId) {
     return getCrawlRunHttp(runId);
   },
-  countNodesByAsn(limit) {
-    return countNodesByAsnHttp(limit);
+  countNodesByAsn(limit, window) {
+    return countNodesByAsnHttp(limit, window);
   },
-  listLastRunServices(limit): Promise<LastRunServicesCountItem[]> {
-    return listLastRunServicesHttp(limit);
+  listLastRunServices(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunServicesCountItem[]> {
+    return listLastRunServicesHttp(limit, options);
   },
-  listLastRunProtocolVersions(limit): Promise<LastRunProtocolVersionCountItem[]> {
-    return listLastRunProtocolVersionsHttp(limit);
+  listLastRunProtocolVersions(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunProtocolVersionCountItem[]> {
+    return listLastRunProtocolVersionsHttp(limit, options);
   },
-  listLastRunUserAgents(limit): Promise<LastRunUserAgentCountItem[]> {
-    return listLastRunUserAgentsHttp(limit);
+  listLastRunUserAgents(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunUserAgentCountItem[]> {
+    return listLastRunUserAgentsHttp(limit, options);
   },
-  listLastRunNetworkTypes(limit): Promise<LastRunNetworkTypeCountItem[]> {
-    return listLastRunNetworkTypesHttp(limit);
+  listLastRunNetworkTypes(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunNetworkTypeCountItem[]> {
+    return listLastRunNetworkTypesHttp(limit, options);
   },
-  listLastRunCountries(limit): Promise<LastRunCountryCountItem[]> {
-    return listLastRunCountriesHttp(limit);
+  listLastRunCountries(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunCountryCountItem[]> {
+    return listLastRunCountriesHttp(limit, options);
   },
-  listLastRunAsns(limit): Promise<LastRunAsnCountItem[]> {
-    return listLastRunAsnsHttp(limit);
+  listLastRunAsns(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunAsnCountItem[]> {
+    return listLastRunAsnsHttp(limit, options);
   },
-  listLastRunStartHeights(limit): Promise<LastRunStartHeightCountItem[]> {
-    return listLastRunStartHeightsHttp(limit);
+  listLastRunStartHeights(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunStartHeightCountItem[]> {
+    return listLastRunStartHeightsHttp(limit, options);
   },
-  listLastRunAsnOrganizations(limit): Promise<LastRunAsnOrganizationCountItem[]> {
-    return listLastRunAsnOrganizationsHttp(limit);
+  listLastRunAsnOrganizations(
+    limit: number | undefined,
+    options: CrawlRunPhaseFilterOptions | undefined,
+  ): Promise<LastRunAsnOrganizationCountItem[]> {
+    return listLastRunAsnOrganizationsHttp(limit, options);
   },
-  listLastRunNodes(limit): Promise<LastRunNodeSummaryItem[]> {
-    return listLastRunNodesHttp(limit);
+  listLastRunNodes(limit, pageToken): Promise<PageResponse<LastRunNodeSummaryItem>> {
+    return listLastRunNodesHttp(limit, pageToken);
   },
   listNodeStatus(): Promise<NodeStatusItem[]> {
     return listNodeStatusHttp();

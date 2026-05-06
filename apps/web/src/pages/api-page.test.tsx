@@ -14,14 +14,15 @@ vi.mock("@/lib/api/docs-http", () => ({
     version: "0.1.0",
     description: "Generated docs",
     introduction: "Start with runs.",
-    openapiUrl: "/api/openapi.json",
+    openapiUrl: "http://127.0.0.1:8080/api/openapi.json",
     openapiPath: "/api/openapi.json",
-    scalarPath: "/docs",
-    baseServerUrl: null,
+    scalarPath: "http://127.0.0.1:8080/docs",
+    baseServerUrl: "http://127.0.0.1:8080",
   }),
   getOpenApiDocument: vi.fn().mockResolvedValue({
     openapi: "3.1.0",
     info: { title: "btc-network API", version: "0.1.0" },
+    servers: [{ url: "http://127.0.0.1:8080" }],
     paths: {},
   }),
   getAgentsGuideMarkdown: vi.fn().mockResolvedValue("# btc-network Agent Guide\n\nUse OpenAPI."),
@@ -29,8 +30,14 @@ vi.mock("@/lib/api/docs-http", () => ({
 }));
 
 vi.mock("@scalar/api-reference-react", () => ({
-  ApiReferenceReact: ({ configuration }: { configuration: { content?: { openapi?: string } } }) => (
-    <div data-testid="scalar-api-reference">{configuration.content?.openapi}</div>
+  ApiReferenceReact: ({
+    configuration,
+  }: {
+    configuration: { content?: { openapi?: string; servers?: Array<{ url: string }> } };
+  }) => (
+    <div data-testid="scalar-api-reference">
+      {configuration.content?.openapi} {configuration.content?.servers?.[0]?.url}
+    </div>
   ),
 }));
 
@@ -114,7 +121,7 @@ function makeClient(overrides: Partial<BtcAppClient> = {}): BtcAppClient {
     listLastRunAsns: vi.fn().mockResolvedValue([]),
     listLastRunStartHeights: vi.fn().mockResolvedValue([]),
     listLastRunAsnOrganizations: vi.fn().mockResolvedValue([]),
-    listLastRunNodes: vi.fn().mockResolvedValue([]),
+    listLastRunNodes: vi.fn().mockResolvedValue({ items: [], nextPageToken: null }),
     listNodeStatus: vi.fn().mockResolvedValue([]),
     handshake: vi.fn(),
     ping: vi.fn(),
@@ -140,9 +147,12 @@ describe("ApiPage", () => {
 
     await waitFor(() => {
       expect(getDocsUiConfig).toHaveBeenCalledTimes(1);
-      expect(getOpenApiDocument).toHaveBeenCalledWith("/api/openapi.json");
+      expect(getOpenApiDocument).toHaveBeenCalledWith("http://127.0.0.1:8080/api/openapi.json", {
+        baseServerUrl: "http://127.0.0.1:8080",
+      });
     });
     expect((await screen.findByTestId("scalar-api-reference")).textContent).toContain("3.1.0");
+    expect((await screen.findByTestId("scalar-api-reference")).textContent).toContain("http://127.0.0.1:8080");
     expect(screen.queryByText("Loading generated API reference.")).toBeNull();
   });
 

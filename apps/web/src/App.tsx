@@ -47,6 +47,7 @@ import type {
   HandshakeResult,
   LastBlockHeightProgress,
   LastBlockHeightResult,
+  LastRunCountryCountItem,
   PingResult,
   UiLogEvent,
 } from "./lib/api/types";
@@ -58,6 +59,15 @@ const sampleBlockHash =
 const DEFAULT_SUPPORT_URL = "https://buymeacoffee.com/chseki";
 const supportUrl = import.meta.env.VITE_SUPPORT_URL?.trim() || DEFAULT_SUPPORT_URL;
 const analyticsLabel = analyticsModeLabel();
+const LATEST_RUN_PHASE_FILTER = { phase: "any" as const };
+const NAV_STORAGE_KEY = "btc-network:app-nav:v1";
+
+type StoredNavigationState = {
+  selectedPage?: AppPageId;
+  crawlerRunsPanel?: CrawlerRunsPanel;
+  networkAnalyticsPanel?: NetworkAnalyticsPanel;
+  apiPanel?: ApiPanel;
+};
 
 function pageFromBrowserPath(pathname: string): AppPageId {
   if (pathname === "/status") {
@@ -75,15 +85,72 @@ function browserPathForPage(page: AppPageId): string {
   return "/";
 }
 
-export function App() {
-  const [selectedPage, setSelectedPage] = useState<AppPageId>(() =>
-    pageFromBrowserPath(window.location.pathname),
+function initialNavigationState(): Required<StoredNavigationState> {
+  const fallback = {
+    selectedPage: pageFromBrowserPath(window.location.pathname),
+    crawlerRunsPanel: "overview" as CrawlerRunsPanel,
+    networkAnalyticsPanel: "overview" as NetworkAnalyticsPanel,
+    apiPanel: "docs" as ApiPanel,
+  };
+
+  if (window.location.pathname === "/status") {
+    return fallback;
+  }
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(NAV_STORAGE_KEY) ?? "{}") as StoredNavigationState;
+    return {
+      selectedPage: isAppPageId(stored.selectedPage) ? stored.selectedPage : fallback.selectedPage,
+      crawlerRunsPanel: isCrawlerRunsPanel(stored.crawlerRunsPanel)
+        ? stored.crawlerRunsPanel
+        : fallback.crawlerRunsPanel,
+      networkAnalyticsPanel: isNetworkAnalyticsPanel(stored.networkAnalyticsPanel)
+        ? stored.networkAnalyticsPanel
+        : fallback.networkAnalyticsPanel,
+      apiPanel: isApiPanel(stored.apiPanel) ? stored.apiPanel : fallback.apiPanel,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function persistNavigationState(state: Required<StoredNavigationState>) {
+  try {
+    window.localStorage.setItem(NAV_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage failures; navigation still works for the active session.
+  }
+}
+
+function isAppPageId(value: unknown): value is AppPageId {
+  return typeof value === "string" && appPages.some((page) => page.id === value);
+}
+
+function isCrawlerRunsPanel(value: unknown): value is CrawlerRunsPanel {
+  return (
+    value === "overview" ||
+    value === "checkpoints" ||
+    value === "failures" ||
+    value === "network"
   );
+}
+
+function isNetworkAnalyticsPanel(value: unknown): value is NetworkAnalyticsPanel {
+  return value === "overview" || value === "risk";
+}
+
+function isApiPanel(value: unknown): value is ApiPanel {
+  return value === "docs" || value === "agent-guide" || value === "overview" || value === "access";
+}
+
+export function App() {
+  const [initialNav] = useState(initialNavigationState);
+  const [selectedPage, setSelectedPage] = useState<AppPageId>(initialNav.selectedPage);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>("overview");
+  const [crawlerRunsPanel, setCrawlerRunsPanel] = useState<CrawlerRunsPanel>(initialNav.crawlerRunsPanel);
   const [networkAnalyticsPanel, setNetworkAnalyticsPanel] =
-    useState<NetworkAnalyticsPanel>("overview");
-  const [apiPanel, setApiPanel] = useState<ApiPanel>("docs");
+    useState<NetworkAnalyticsPanel>(initialNav.networkAnalyticsPanel);
+  const [apiPanel, setApiPanel] = useState<ApiPanel>(initialNav.apiPanel);
   const [client] = useState(() => getAppClient());
   const [node, setNode] = useState(defaultNode);
   const pageIcons = {
@@ -126,6 +193,7 @@ export function App() {
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [isDownloadingBlock, setIsDownloadingBlock] = useState(false);
   const [latestCrawlerPreview, setLatestCrawlerPreview] = useState<CrawlRunDetail | null>(null);
+  const [latestCrawlerPreviewCountries, setLatestCrawlerPreviewCountries] = useState<LastRunCountryCountItem[]>([]);
   const [isLoadingCrawlerPreview, setIsLoadingCrawlerPreview] = useState(false);
   const [isCrawlerPreviewOpen, setIsCrawlerPreviewOpen] = useState(false);
   const [isCrawlerPreviewRendered, setIsCrawlerPreviewRendered] = useState(false);
@@ -235,6 +303,15 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    persistNavigationState({
+      selectedPage,
+      crawlerRunsPanel,
+      networkAnalyticsPanel,
+      apiPanel,
+    });
+  }, [apiPanel, crawlerRunsPanel, networkAnalyticsPanel, selectedPage]);
+
+  useEffect(() => {
     let cancelled = false;
 
     void client.getSuggestedBlockDownloadPath(blockHash).then((nextPath) => {
@@ -251,6 +328,7 @@ export function App() {
   useEffect(() => {
     if (showsNodeContext) {
       setIsCrawlerPreviewOpen(false);
+      setLatestCrawlerPreviewCountries([]);
       return;
     }
 
@@ -259,16 +337,21 @@ export function App() {
 
     void (async () => {
       try {
-        const runs = await client.listCrawlRuns(1);
+        const [runs, nextCountries] = await Promise.all([
+          client.listCrawlRuns(1),
+          client.listLastRunCountries(32, LATEST_RUN_PHASE_FILTER),
+        ]);
         const latestRun = runs[0] ?? null;
         const nextDetail = latestRun ? await client.getCrawlRun(latestRun.runId) : null;
 
         if (!cancelled) {
           setLatestCrawlerPreview(nextDetail);
+          setLatestCrawlerPreviewCountries(nextCountries);
         }
       } catch {
         if (!cancelled) {
           setLatestCrawlerPreview(null);
+          setLatestCrawlerPreviewCountries([]);
         }
       } finally {
         if (!cancelled) {
@@ -465,7 +548,11 @@ export function App() {
                   Back
                 </button>
               </div>
-              <CrawlerLiveSignal detail={latestCrawlerPreview} playback={crawlerPreviewPlayback} />
+              <CrawlerLiveSignal
+                detail={latestCrawlerPreview}
+                playback={crawlerPreviewPlayback}
+                countries={latestCrawlerPreviewCountries}
+              />
               <div className="flex justify-end px-2 pb-2">
                 <button
                   type="button"

@@ -129,6 +129,12 @@ const PLAYBACK = {
   completedAt: "2026-04-01T12:05:00Z",
 } satisfies CrawlerSignalPlayback;
 
+const COUNTRIES = [
+  { country: "BR", nodeCount: 500 },
+  { country: "US", nodeCount: 320 },
+  { country: "DE", nodeCount: 180 },
+];
+
 describe("useCrawlerSignalPlayback", () => {
   afterEach(() => {
     cleanup();
@@ -246,28 +252,28 @@ describe("useCrawlerSignalPlayback", () => {
   });
 
   it("shows location and ASN rankings that respond to map hover", () => {
-    render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} variant="hero" />);
+    render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} countries={COUNTRIES} variant="hero" />);
 
     expect(screen.queryByText("Map Focus")).toBeNull();
-    expect(screen.queryByText("Brazil")).toBeNull();
+    expect(screen.queryByText("500 nodes")).toBeNull();
 
-    const hotspot = screen.getByLabelText("Show node count for Brazil");
+    const hotspot = screen.getByLabelText("Show node count for BR");
 
     fireEvent.mouseEnter(hotspot);
 
-    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("BR").length).toBeGreaterThan(0);
     expect(screen.getAllByText("500 nodes").length).toBeGreaterThan(0);
 
     fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
 
-    expect(screen.queryByText("Brazil")).toBeNull();
+    expect(screen.queryByText("500 nodes")).toBeNull();
 
     fireEvent.click(hotspot);
     fireEvent.mouseLeave(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
-    expect(screen.getAllByText("Brazil").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("BR").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("img", { name: "Crawler execution playback across a world route map" }));
-    expect(screen.queryByText("Brazil")).toBeNull();
+    expect(screen.queryByText("500 nodes")).toBeNull();
   });
 
   it("renders after playback becomes available on the normal async mount path", async () => {
@@ -278,11 +284,12 @@ describe("useCrawlerSignalPlayback", () => {
   });
 
   it("renders a compact country-globe preview in the default variant", () => {
-    render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} />);
+    render(<CrawlerLiveSignal detail={DETAIL} playback={PLAYBACK} countries={COUNTRIES} />);
 
     expect(screen.getByText("Crawler Snapshot")).toBeTruthy();
     expect(screen.getByRole("img", { name: "Interactive 3D globe of verified Bitcoin nodes aggregated by country" })).toBeTruthy();
     expect(screen.getByText(/crawled ·/i)).toBeTruthy();
+    expect(screen.getByText(/country buckets/i)).toBeTruthy();
     expect(screen.queryByText("Tracked")).toBeNull();
     expect(screen.queryByText("Yield")).toBeNull();
     expect(screen.queryByText("Map Focus")).toBeNull();

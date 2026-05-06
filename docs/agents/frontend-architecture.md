@@ -43,6 +43,8 @@ Web-first frontend, thin Tauri desktop adapter.
 - Keep `Risk Drivers` product-facing and evidence-oriented; do not reuse crawler-internal checkpoint rails on the public home
 - Prefer derived signals computed from current API over decorative KPI filler
 - Prefer lightweight custom charts over dependencies for simple comparative views
+- Do not auto-scan all `last-run/nodes` pages from dashboards; request a modest first page only when node inventory is visible
+- Historical aggregate calls must include explicit `start` and `end` bounds instead of relying on all-history reads
 
 ## High-Level Shape
 
