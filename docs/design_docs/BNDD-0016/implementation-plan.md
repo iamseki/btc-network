@@ -4,7 +4,7 @@ Execution plan for [BNDD-0016](./BNDD-0016.md).
 
 ## Summary
 
-Add one conservative, read-only Sybil-oriented metrics report for latest-run crawler analytics. The report exposes typed heuristic review signals derived from raw concentration metrics, while explicitly avoiding confirmed attack claims.
+Start with a mocked web evidence surface for Sybil-oriented risk topics. Backend, storage, and public API work must wait for explicit human review and approval after the mocked UI proves the product shape.
 
 ## Progress Tracker
 
@@ -19,10 +19,11 @@ Status values:
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
 | Phase 1: BNDD and boundaries | `reviewing` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Defines metric scope, non-detection boundary, and rollout plan.` |
-| Phase 2: Shared read contract | `pending` | `2026-05-23` | `docs/BNDD-0016-sybil-metrics` | `Add report and typed signal models; keep interpretation and limitation prose out of response models.` |
-| Phase 3: PostgreSQL aggregations | `pending` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Run-scoped aggregate queries for concentration and uniformity.` |
-| Phase 4: API and OpenAPI | `pending` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Add last-run sybil metrics endpoint and docs guardrails.` |
-| Phase 5: Web evidence surface | `reviewing` | `2026-05-23` | `feat/BNDD-0016-risk-library` | `Render review signals as Risk library topic cards without attack language.` |
+| Phase 2: Mocked web evidence surface | `reviewing` | `2026-05-23` | `feat/BNDD-0016-risk-library` | `Render mocked review signals as Risk library topic cards without attack language.` |
+| Phase 3: Human approval gate | `pending` | `2026-05-23` | `not-started` | `Human reviews the mocked UI and explicitly approves backend/API implementation scope.` |
+| Phase 4: Shared read contract | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add report and typed signal models after approval.` |
+| Phase 5: PostgreSQL aggregations | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add run-scoped aggregate queries for concentration and uniformity.` |
+| Phase 6: API and OpenAPI | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add last-run sybil metrics endpoint and docs guardrails.` |
 
 ## Explicit Agent Constraints
 
@@ -37,6 +38,8 @@ Status values:
 - keep queries scoped to one selected latest run
 - do not add protocol parsing logic to API handlers or React components
 - do not add materialized views until query cost is measured
+- start with mocked web data only
+- do not implement shared models, PostgreSQL queries, API handlers, or OpenAPI contract changes until a human explicitly approves Phase 3
 
 ## Phases
 
@@ -55,7 +58,48 @@ Done criteria:
 - first endpoint and response boundaries are documented
 - design doc index status matches BNDD status
 
-### Phase 2: Shared Read Contract
+### Phase 2: Mocked Web Evidence Surface
+
+Targets:
+
+- `apps/web/src/pages/risk-page.tsx`
+- `apps/web/src/pages/risk-page.test.tsx`
+- `apps/web/src/App.tsx`
+- `apps/web/src/App.test.tsx`
+- `apps/web/src/app/page-registry.ts`
+- `apps/web/src/app/page-registry.test.ts`
+- `apps/web/src/pages/network-analytics-page.tsx`
+- affected frontend docs
+
+Done criteria:
+
+- Risk page is a primary sidebar destination
+- Risk page shows mocked Sybil-oriented evidence as the first growable topic card
+- Network Analytics keeps Status and Crawler Runs as header-level sibling views instead of sidebar entries
+- mocked typed signal values are visible near signal labels
+- UI does not use attack, attacker, malicious, or controlled-by-one-entity language
+- empty signal state copy exists for the future real API path
+- demo/mock copy clearly distinguishes planned signals from live backend findings
+- no backend, shared Rust model, PostgreSQL, API route, or OpenAPI implementation is added in this phase
+
+### Phase 3: Human Approval Gate
+
+Targets:
+
+- mocked Risk page review
+- BNDD-0016 response shape review
+- implementation scope review for backend/API phases
+
+Done criteria:
+
+- a human explicitly approves moving beyond mocked web UI
+- approved scope names which backend phases may start
+- any requested response-shape changes are reflected in this BNDD before implementation
+- implementation branch or PR is identified for the approved backend/API work
+
+Until this phase is approved, agents must stop after frontend mock work and documentation updates.
+
+### Phase 4: Shared Read Contract
 
 Targets:
 
@@ -71,7 +115,11 @@ Done criteria:
 - model docs warn that signals are not confirmed attacks
 - model docs point interpretation and limitation copy to OpenAPI, agent docs, and frontend descriptors
 
-### Phase 3: PostgreSQL Aggregations
+Start condition:
+
+- Phase 3 approval is complete.
+
+### Phase 5: PostgreSQL Aggregations
 
 Targets:
 
@@ -87,7 +135,12 @@ Done criteria:
 - uniformity signals use explicit thresholds and include typed threshold fields
 - tests cover concentration, no-signal baseline, software uniformity, and missing enrichment
 
-### Phase 4: API And OpenAPI
+Start condition:
+
+- Phase 3 approval is complete.
+- Phase 4 shared read contract is merged or included in the active implementation branch.
+
+### Phase 6: API And OpenAPI
 
 Targets:
 
@@ -108,32 +161,23 @@ Done criteria:
 - OpenAPI documents metric definitions and non-detection boundary
 - `/agents.md` tells agents not to treat signals as confirmed attacks
 
-### Phase 5: Web Evidence Surface
+Start condition:
 
-Targets:
-
-- `apps/web/src/lib/api/`
-- `apps/web/src/components/analytics/`
-- `apps/web/src/pages/risk-page.tsx`
-- `apps/web/src/pages/network-analytics-page.tsx`
-- affected page/component tests
-
-Done criteria:
-
-- Risk page shows Sybil-oriented evidence as the first growable topic card
-- Network Analytics keeps Status and Crawler Runs as header-level sibling views instead of sidebar entries
-- typed signal values are visible near signal labels
-- UI does not use attack, attacker, malicious, or controlled-by-one-entity language
-- empty signal state explains that no heuristic review signals crossed thresholds
-- demo mode includes conservative sample data and limitations
+- Phase 3 approval is complete.
+- Phase 4 shared read contract and Phase 5 PostgreSQL aggregations are merged or included in the active implementation branch.
 
 ## Verification
+
+Phase 2:
+
+- `npm run test --prefix apps/web`
+- `npm run build --prefix apps/web`
+
+Backend/API phases after Phase 3 approval:
 
 - `cargo test -p btc-network`
 - `cargo test -p btc-network-postgres`
 - `cargo test -p btc-network-api`
-- `npm run test --prefix apps/web`
-- `npm run build --prefix apps/web`
 
 Optional before accepting implementation:
 
