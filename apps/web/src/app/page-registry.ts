@@ -2,6 +2,7 @@ export type AppPageId =
   | "api"
   | "crawler-runs"
   | "network-analytics"
+  | "risk"
   | "status"
   | "connection"
   | "peer-tools"
@@ -15,6 +16,7 @@ export type AppPage = {
   group: AppPageGroupId;
   title: string;
   description: string;
+  showInSidebar?: boolean;
 };
 
 export const appPages: AppPage[] = [
@@ -23,6 +25,12 @@ export const appPages: AppPage[] = [
     group: "network-analytics",
     title: "Network Analytics",
     description: "Summarize ASN concentration and recent verification outcomes from crawler data.",
+  },
+  {
+    id: "risk",
+    group: "network-analytics",
+    title: "Risk",
+    description: "Review crawler-visible network risk metrics, limitations, and evidence topics.",
   },
   {
     id: "api",
@@ -35,12 +43,14 @@ export const appPages: AppPage[] = [
     group: "network-analytics",
     title: "Status",
     description: "Curated Bitcoin DNS seeders and public node endpoint status.",
+    showInSidebar: false,
   },
   {
     id: "crawler-runs",
     group: "network-analytics",
     title: "Crawler Runs",
     description: "Review recent crawl runs, compare outcomes, and inspect checkpoint progress.",
+    showInSidebar: false,
   },
   {
     id: "connection",

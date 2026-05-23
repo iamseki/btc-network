@@ -50,3 +50,4 @@ Use only the canonical status values below.
 | `BNDD-0013` | `Curated Bitcoin node status page` | `implemented` | [BNDD-0013/BNDD-0013.md](./BNDD-0013/BNDD-0013.md) |
 | `BNDD-0014` | `Agent-first API guide` | `accepted` | [BNDD-0014/BNDD-0014.md](./BNDD-0014/BNDD-0014.md) |
 | `BNDD-0015` | `Bounded scans and targeted keyset pagination` | `implemented` | [BNDD-0015/BNDD-0015.md](./BNDD-0015/BNDD-0015.md) |
+| `BNDD-0016` | `Sybil-oriented crawler metrics` | `proposed` | [BNDD-0016/BNDD-0016.md](./BNDD-0016/BNDD-0016.md) |

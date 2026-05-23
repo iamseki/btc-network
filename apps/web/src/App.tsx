@@ -6,6 +6,7 @@ import {
   Network,
   Radio,
   RadioTower,
+  ShieldAlert,
   ShieldCheck,
   Waypoints,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import {
   useCrawlerSignalPlayback,
 } from "./components/crawler-live-signal";
 import { SessionLogPanel } from "./components/session-log-panel";
+import { Badge } from "./components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +39,7 @@ import {
 } from "./pages/network-analytics-page";
 import { PeerToolsPage } from "./pages/peer-tools-page";
 import { ApiPage, type ApiPanel } from "./pages/api-page";
+import { RiskPage } from "./pages/risk-page";
 import { StatusPage } from "./pages/status-page";
 import { getAppClient } from "./lib/api";
 import type {
@@ -136,7 +139,7 @@ function isCrawlerRunsPanel(value: unknown): value is CrawlerRunsPanel {
 }
 
 function isNetworkAnalyticsPanel(value: unknown): value is NetworkAnalyticsPanel {
-  return value === "overview" || value === "risk";
+  return value === "overview" || value === "status" || value === "crawler-runs";
 }
 
 function isApiPanel(value: unknown): value is ApiPanel {
@@ -157,6 +160,7 @@ export function App() {
     api: ShieldCheck,
     "crawler-runs": Activity,
     "network-analytics": ChartColumn,
+    risk: ShieldAlert,
     status: RadioTower,
     connection: Radio,
     "peer-tools": Network,
@@ -202,7 +206,9 @@ export function App() {
   const page = appPages.find((entry) => entry.id === selectedPage)!;
   const currentPageIcon = pageIcons[selectedPage];
   const isMobileSidebarOpen = !sidebarCollapsed;
-  const analyticsPages = appPages.filter((entry) => entry.group === "network-analytics");
+  const analyticsPages = appPages.filter(
+    (entry) => entry.group === "network-analytics" && entry.showInSidebar !== false,
+  );
   const peerPages = appPages.filter((entry) => entry.group === "peer-tools");
   const showsNodeContext = page.group === "peer-tools";
   const desktopShellClass = sidebarCollapsed
@@ -214,7 +220,8 @@ export function App() {
             label: "Network Analytics Views",
             items: [
               { id: "overview", title: "Overview" },
-              { id: "risk", title: "Risk" },
+              { id: "status", title: "Status" },
+              { id: "crawler-runs", title: "Crawler Runs" },
             ] satisfies { id: NetworkAnalyticsPanel; title: string }[],
           activeItem: networkAnalyticsPanel,
           onSelect: (panel: string) => setNetworkAnalyticsPanel(panel as NetworkAnalyticsPanel),
@@ -245,7 +252,10 @@ export function App() {
             }
         : null;
   const currentSubnavItemTitle =
-    currentSubnav?.items.find((item) => item.id === currentSubnav.activeItem)?.title ?? "Overview";
+    selectedPage === "risk"
+      ? "Risk Library"
+      : currentSubnav?.items.find((item) => item.id === currentSubnav.activeItem)?.title ?? page.title;
+  const showsCrawlerPreviewControl = selectedPage !== "risk";
   const crawlerPreviewPlayback = useCrawlerSignalPlayback(latestCrawlerPreview);
 
   function selectPage(nextPage: AppPageId) {
@@ -718,7 +728,13 @@ export function App() {
                   <div className="rounded-md border border-border bg-card px-3 py-1.5 font-mono text-xs text-foreground break-all md:max-w-[24rem]">
                     {node}
                   </div>
-                ) : latestCrawlerPreview || isLoadingCrawlerPreview ? (
+                ) : selectedPage === "risk" ? (
+                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    <Badge variant="muted">Crawler-visible</Badge>
+                    <Badge variant="muted">Mocked details</Badge>
+                    <Badge variant="muted">No attack claims</Badge>
+                  </div>
+                ) : showsCrawlerPreviewControl && (latestCrawlerPreview || isLoadingCrawlerPreview) ? (
                   <CrawlerPulseButton
                     summary={
                       crawlerPreviewPlayback?.currentSummary ??
@@ -761,19 +777,28 @@ export function App() {
               ) : null}
 
               {selectedPage === "network-analytics" ? (
-                <NetworkAnalyticsPage
-                  client={client}
-                  activePanel={networkAnalyticsPanel}
-                  onPanelChange={setNetworkAnalyticsPanel}
-                  onOpenApiPage={() => selectPage("api")}
-                  onOpenAgentGuidePage={() => {
-                    selectPage("api");
-                    setApiPanel("agent-guide");
-                  }}
-                  onOpenStatusPage={() => selectPage("status")}
-                  showPanelNav={false}
-                />
+                networkAnalyticsPanel === "status" ? (
+                  <StatusPage client={client} />
+                ) : networkAnalyticsPanel === "crawler-runs" ? (
+                  <CrawlerRunsPage
+                    client={client}
+                    activePanel={crawlerRunsPanel}
+                    onPanelChange={setCrawlerRunsPanel}
+                  />
+                ) : (
+                  <NetworkAnalyticsPage
+                    client={client}
+                    onOpenApiPage={() => selectPage("api")}
+                    onOpenAgentGuidePage={() => {
+                      selectPage("api");
+                      setApiPanel("agent-guide");
+                    }}
+                    onOpenStatusPage={() => setNetworkAnalyticsPanel("status")}
+                  />
+                )
               ) : null}
+
+              {selectedPage === "risk" ? <RiskPage client={client} showHeader={false} /> : null}
 
               {selectedPage === "status" ? <StatusPage client={client} /> : null}
 

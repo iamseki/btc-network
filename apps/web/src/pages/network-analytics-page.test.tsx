@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BtcAppClient } from "@/lib/api/client";
@@ -242,7 +242,7 @@ describe("NetworkAnalyticsPage", () => {
     }
   });
 
-  it("renders a focused overview first, then shows the risk metrics", async () => {
+  it("renders a focused analytics overview without risk-library content", async () => {
     const client = makeClient({
       listCrawlRuns: vi.fn().mockResolvedValue([
         {
@@ -339,12 +339,12 @@ describe("NetworkAnalyticsPage", () => {
 
     render(<NetworkAnalyticsPage client={client} />);
 
-    expect(await screen.findByText("Network Risk Snapshot")).toBeTruthy();
-    expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
+    expect(await screen.findByText("Network Analytics Snapshot")).toBeTruthy();
+    expect(screen.getByText("Network Analytics Snapshot")).toBeTruthy();
     expect(screen.queryByText("Checkpoint Rail")).toBeNull();
     expect(screen.getByRole("button", { name: "Network Analytics overview" })).toBeTruthy();
     expect(screen.queryByText("Block Height")).toBeNull();
-    expect(screen.getByRole("img", { name: /Interactive 3D globe/i })).toBeTruthy();
+    expect(await screen.findByRole("img", { name: /Interactive 3D globe/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Zoom in globe" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reset globe view" })).toBeTruthy();
     expect(screen.getByText("Network Type Distribution")).toBeTruthy();
@@ -355,17 +355,9 @@ describe("NetworkAnalyticsPage", () => {
     expect(screen.queryByRole("button", { name: "Top ASNs" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Verification" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Risk" }));
-    expect(await screen.findByText("Decentralization Score")).toBeTruthy();
-    expect(screen.getByText("Eclipse Exposure (Proxy)")).toBeTruthy();
-    expect(screen.getByText("Observation Confidence")).toBeTruthy();
-    expect(screen.getByText("Transport Diversity")).toBeTruthy();
-    expect(scoreCardValue("Decentralization Score")).toBe("37");
-    expect(scoreCardValue("Eclipse Exposure (Proxy)")).toBe("65");
-    expect(scoreCardValue("Observation Confidence")).toBe("58");
-    expect(scoreCardValue("Transport Diversity")).toBe("72");
-    expect(screen.getByRole("button", { name: "Decentralization Score score explanation" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Eclipse Exposure (Proxy) score explanation" })).toBeTruthy();
+    expect(screen.queryByText("Decentralization Score")).toBeNull();
+    expect(screen.queryByText("Eclipse Exposure (Proxy)")).toBeNull();
+    expect(screen.queryByText("Risk Library")).toBeNull();
     expect(screen.queryByText("What This Means")).toBeNull();
     expect(screen.queryByText("Risk Drivers")).toBeNull();
     expect(screen.queryByText("Last-Run Inputs")).toBeNull();
@@ -432,18 +424,6 @@ describe("NetworkAnalyticsPage", () => {
     expect(onOpenAgentGuidePage).toHaveBeenCalledTimes(1);
   });
 });
-
-function scoreCardValue(label: string): string {
-  const labelNode = screen.getByText(label);
-  const card = labelNode.closest("div[class*='rounded']");
-
-  if (!(card instanceof HTMLElement)) {
-    throw new Error(`Could not find score card for ${label}`);
-  }
-
-  const values = within(card).getAllByText(/^\d+$/);
-  return values[0]?.textContent ?? "";
-}
 
 async function flushAsyncWork() {
   await act(async () => {
