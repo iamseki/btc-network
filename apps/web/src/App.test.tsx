@@ -435,6 +435,27 @@ describe("App sidebar shell", () => {
     expect(mockListNodeStatus).toHaveBeenCalled();
   });
 
+  it("starts root loads on the analytics overview even when navigation storage points at status", async () => {
+    window.localStorage.setItem(
+      "btc-network:app-nav:v1",
+      JSON.stringify({
+        selectedPage: "network-analytics",
+        crawlerRunsPanel: "overview",
+        networkAnalyticsPanel: "status",
+        apiPanel: "docs",
+      }),
+    );
+
+    render(<App />);
+
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Overview");
+    expect(await screen.findByRole("heading", { name: "Network Analytics" })).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("Network Analytics Snapshot")).toBeTruthy();
+    });
+    expect(screen.queryByText("No node status rows are available yet.")).toBeNull();
+  });
+
   it("shows the default Buy Me a Coffee link in the sidebar footer", () => {
     render(<App />);
 
@@ -523,7 +544,7 @@ describe("App sidebar shell", () => {
     });
   });
 
-  it("restores the selected page and section after an app remount", async () => {
+  it("returns root remounts to the analytics overview", async () => {
     mockCrawlerPreviewRun();
     const firstRender = render(<App />);
 
@@ -538,9 +559,8 @@ describe("App sidebar shell", () => {
     firstRender.unmount();
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
-    expect(screen.getByTestId("page-subview-label").textContent).toBe("Crawler Runs");
-    expect(await screen.findByRole("button", { name: "Checkpoints" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Network Analytics" })).toBeTruthy();
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Overview");
   });
 
   it("keeps crawler runs focused on inspection while the snapshot stays in the header preview", async () => {

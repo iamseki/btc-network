@@ -89,32 +89,12 @@ function browserPathForPage(page: AppPageId): string {
 }
 
 function initialNavigationState(): Required<StoredNavigationState> {
-  const fallback = {
+  return {
     selectedPage: pageFromBrowserPath(window.location.pathname),
     crawlerRunsPanel: "overview" as CrawlerRunsPanel,
     networkAnalyticsPanel: "overview" as NetworkAnalyticsPanel,
     apiPanel: "docs" as ApiPanel,
   };
-
-  if (window.location.pathname === "/status") {
-    return fallback;
-  }
-
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(NAV_STORAGE_KEY) ?? "{}") as StoredNavigationState;
-    return {
-      selectedPage: isAppPageId(stored.selectedPage) ? stored.selectedPage : fallback.selectedPage,
-      crawlerRunsPanel: isCrawlerRunsPanel(stored.crawlerRunsPanel)
-        ? stored.crawlerRunsPanel
-        : fallback.crawlerRunsPanel,
-      networkAnalyticsPanel: isNetworkAnalyticsPanel(stored.networkAnalyticsPanel)
-        ? stored.networkAnalyticsPanel
-        : fallback.networkAnalyticsPanel,
-      apiPanel: isApiPanel(stored.apiPanel) ? stored.apiPanel : fallback.apiPanel,
-    };
-  } catch {
-    return fallback;
-  }
 }
 
 function persistNavigationState(state: Required<StoredNavigationState>) {
@@ -123,27 +103,6 @@ function persistNavigationState(state: Required<StoredNavigationState>) {
   } catch {
     // Ignore storage failures; navigation still works for the active session.
   }
-}
-
-function isAppPageId(value: unknown): value is AppPageId {
-  return typeof value === "string" && appPages.some((page) => page.id === value);
-}
-
-function isCrawlerRunsPanel(value: unknown): value is CrawlerRunsPanel {
-  return (
-    value === "overview" ||
-    value === "checkpoints" ||
-    value === "failures" ||
-    value === "network"
-  );
-}
-
-function isNetworkAnalyticsPanel(value: unknown): value is NetworkAnalyticsPanel {
-  return value === "overview" || value === "status" || value === "crawler-runs";
-}
-
-function isApiPanel(value: unknown): value is ApiPanel {
-  return value === "docs" || value === "agent-guide" || value === "overview" || value === "access";
 }
 
 export function App() {

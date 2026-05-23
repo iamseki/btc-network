@@ -43,6 +43,7 @@ export function StatusPage({ client }: StatusPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [historyWindow, setHistoryWindow] = useState<HistoryWindowId>("7d");
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => window.innerWidth < 768);
 
   async function refreshStatus() {
     setError(null);
@@ -69,6 +70,17 @@ export function StatusPage({ client }: StatusPageProps) {
       window.clearInterval(interval);
     };
   }, [client]);
+
+  useEffect(() => {
+    function handleResize() {
+      setIsNarrowViewport(window.innerWidth < 768);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const summary = useMemo(() => summarizeRows(rows), [rows]);
 
@@ -125,7 +137,11 @@ export function StatusPage({ client }: StatusPageProps) {
       ) : rows.length === 0 ? (
         <StatusNotice tone="unknown" message="No node status rows are available yet." />
       ) : (
-        <NodeStatusTable rows={rows} historyWindow={historyWindow} />
+        isNarrowViewport ? (
+          <NodeStatusCards rows={rows} historyWindow={historyWindow} />
+        ) : (
+          <NodeStatusTable rows={rows} historyWindow={historyWindow} />
+        )
       )}
     </div>
   );
@@ -158,6 +174,60 @@ function NodeStatusTable({
         </Table>
       </div>
     </section>
+  );
+}
+
+function NodeStatusCards({
+  rows,
+  historyWindow,
+}: {
+  rows: NodeStatusItem[];
+  historyWindow: HistoryWindowId;
+}) {
+  return (
+    <section className="grid gap-3" aria-label="Node status cards">
+      {rows.map((row) => (
+        <NodeStatusCard key={row.endpoint} row={row} historyWindow={historyWindow} />
+      ))}
+    </section>
+  );
+}
+
+function NodeStatusCard({
+  row,
+  historyWindow,
+}: {
+  row: NodeStatusItem;
+  historyWindow: HistoryWindowId;
+}) {
+  const displayStatus = classifyDisplayStatus(row);
+  const statusText =
+    displayStatus === "stale" ? "No fresh status check in the last 5 minutes" : row.message;
+
+  return (
+    <article
+      className={`rounded-[8px] border border-border/80 bg-card/86 p-3 ${rowToneClass(displayStatus)}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1.5">
+          <h2 className="text-sm font-semibold text-foreground">{row.label}</h2>
+          <div className="break-all font-mono text-[11px] text-muted-foreground">{row.endpoint}</div>
+        </div>
+        <Status variant={statusVariant(displayStatus)}>{statusLabel(displayStatus)}</Status>
+      </div>
+
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">{row.description}</p>
+
+      <div className="mt-3 grid gap-3 border-t border-border/70 pt-3">
+        <div className="grid gap-1">
+          <p className="text-xs leading-5 text-muted-foreground">{statusText}</p>
+          <p className="font-mono text-[11px] text-muted-foreground">
+            Last check {formatRelativeTime(row.checkedAt)} | {formatClockTime(row.checkedAt)}
+          </p>
+        </div>
+        <StatusHistoryTimeline label={row.label} history={row.history} historyWindow={historyWindow} />
+      </div>
+    </article>
   );
 }
 
