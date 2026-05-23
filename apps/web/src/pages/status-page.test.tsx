@@ -7,10 +7,17 @@ import type { BtcAppClient } from "@/lib/api/client";
 import type { NodeStatusItem } from "@/lib/api/types";
 import { STATUS_POLL_INTERVAL_MS, StatusPage, classifyDisplayStatus } from "./status-page";
 
+const originalInnerWidth = window.innerWidth;
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: originalInnerWidth,
+  });
 });
 
 describe("StatusPage", () => {
@@ -53,6 +60,27 @@ describe("StatusPage", () => {
     expect(historyButtons).toHaveLength(2);
     expect(historyButtons[0]?.getAttribute("aria-label")).toMatch(/^healthy at /);
     expect(historyButtons[1]?.getAttribute("aria-label")).toMatch(/^failed at /);
+  });
+
+  it("renders mobile status rows as stacked cards instead of a wide table", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 390,
+    });
+    const client = makeClient([
+      makeStatusRow({
+        label: "Sipa DNS Seed",
+        checkedAt: new Date().toISOString(),
+      }),
+    ]);
+
+    render(<StatusPage client={client} />);
+
+    expect(await screen.findByLabelText("Node status cards")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByText("Sipa DNS Seed")).toBeTruthy();
+    expect(screen.getByText(/Last check/i)).toBeTruthy();
   });
 
   it("shows bucketed history behind a global window control", async () => {
