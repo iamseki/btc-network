@@ -6,6 +6,7 @@ describe("appPages", () => {
   it("lists analytics-first pages before the existing peer tools", () => {
     expect(appPages.map((page) => page.id)).toEqual([
       "network-analytics",
+      "risk",
       "api",
       "status",
       "crawler-runs",
@@ -22,5 +23,13 @@ describe("appPages", () => {
       expect(page.description.length).toBeGreaterThan(0);
       expect(page.group.length).toBeGreaterThan(0);
     }
+  });
+
+  it("keeps status and crawler runs out of the primary sidebar", () => {
+    const hiddenPages = appPages
+      .filter((page) => page.showInSidebar === false)
+      .map((page) => page.id);
+
+    expect(hiddenPages).toEqual(["status", "crawler-runs"]);
   });
 });

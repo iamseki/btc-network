@@ -42,9 +42,15 @@ When a decision has scalability, storage-growth, latency, concurrency, or throug
 ## Communication Rule
 
 - Prefer terse, low-token responses by default
-- If the environment supports the `caveman` skill, use `caveman full`
+- If the environment supports RTK AI, use it for task-focused agent assistance
 - Switch to normal prose for security warnings, irreversible actions, and multi-step instructions where fragments could cause confusion
-- Treat the skill name as a hint, not a requirement; plain-language brevity instructions still apply when the skill system is unavailable
+- Treat RTK AI availability as a hint, not a requirement; plain-language brevity instructions still apply when it is unavailable
+
+## Web Preview Rule
+
+- Do not start web previews, Vite dev servers, Tauri dev sessions, or `npm run dev` for the user unless explicitly requested
+- For frontend work, provide the command the user can run locally instead of launching it automatically
+- Running tests and production builds is still allowed when it is the relevant verification scope
 
 ## Non-Negotiable Boundaries
 

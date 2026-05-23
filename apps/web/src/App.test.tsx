@@ -355,14 +355,18 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("button", { name: "Open navigation" })).toBeTruthy();
   });
 
-  it("switches the visible page from the sidebar", () => {
+  it("promotes risk to a primary sidebar page", async () => {
+    mockCrawlerPreviewRun();
+
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Risk" }));
 
-    expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Crawler Runs Views" })).toBeTruthy();
-    expect(screen.getByText(/latest public snapshot/i)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Risk" })).toBeTruthy();
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk Library");
+    expect(await screen.findByText("Risk Library")).toBeTruthy();
+    expect(screen.getByText("Identity Concentration Signals")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show latest snapshot preview" })).toBeNull();
   });
 
   it("renders the commercial API page from the analytics navigation", async () => {
@@ -417,7 +421,8 @@ describe("App sidebar shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Status" }));
 
     expect(await screen.findByText("Endpoint")).toBeTruthy();
-    expect(window.location.pathname).toBe("/status");
+    expect(window.location.pathname).toBe("/");
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Status");
     expect(await screen.findByText("Sipa DNS Seed")).toBeTruthy();
   });
 
@@ -514,11 +519,12 @@ describe("App sidebar shell", () => {
 
     expect(await screen.findByRole("heading", { name: "Network Analytics" })).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText("Network Risk Snapshot")).toBeTruthy();
+      expect(screen.getByText("Network Analytics Snapshot")).toBeTruthy();
     });
   });
 
   it("restores the selected page and section after an app remount", async () => {
+    mockCrawlerPreviewRun();
     const firstRender = render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
@@ -526,14 +532,15 @@ describe("App sidebar shell", () => {
       expect(screen.getByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Checkpoints" }));
-    expect(screen.getByTestId("page-subview-label").textContent).toBe("Checkpoints");
+    fireEvent.click(await screen.findByRole("button", { name: "Checkpoints" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Crawler Runs");
 
     firstRender.unmount();
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Crawler Runs" })).toBeTruthy();
-    expect(screen.getByTestId("page-subview-label").textContent).toBe("Checkpoints");
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Crawler Runs");
+    expect(await screen.findByRole("button", { name: "Checkpoints" })).toBeTruthy();
   });
 
   it("keeps crawler runs focused on inspection while the snapshot stays in the header preview", async () => {
@@ -555,14 +562,15 @@ describe("App sidebar shell", () => {
     render(<App />);
 
     expect(screen.getAllByRole("button", { name: "Network Analytics" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Crawler Runs" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Risk" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Status" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Crawler Runs" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Top ASNs" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
 
-    expect(screen.getByRole("button", { name: "Checkpoints" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Failures" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Network Analytics Views" })).toBeTruthy();
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Crawler Runs");
 
     fireEvent.click(screen.getByRole("button", { name: "API" }));
 
@@ -575,12 +583,11 @@ describe("App sidebar shell", () => {
 
     expect(screen.getByTestId("page-subview-label").textContent).toBe("Overview");
 
-    fireEvent.click(screen.getByRole("button", { name: "Risk" }));
-    expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk");
-
     fireEvent.click(screen.getByRole("button", { name: "Crawler Runs" }));
-    fireEvent.click(screen.getByRole("button", { name: "Failures" }));
-    expect(screen.getByTestId("page-subview-label").textContent).toBe("Failures");
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Crawler Runs");
+
+    fireEvent.click(screen.getByRole("button", { name: "Risk" }));
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk Library");
   });
 
   it("requests the last block height from the headers page", async () => {

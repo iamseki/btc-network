@@ -142,6 +142,8 @@ Already in place:
 - compact analytics header stats aligned with page refresh actions instead of large summary grids
 - lightweight ASN concentration and verification charts built directly from the current analytics API shape
 - home-page API area links to the OpenAPI reference and an in-app `Agent Guide` view under API center navigation, not a sidebar item; normal builds load API-hosted `/agents.md`, while demo mode renders the bundled `src` symlink to the API guide without calling the API
+- `Risk` is a primary sidebar destination and owns the growable evidence-topic library; do not hide new risk topics under the `Network Analytics` overview
+- `Network Analytics` owns snapshot analytics and exposes `Status` and `Crawler Runs` through its header sub-navigation instead of sidebar entries
 - `apps/web/src/lib/api/api-agents.md` is intentionally a symlink to `apps/api/src/docs/agents.md`; keep the API guide as the maintained source
 - render tests for the app shell, sidebar behavior, and current page actions
 
