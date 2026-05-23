@@ -4,7 +4,7 @@ Execution plan for [BNDD-0016](./BNDD-0016.md).
 
 ## Summary
 
-Add one conservative, read-only Sybil-oriented metrics report for latest-run crawler analytics. The report exposes raw concentration metrics and explainable heuristic review signals, while explicitly avoiding confirmed attack claims.
+Add one conservative, read-only Sybil-oriented metrics report for latest-run crawler analytics. The report exposes typed heuristic review signals derived from raw concentration metrics, while explicitly avoiding confirmed attack claims.
 
 ## Progress Tracker
 
@@ -19,7 +19,7 @@ Status values:
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
 | Phase 1: BNDD and boundaries | `reviewing` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Defines metric scope, non-detection boundary, and rollout plan.` |
-| Phase 2: Shared read contract | `pending` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Add report, raw metric, signal, and limitation models.` |
+| Phase 2: Shared read contract | `pending` | `2026-05-23` | `docs/BNDD-0016-sybil-metrics` | `Add report and typed signal models; keep interpretation and limitation prose out of response models.` |
 | Phase 3: PostgreSQL aggregations | `pending` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Run-scoped aggregate queries for concentration and uniformity.` |
 | Phase 4: API and OpenAPI | `pending` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Add last-run sybil metrics endpoint and docs guardrails.` |
 | Phase 5: Web evidence surface | `reviewing` | `2026-05-23` | `feat/BNDD-0016-risk-library` | `Render review signals as Risk library topic cards without attack language.` |
@@ -28,9 +28,10 @@ Status values:
 
 - do not call these metrics Sybil detection
 - do not emit attack claims from crawler data
-- keep `attackClaims` empty in the first version
-- keep raw metrics separate from heuristic signals
-- include confidence boundaries on every signal
+- do not model `attackClaims` in the first response shape
+- keep raw metrics as internal signal inputs, not a top-level API payload
+- do not include response prose fields such as `interpretation`, `confidenceBoundary`, or `limitations`
+- use typed signal fields instead of a generic `evidence[]` array until the API needs heterogeneous evidence
 - ground every metric in persisted crawler fields
 - avoid opaque scores and ML-style confidence
 - keep queries scoped to one selected latest run
@@ -65,9 +66,10 @@ Targets:
 Done criteria:
 
 - `CrawlerAnalyticsReader` exposes a Sybil metrics report method
-- shared models represent raw metrics, heuristic signals, limitations, and empty attack claims
+- shared models represent report context and typed heuristic signals
 - signal levels are limited to `info`, `watch`, and `review`
 - model docs warn that signals are not confirmed attacks
+- model docs point interpretation and limitation copy to OpenAPI, agent docs, and frontend descriptors
 
 ### Phase 3: PostgreSQL Aggregations
 
@@ -82,7 +84,7 @@ Done criteria:
 - latest run selection follows last-run phase filter semantics
 - ASN, prefix, country, and software fingerprint aggregations are run-scoped
 - HHI is computed from grouped counts
-- uniformity signals use explicit thresholds and include threshold evidence
+- uniformity signals use explicit thresholds and include typed threshold fields
 - tests cover concentration, no-signal baseline, software uniformity, and missing enrichment
 
 ### Phase 4: API And OpenAPI
@@ -99,9 +101,10 @@ Targets:
 Done criteria:
 
 - `GET /api/v1/network/last-run/sybil-metrics` returns report JSON
-- response always includes `limitations`
-- response always includes empty `attackClaims`
-- bad phase or limit parameters return `400 bad_request`
+- response contains run context plus `signals`
+- response does not contain top-level `rawMetrics`, `limitations`, `attackClaims`, `interpretation`, `confidenceBoundary`, or generic `evidence[]`
+- response uses an internal signal cap instead of a public `limit` or pagination parameter
+- bad phase parameters return `400 bad_request`
 - OpenAPI documents metric definitions and non-detection boundary
 - `/agents.md` tells agents not to treat signals as confirmed attacks
 
@@ -119,7 +122,7 @@ Done criteria:
 
 - Risk page shows Sybil-oriented evidence as the first growable topic card
 - Network Analytics keeps Status and Crawler Runs as header-level sibling views instead of sidebar entries
-- raw metric values are visible near signal labels
+- typed signal values are visible near signal labels
 - UI does not use attack, attacker, malicious, or controlled-by-one-entity language
 - empty signal state explains that no heuristic review signals crossed thresholds
 - demo mode includes conservative sample data and limitations
