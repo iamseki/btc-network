@@ -25,8 +25,9 @@ Do not infer fields from this guide. Use OpenAPI for contract details.
    - `GET /api/v1/network/last-run/services?limit=10`
    - `GET /api/v1/network/last-run/start-heights?limit=10`
    - `GET /api/v1/network/last-run/user-agents?limit=10`
-5. Use `GET /api/v1/network/historical/asns?start=<RFC3339>&end=<RFC3339>&limit=10` only when a bounded historical ASN window is needed.
-6. Use `GET /api/nodes/status` for curated DNS seeder and public endpoint health.
+5. Use `GET /api/v1/network/last-run/sybil-metrics` for a compact report of typed concentration and uniformity signals.
+6. Use `GET /api/v1/network/historical/asns?start=<RFC3339>&end=<RFC3339>&limit=10` only when a bounded historical ASN window is needed.
+7. Use `GET /api/nodes/status` for curated DNS seeder and public endpoint health.
 
 ## Cheap Workflow
 
@@ -38,6 +39,16 @@ For most summaries:
 4. Fetch verified nodes only when endpoint-level inventory is required.
 
 Prefer compact distribution endpoints over broad node inventory reads.
+
+## Sybil-Oriented Signals
+
+`GET /api/v1/network/last-run/sybil-metrics` returns crawler-visible heuristic signals only.
+
+Treat `info`, `watch`, and `review` as review levels for concentration or uniformity patterns. They are not confirmed attack labels, proof of shared operator control, or evidence of malicious behavior by themselves.
+
+Use the typed fields on each signal, such as `kind`, `clusterType`, `clusterKey`, `nodeCount`, `share`, `threshold`, `hhi`, and `density`. Do not invent prose fields, confidence scores, or attack claims that are not present in OpenAPI.
+
+Common benign explanations include NAT, VPN exits, Tor, cloud hosting concentration, popular Bitcoin client defaults, coarse geolocation, and incomplete crawler visibility.
 
 ## Pagination And Limits
 

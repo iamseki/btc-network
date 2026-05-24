@@ -91,6 +91,10 @@ pub fn build_router_with_config(
             handlers::LIST_LAST_RUN_NODES_PATH,
             get(handlers::list_last_run_nodes),
         )
+        .route(
+            handlers::GET_LAST_RUN_SYBIL_METRICS_PATH,
+            get(handlers::get_last_run_sybil_metrics),
+        )
         .route(handlers::NODE_STATUS_PATH, get(handlers::list_node_status))
         .layer(
             ServiceBuilder::new()

@@ -15,10 +15,10 @@ pub(crate) use historical::{
     get_crawl_run, list_crawl_runs,
 };
 pub(crate) use last_run::{
-    LIST_LAST_RUN_ASN_ORGANIZATIONS_PATH, LIST_LAST_RUN_ASNS_PATH, LIST_LAST_RUN_COUNTRIES_PATH,
-    LIST_LAST_RUN_NETWORK_TYPES_PATH, LIST_LAST_RUN_NODES_PATH,
+    GET_LAST_RUN_SYBIL_METRICS_PATH, LIST_LAST_RUN_ASN_ORGANIZATIONS_PATH, LIST_LAST_RUN_ASNS_PATH,
+    LIST_LAST_RUN_COUNTRIES_PATH, LIST_LAST_RUN_NETWORK_TYPES_PATH, LIST_LAST_RUN_NODES_PATH,
     LIST_LAST_RUN_PROTOCOL_VERSIONS_PATH, LIST_LAST_RUN_SERVICES_PATH,
-    LIST_LAST_RUN_START_HEIGHTS_PATH, LIST_LAST_RUN_USER_AGENTS_PATH,
+    LIST_LAST_RUN_START_HEIGHTS_PATH, LIST_LAST_RUN_USER_AGENTS_PATH, get_last_run_sybil_metrics,
     list_last_run_asn_organizations, list_last_run_asns, list_last_run_countries,
     list_last_run_network_types, list_last_run_nodes, list_last_run_protocol_versions,
     list_last_run_services, list_last_run_start_heights, list_last_run_user_agents,

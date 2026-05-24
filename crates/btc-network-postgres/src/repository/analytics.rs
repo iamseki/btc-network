@@ -5,7 +5,8 @@ use btc_network::crawler::{
     LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodePageCursor,
     LastRunNodeSummaryItem, LastRunNodeSummaryPage, LastRunProtocolVersionCountItem,
     LastRunServicesCountItem, LastRunStartHeightCountItem, LastRunUserAgentCountItem,
-    NetworkOutcomeCount,
+    NetworkOutcomeCount, SybilClusterType, SybilMetricSignal, SybilMetricsReport, SybilSignalKind,
+    SybilSignalLevel,
 };
 use chrono::{DateTime, Utc};
 use sqlx_core::{query::query, row::Row};
@@ -20,6 +21,16 @@ WHERE phase = 'finished'
 ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
 LIMIT 1
 ";
+
+const SYBIL_SIGNAL_CAP: usize = 20;
+const SYBIL_TOP_CLUSTER_LIMIT: usize = 10;
+const TOP_ASN_SHARE_WATCH_THRESHOLD: f64 = 0.08;
+const ASN_HHI_WATCH_THRESHOLD: f64 = 0.15;
+const TOP_PREFIX_SHARE_WATCH_THRESHOLD: f64 = 0.05;
+const PREFIX_DENSITY_WATCH_THRESHOLD: f64 = 3.0;
+const FINGERPRINT_UNIFORMITY_REVIEW_THRESHOLD: f64 = 0.80;
+const HEIGHT_UNIFORMITY_REVIEW_THRESHOLD: f64 = 0.80;
+const MIN_UNIFORM_CLUSTER_NODE_COUNT: u64 = 3;
 
 pub(super) async fn count_nodes_by_asn(
     pool: &PgPool,
@@ -374,6 +385,33 @@ struct LastRunNodeSummaryDbRow {
     asn_organization: Option<String>,
 }
 
+struct LastRunContextDbRow {
+    run_id: CrawlRunId,
+    phase: String,
+    observed_at: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+struct SybilClusterCountDbRow {
+    cluster_key: String,
+    cluster_label: Option<String>,
+    node_count: i64,
+}
+
+#[derive(Debug)]
+struct SybilUniformityDbRow {
+    cluster_key: String,
+    cluster_label: Option<String>,
+    node_count: i64,
+    matching_node_count: i64,
+    share: f64,
+}
+
+struct ScoredSybilSignal {
+    signal: SybilMetricSignal,
+    strength: f64,
+}
+
 enum StringDistributionColumn {
     Services,
     UserAgent,
@@ -423,6 +461,35 @@ impl I32DistributionColumn {
             Self::StartHeight => "list last-run start height counts",
         }
     }
+}
+
+pub(super) async fn get_last_run_sybil_metrics(
+    pool: &PgPool,
+    phase_filter: CrawlRunPhaseFilter,
+) -> Result<Option<SybilMetricsReport>, CrawlerRepositoryError> {
+    let Some(context) = query_last_run_context(pool, &phase_filter).await? else {
+        return Ok(None);
+    };
+    let verified_node_count = query_verified_node_count(pool, &context.run_id).await?;
+    let mut signals = Vec::new();
+
+    if verified_node_count > 0 {
+        add_concentration_signals(pool, &context.run_id, verified_node_count, &mut signals).await?;
+        add_uniformity_signals(pool, &context.run_id, &mut signals).await?;
+        sort_and_cap_sybil_signals(&mut signals);
+    }
+
+    Ok(Some(SybilMetricsReport {
+        run_id: context.run_id.to_string(),
+        phase: context.phase,
+        observed_at: context.observed_at.to_rfc3339(),
+        verified_node_count,
+        signals: signals
+            .into_iter()
+            .take(SYBIL_SIGNAL_CAP)
+            .map(|value| value.signal)
+            .collect(),
+    }))
 }
 
 pub(super) async fn list_last_run_services(
@@ -751,6 +818,613 @@ LIMIT $1
     Ok(LastRunNodeSummaryPage { items, next_cursor })
 }
 
+async fn query_last_run_context(
+    pool: &PgPool,
+    phase_filter: &CrawlRunPhaseFilter,
+) -> Result<Option<LastRunContextDbRow>, CrawlerRepositoryError> {
+    let where_clause = latest_run_where_clause(phase_filter);
+    let sql = format!(
+        "
+SELECT
+    run_id,
+    phase,
+    checkpointed_at AS observed_at
+FROM crawler_run_checkpoints
+{where_clause}
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+LIMIT 1
+"
+    );
+    let row = query::<Postgres>(&sql)
+        .fetch_optional(pool)
+        .await
+        .map_err(|err| map_postgres_err("get last-run sybil metrics context", err))?;
+
+    row.map(
+        |row| -> Result<LastRunContextDbRow, CrawlerRepositoryError> {
+            let run_id = row
+                .try_get("run_id")
+                .map_err(|err| map_postgres_err("decode run_id", err))?;
+            Ok(LastRunContextDbRow {
+                run_id: CrawlRunId::new(run_id),
+                phase: row
+                    .try_get("phase")
+                    .map_err(|err| map_postgres_err("decode phase", err))?,
+                observed_at: row
+                    .try_get("observed_at")
+                    .map_err(|err| map_postgres_err("decode observed_at", err))?,
+            })
+        },
+    )
+    .transpose()
+}
+
+async fn query_verified_node_count(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+) -> Result<u64, CrawlerRepositoryError> {
+    let row = query::<Postgres>(
+        "
+SELECT COUNT(*) AS node_count
+FROM node_observations
+WHERE crawl_run_id = $1
+  AND protocol_version IS NOT NULL
+  AND failure_classification IS NULL
+",
+    )
+    .bind(run_id.as_uuid())
+    .fetch_one(pool)
+    .await
+    .map_err(|err| map_postgres_err("count last-run verified nodes", err))?;
+    let node_count = row
+        .try_get::<i64, _>("node_count")
+        .map_err(|err| map_postgres_err("decode verified node count", err))?;
+
+    Ok(node_count.max(0) as u64)
+}
+
+async fn add_concentration_signals(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+    verified_node_count: u64,
+    signals: &mut Vec<ScoredSybilSignal>,
+) -> Result<(), CrawlerRepositoryError> {
+    let asn_rows = query_asn_sybil_clusters(pool, run_id, usize::MAX).await?;
+    let prefix_rows = query_string_sybil_clusters(
+        pool,
+        run_id,
+        "prefix",
+        "prefix",
+        "prefix",
+        SYBIL_TOP_CLUSTER_LIMIT,
+    )
+    .await?;
+    let country_rows = query_string_sybil_clusters(
+        pool,
+        run_id,
+        "country",
+        "country",
+        "country",
+        SYBIL_TOP_CLUSTER_LIMIT,
+    )
+    .await?;
+
+    if let Some(top_asn) = asn_rows.first() {
+        push_share_signal(
+            signals,
+            SybilSignalKind::TopAsnShare,
+            SybilClusterType::Asn,
+            top_asn,
+            verified_node_count,
+            Some(TOP_ASN_SHARE_WATCH_THRESHOLD),
+            SybilSignalLevel::Watch,
+        );
+    }
+
+    let asn_hhi = hhi(&asn_rows, verified_node_count);
+    if asn_hhi >= ASN_HHI_WATCH_THRESHOLD {
+        signals.push(ScoredSybilSignal {
+            signal: SybilMetricSignal {
+                level: SybilSignalLevel::Watch,
+                kind: SybilSignalKind::AsnHhi,
+                cluster_type: SybilClusterType::Asn,
+                cluster_key: "all_asns".to_string(),
+                cluster_label: None,
+                node_count: verified_node_count,
+                share: None,
+                threshold: Some(ASN_HHI_WATCH_THRESHOLD),
+                hhi: Some(round_ratio(asn_hhi)),
+                density: None,
+            },
+            strength: asn_hhi / ASN_HHI_WATCH_THRESHOLD,
+        });
+    }
+
+    if let Some(top_prefix) = prefix_rows.first() {
+        push_share_signal(
+            signals,
+            SybilSignalKind::TopPrefixShare,
+            SybilClusterType::Prefix,
+            top_prefix,
+            verified_node_count,
+            Some(TOP_PREFIX_SHARE_WATCH_THRESHOLD),
+            SybilSignalLevel::Watch,
+        );
+
+        let density = top_prefix.node_count.max(0) as f64;
+        if density >= PREFIX_DENSITY_WATCH_THRESHOLD {
+            signals.push(ScoredSybilSignal {
+                signal: SybilMetricSignal {
+                    level: SybilSignalLevel::Watch,
+                    kind: SybilSignalKind::PrefixDensity,
+                    cluster_type: SybilClusterType::Prefix,
+                    cluster_key: top_prefix.cluster_key.clone(),
+                    cluster_label: top_prefix.cluster_label.clone(),
+                    node_count: top_prefix.node_count.max(0) as u64,
+                    share: Some(round_ratio(share(
+                        top_prefix.node_count.max(0) as u64,
+                        verified_node_count,
+                    ))),
+                    threshold: Some(PREFIX_DENSITY_WATCH_THRESHOLD),
+                    hhi: None,
+                    density: Some(density),
+                },
+                strength: density / PREFIX_DENSITY_WATCH_THRESHOLD,
+            });
+        }
+    }
+
+    if let Some(top_country) = country_rows.first() {
+        push_share_signal(
+            signals,
+            SybilSignalKind::TopCountryShare,
+            SybilClusterType::Country,
+            top_country,
+            verified_node_count,
+            None,
+            SybilSignalLevel::Info,
+        );
+    }
+
+    Ok(())
+}
+
+async fn add_uniformity_signals(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+    signals: &mut Vec<ScoredSybilSignal>,
+) -> Result<(), CrawlerRepositoryError> {
+    for row in query_fingerprint_uniformity(
+        pool,
+        run_id,
+        "asn",
+        "asn",
+        "MIN(asn_organization) OVER (PARTITION BY asn)",
+    )
+    .await?
+    {
+        push_uniformity_signal(
+            signals,
+            SybilSignalKind::ClusterFingerprintUniformity,
+            SybilClusterType::Asn,
+            &row,
+            FINGERPRINT_UNIFORMITY_REVIEW_THRESHOLD,
+        );
+    }
+    for row in query_fingerprint_uniformity(pool, run_id, "prefix", "prefix", "prefix").await? {
+        push_uniformity_signal(
+            signals,
+            SybilSignalKind::ClusterFingerprintUniformity,
+            SybilClusterType::Prefix,
+            &row,
+            FINGERPRINT_UNIFORMITY_REVIEW_THRESHOLD,
+        );
+    }
+    for row in query_height_uniformity(
+        pool,
+        run_id,
+        "asn",
+        "asn",
+        "MIN(asn_organization) OVER (PARTITION BY asn)",
+    )
+    .await?
+    {
+        push_uniformity_signal(
+            signals,
+            SybilSignalKind::ClusterHeightUniformity,
+            SybilClusterType::Asn,
+            &row,
+            HEIGHT_UNIFORMITY_REVIEW_THRESHOLD,
+        );
+    }
+    for row in query_height_uniformity(pool, run_id, "prefix", "prefix", "prefix").await? {
+        push_uniformity_signal(
+            signals,
+            SybilSignalKind::ClusterHeightUniformity,
+            SybilClusterType::Prefix,
+            &row,
+            HEIGHT_UNIFORMITY_REVIEW_THRESHOLD,
+        );
+    }
+
+    Ok(())
+}
+
+async fn query_asn_sybil_clusters(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+    limit: usize,
+) -> Result<Vec<SybilClusterCountDbRow>, CrawlerRepositoryError> {
+    let sql = "
+SELECT
+    asn::text AS cluster_key,
+    MIN(asn_organization) AS cluster_label,
+    COUNT(*) AS node_count
+FROM node_observations
+WHERE crawl_run_id = $1
+  AND protocol_version IS NOT NULL
+  AND failure_classification IS NULL
+  AND asn IS NOT NULL
+GROUP BY asn
+ORDER BY node_count DESC, asn ASC
+LIMIT $2
+";
+    query_sybil_cluster_counts(pool, sql, "list sybil ASN clusters", run_id, limit).await
+}
+
+async fn query_string_sybil_clusters(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+    select_expr: &str,
+    label_expr: &str,
+    context_label: &'static str,
+    limit: usize,
+) -> Result<Vec<SybilClusterCountDbRow>, CrawlerRepositoryError> {
+    let sql = format!(
+        "
+SELECT
+    {select_expr} AS cluster_key,
+    {label_expr} AS cluster_label,
+    COUNT(*) AS node_count
+FROM node_observations
+WHERE crawl_run_id = $1
+  AND protocol_version IS NOT NULL
+  AND failure_classification IS NULL
+  AND {select_expr} IS NOT NULL
+GROUP BY {select_expr}, {label_expr}
+ORDER BY node_count DESC, cluster_key ASC
+LIMIT $2
+"
+    );
+    query_sybil_cluster_counts(pool, &sql, context_label, run_id, limit).await
+}
+
+async fn query_sybil_cluster_counts(
+    pool: &PgPool,
+    sql: &str,
+    context: &'static str,
+    run_id: &CrawlRunId,
+    limit: usize,
+) -> Result<Vec<SybilClusterCountDbRow>, CrawlerRepositoryError> {
+    let limit = limit.min(i64::MAX as usize) as i64;
+    let rows = query::<Postgres>(sql)
+        .bind(run_id.as_uuid())
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .map_err(|err| map_postgres_err(context, err))?;
+
+    rows.into_iter()
+        .map(
+            |row| -> Result<SybilClusterCountDbRow, CrawlerRepositoryError> {
+                Ok(SybilClusterCountDbRow {
+                    cluster_key: row
+                        .try_get("cluster_key")
+                        .map_err(|err| map_postgres_err("decode cluster_key", err))?,
+                    cluster_label: row
+                        .try_get("cluster_label")
+                        .map_err(|err| map_postgres_err("decode cluster_label", err))?,
+                    node_count: row
+                        .try_get("node_count")
+                        .map_err(|err| map_postgres_err("decode node_count", err))?,
+                })
+            },
+        )
+        .collect()
+}
+
+async fn query_fingerprint_uniformity(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+    cluster_expr: &str,
+    key_expr: &str,
+    label_expr: &str,
+) -> Result<Vec<SybilUniformityDbRow>, CrawlerRepositoryError> {
+    let sql = format!(
+        "
+WITH verified AS (
+    SELECT
+        {key_expr}::text AS cluster_key,
+        {label_expr} AS cluster_label,
+        protocol_version,
+        services,
+        user_agent,
+        relay
+    FROM node_observations
+    WHERE crawl_run_id = $1
+      AND protocol_version IS NOT NULL
+      AND failure_classification IS NULL
+      AND {cluster_expr} IS NOT NULL
+),
+cluster_counts AS (
+    SELECT cluster_key, cluster_label, COUNT(*) AS node_count
+    FROM verified
+    GROUP BY cluster_key, cluster_label
+),
+fingerprint_counts AS (
+    SELECT
+        cluster_key,
+        cluster_label,
+        protocol_version,
+        services,
+        user_agent,
+        relay,
+        COUNT(*) AS matching_node_count
+    FROM verified
+    GROUP BY cluster_key, cluster_label, protocol_version, services, user_agent, relay
+)
+SELECT
+    cluster_counts.cluster_key,
+    cluster_counts.cluster_label,
+    cluster_counts.node_count,
+    MAX(fingerprint_counts.matching_node_count) AS matching_node_count,
+    (
+        MAX(fingerprint_counts.matching_node_count)::double precision
+        / NULLIF(cluster_counts.node_count, 0)::double precision
+    ) AS share
+FROM cluster_counts
+JOIN fingerprint_counts
+  ON fingerprint_counts.cluster_key = cluster_counts.cluster_key
+ AND COALESCE(fingerprint_counts.cluster_label, '') = COALESCE(cluster_counts.cluster_label, '')
+WHERE cluster_counts.node_count >= $2
+GROUP BY cluster_counts.cluster_key, cluster_counts.cluster_label, cluster_counts.node_count
+HAVING (
+    MAX(fingerprint_counts.matching_node_count)::double precision
+    / NULLIF(cluster_counts.node_count, 0)::double precision
+) >= $3
+ORDER BY share DESC, node_count DESC, cluster_key ASC
+LIMIT $4
+"
+    );
+    query_uniformity_rows(
+        pool,
+        &sql,
+        "list sybil fingerprint uniformity clusters",
+        run_id,
+        FINGERPRINT_UNIFORMITY_REVIEW_THRESHOLD,
+    )
+    .await
+}
+
+async fn query_height_uniformity(
+    pool: &PgPool,
+    run_id: &CrawlRunId,
+    cluster_expr: &str,
+    key_expr: &str,
+    label_expr: &str,
+) -> Result<Vec<SybilUniformityDbRow>, CrawlerRepositoryError> {
+    let sql = format!(
+        "
+WITH verified AS (
+    SELECT
+        {key_expr}::text AS cluster_key,
+        {label_expr} AS cluster_label,
+        FLOOR(start_height::double precision / 100.0)::integer AS height_bucket
+    FROM node_observations
+    WHERE crawl_run_id = $1
+      AND protocol_version IS NOT NULL
+      AND failure_classification IS NULL
+      AND start_height IS NOT NULL
+      AND {cluster_expr} IS NOT NULL
+),
+cluster_counts AS (
+    SELECT cluster_key, cluster_label, COUNT(*) AS node_count
+    FROM verified
+    GROUP BY cluster_key, cluster_label
+),
+height_counts AS (
+    SELECT cluster_key, cluster_label, height_bucket, COUNT(*) AS matching_node_count
+    FROM verified
+    GROUP BY cluster_key, cluster_label, height_bucket
+)
+SELECT
+    cluster_counts.cluster_key,
+    cluster_counts.cluster_label,
+    cluster_counts.node_count,
+    MAX(height_counts.matching_node_count) AS matching_node_count,
+    (
+        MAX(height_counts.matching_node_count)::double precision
+        / NULLIF(cluster_counts.node_count, 0)::double precision
+    ) AS share
+FROM cluster_counts
+JOIN height_counts
+  ON height_counts.cluster_key = cluster_counts.cluster_key
+ AND COALESCE(height_counts.cluster_label, '') = COALESCE(cluster_counts.cluster_label, '')
+WHERE cluster_counts.node_count >= $2
+GROUP BY cluster_counts.cluster_key, cluster_counts.cluster_label, cluster_counts.node_count
+HAVING (
+    MAX(height_counts.matching_node_count)::double precision
+    / NULLIF(cluster_counts.node_count, 0)::double precision
+) >= $3
+ORDER BY share DESC, node_count DESC, cluster_key ASC
+LIMIT $4
+"
+    );
+    query_uniformity_rows(
+        pool,
+        &sql,
+        "list sybil height uniformity clusters",
+        run_id,
+        HEIGHT_UNIFORMITY_REVIEW_THRESHOLD,
+    )
+    .await
+}
+
+async fn query_uniformity_rows(
+    pool: &PgPool,
+    sql: &str,
+    context: &'static str,
+    run_id: &CrawlRunId,
+    threshold: f64,
+) -> Result<Vec<SybilUniformityDbRow>, CrawlerRepositoryError> {
+    let rows = query::<Postgres>(sql)
+        .bind(run_id.as_uuid())
+        .bind(MIN_UNIFORM_CLUSTER_NODE_COUNT as i64)
+        .bind(threshold)
+        .bind(SYBIL_TOP_CLUSTER_LIMIT.min(i64::MAX as usize) as i64)
+        .fetch_all(pool)
+        .await
+        .map_err(|err| map_postgres_err(context, err))?;
+
+    rows.into_iter()
+        .map(
+            |row| -> Result<SybilUniformityDbRow, CrawlerRepositoryError> {
+                Ok(SybilUniformityDbRow {
+                    cluster_key: row
+                        .try_get("cluster_key")
+                        .map_err(|err| map_postgres_err("decode cluster_key", err))?,
+                    cluster_label: row
+                        .try_get("cluster_label")
+                        .map_err(|err| map_postgres_err("decode cluster_label", err))?,
+                    node_count: row
+                        .try_get("node_count")
+                        .map_err(|err| map_postgres_err("decode node_count", err))?,
+                    matching_node_count: row
+                        .try_get("matching_node_count")
+                        .map_err(|err| map_postgres_err("decode matching_node_count", err))?,
+                    share: row
+                        .try_get("share")
+                        .map_err(|err| map_postgres_err("decode share", err))?,
+                })
+            },
+        )
+        .collect()
+}
+
+fn push_share_signal(
+    signals: &mut Vec<ScoredSybilSignal>,
+    kind: SybilSignalKind,
+    cluster_type: SybilClusterType,
+    row: &SybilClusterCountDbRow,
+    verified_node_count: u64,
+    threshold: Option<f64>,
+    threshold_level: SybilSignalLevel,
+) {
+    let share = share(row.node_count.max(0) as u64, verified_node_count);
+    let level = threshold
+        .filter(|threshold| share >= *threshold)
+        .map(|_| threshold_level)
+        .unwrap_or(SybilSignalLevel::Info);
+    let strength = threshold
+        .map(|threshold| share / threshold)
+        .unwrap_or(share);
+
+    signals.push(ScoredSybilSignal {
+        signal: SybilMetricSignal {
+            level,
+            kind,
+            cluster_type,
+            cluster_key: row.cluster_key.clone(),
+            cluster_label: row.cluster_label.clone(),
+            node_count: row.node_count.max(0) as u64,
+            share: Some(round_ratio(share)),
+            threshold,
+            hhi: None,
+            density: None,
+        },
+        strength,
+    });
+}
+
+fn push_uniformity_signal(
+    signals: &mut Vec<ScoredSybilSignal>,
+    kind: SybilSignalKind,
+    cluster_type: SybilClusterType,
+    row: &SybilUniformityDbRow,
+    threshold: f64,
+) {
+    signals.push(ScoredSybilSignal {
+        signal: SybilMetricSignal {
+            level: SybilSignalLevel::Review,
+            kind,
+            cluster_type,
+            cluster_key: row.cluster_key.clone(),
+            cluster_label: row.cluster_label.clone(),
+            node_count: row.node_count.max(0) as u64,
+            share: Some(round_ratio(row.share)),
+            threshold: Some(threshold),
+            hhi: None,
+            density: None,
+        },
+        strength: (row.matching_node_count.max(0) as f64) / (row.node_count.max(1) as f64),
+    });
+}
+
+fn hhi(rows: &[SybilClusterCountDbRow], total: u64) -> f64 {
+    if total == 0 {
+        return 0.0;
+    }
+
+    rows.iter()
+        .map(|row| share(row.node_count.max(0) as u64, total).powi(2))
+        .sum()
+}
+
+fn share(numerator: u64, denominator: u64) -> f64 {
+    if denominator == 0 {
+        return 0.0;
+    }
+
+    numerator as f64 / denominator as f64
+}
+
+fn round_ratio(value: f64) -> f64 {
+    (value * 1_000.0).round() / 1_000.0
+}
+
+fn sort_and_cap_sybil_signals(signals: &mut Vec<ScoredSybilSignal>) {
+    signals.sort_by(|left, right| {
+        sybil_level_rank(left.signal.level)
+            .cmp(&sybil_level_rank(right.signal.level))
+            .then_with(|| right.strength.total_cmp(&left.strength))
+            .then_with(|| {
+                sybil_kind_rank(left.signal.kind).cmp(&sybil_kind_rank(right.signal.kind))
+            })
+            .then_with(|| left.signal.cluster_key.cmp(&right.signal.cluster_key))
+    });
+    signals.truncate(SYBIL_SIGNAL_CAP);
+}
+
+fn sybil_level_rank(level: SybilSignalLevel) -> u8 {
+    match level {
+        SybilSignalLevel::Review => 0,
+        SybilSignalLevel::Watch => 1,
+        SybilSignalLevel::Info => 2,
+    }
+}
+
+fn sybil_kind_rank(kind: SybilSignalKind) -> u8 {
+    match kind {
+        SybilSignalKind::ClusterFingerprintUniformity => 0,
+        SybilSignalKind::ClusterHeightUniformity => 1,
+        SybilSignalKind::TopPrefixShare => 2,
+        SybilSignalKind::TopAsnShare => 3,
+        SybilSignalKind::AsnHhi => 4,
+        SybilSignalKind::PrefixDensity => 5,
+        SybilSignalKind::TopCountryShare => 6,
+    }
+}
+
 async fn query_run_string_distribution(
     pool: &PgPool,
     column: StringDistributionColumn,
@@ -794,7 +1468,21 @@ LIMIT $1
 }
 
 fn latest_run_id_sql(phase_filter: &CrawlRunPhaseFilter) -> String {
-    let where_clause = match phase_filter {
+    let where_clause = latest_run_where_clause(phase_filter);
+
+    format!(
+        "
+SELECT run_id
+FROM crawler_run_checkpoints
+{where_clause}
+ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
+LIMIT 1
+"
+    )
+}
+
+fn latest_run_where_clause(phase_filter: &CrawlRunPhaseFilter) -> String {
+    match phase_filter {
         CrawlRunPhaseFilter::Finished => "WHERE phase = 'finished'".to_string(),
         CrawlRunPhaseFilter::Any => String::new(),
         CrawlRunPhaseFilter::OneOf(phases) => {
@@ -809,17 +1497,7 @@ fn latest_run_id_sql(phase_filter: &CrawlRunPhaseFilter) -> String {
                 format!("WHERE phase IN ({})", phases.join(", "))
             }
         }
-    };
-
-    format!(
-        "
-SELECT run_id
-FROM crawler_run_checkpoints
-{where_clause}
-ORDER BY checkpointed_at DESC, checkpoint_sequence DESC
-LIMIT 1
-"
-    )
+    }
 }
 
 fn crawl_phase_sql_value(phase: CrawlPhase) -> &'static str {

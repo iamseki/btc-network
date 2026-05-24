@@ -4,5 +4,6 @@ mod historical_runs;
 mod last_run_asns;
 mod last_run_distributions;
 mod last_run_nodes;
+mod last_run_sybil_metrics;
 mod limit_guardrails;
 mod node_status;

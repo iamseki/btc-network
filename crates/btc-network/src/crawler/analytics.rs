@@ -279,10 +279,8 @@ pub enum SybilSignalKind {
     TopPrefixShare,
     PrefixDensity,
     TopCountryShare,
-    TopSoftwareFingerprintShare,
     ClusterFingerprintUniformity,
     ClusterHeightUniformity,
-    RepeatedObservationPattern,
 }
 
 /// Observed grouping that produced a Sybil-oriented signal.
@@ -293,8 +291,6 @@ pub enum SybilClusterType {
     Asn,
     Prefix,
     Country,
-    SoftwareFingerprint,
-    ObservationPattern,
 }
 
 /// Typed heuristic signal derived from crawler-observed latest-run metrics.
