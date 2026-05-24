@@ -6,6 +6,7 @@ import {
   Network,
   Radio,
   RadioTower,
+  Search,
   ShieldAlert,
   ShieldCheck,
   Waypoints,
@@ -20,7 +21,7 @@ import {
   useCrawlerSignalPlayback,
 } from "./components/crawler-live-signal";
 import { SessionLogPanel } from "./components/session-log-panel";
-import { Badge } from "./components/ui/badge";
+import { TextInput } from "./components/ui/text-input";
 import {
   Sidebar,
   SidebarContent,
@@ -157,6 +158,7 @@ export function App() {
   const [isDownloadingBlock, setIsDownloadingBlock] = useState(false);
   const [latestCrawlerPreview, setLatestCrawlerPreview] = useState<CrawlRunDetail | null>(null);
   const [latestCrawlerPreviewCountries, setLatestCrawlerPreviewCountries] = useState<LastRunCountryCountItem[]>([]);
+  const [riskTopicFilter, setRiskTopicFilter] = useState("");
   const [isLoadingCrawlerPreview, setIsLoadingCrawlerPreview] = useState(false);
   const [isCrawlerPreviewOpen, setIsCrawlerPreviewOpen] = useState(false);
   const [isCrawlerPreviewRendered, setIsCrawlerPreviewRendered] = useState(false);
@@ -681,6 +683,19 @@ export function App() {
                     ))}
                   </div>
                 </nav>
+              ) : selectedPage === "risk" ? (
+                <div className="min-w-0 md:flex md:justify-center">
+                  <div className="relative w-full sm:max-w-sm md:w-80">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <TextInput
+                      aria-label="Filter risk topics"
+                      className="h-9 rounded-[8px] pl-9 pr-3 text-xs"
+                      placeholder="Filter topics"
+                      value={riskTopicFilter}
+                      onChange={(event) => setRiskTopicFilter(event.target.value)}
+                    />
+                  </div>
+                </div>
               ) : null}
               <div className="md:ml-auto">
                 {showsNodeContext ? (
@@ -688,11 +703,7 @@ export function App() {
                     {node}
                   </div>
                 ) : selectedPage === "risk" ? (
-                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                    <Badge variant="muted">Crawler-visible</Badge>
-                    <Badge variant="muted">Mocked details</Badge>
-                    <Badge variant="muted">No attack claims</Badge>
-                  </div>
+                  <div id="risk-header-actions" className="flex min-h-9 items-center justify-end" />
                 ) : showsCrawlerPreviewControl && (latestCrawlerPreview || isLoadingCrawlerPreview) ? (
                   <CrawlerPulseButton
                     summary={
@@ -757,7 +768,14 @@ export function App() {
                 )
               ) : null}
 
-              {selectedPage === "risk" ? <RiskPage client={client} showHeader={false} /> : null}
+              {selectedPage === "risk" ? (
+                <RiskPage
+                  client={client}
+                  showHeader={false}
+                  topicFilter={riskTopicFilter}
+                  onTopicFilterChange={setRiskTopicFilter}
+                />
+              ) : null}
 
               {selectedPage === "status" ? <StatusPage client={client} /> : null}
 

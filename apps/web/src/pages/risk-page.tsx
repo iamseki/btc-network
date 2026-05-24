@@ -1,17 +1,24 @@
 import {
   ArrowLeft,
-  BookOpenText,
   ChevronRight,
   CircleHelp,
   LoaderCircle,
   RotateCw,
-  ShieldAlert,
+  Search,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { TextInput } from "@/components/ui/text-input";
+import {
+  identityConcentrationArticle,
+  type RiskArticleBlock,
+  type RiskArticleDocument,
+  type RiskArticleSection,
+} from "@/content/risk/article-registry";
 import type { BtcAppClient } from "@/lib/api/client";
 import type {
   CrawlRunDetail,
@@ -20,10 +27,13 @@ import type {
   LastRunNetworkTypeCountItem,
 } from "@/lib/api/types";
 import { isDemoModeEnabled } from "@/lib/runtime-config";
+import { RiskArticleWidget } from "./risk-article-widgets";
 
 type RiskPageProps = {
   client: BtcAppClient;
   showHeader?: boolean;
+  topicFilter?: string;
+  onTopicFilterChange?: (value: string) => void;
 };
 
 type RiskTopic = {
@@ -31,6 +41,7 @@ type RiskTopic = {
   title: string;
   category: string;
   status: "ready" | "planned";
+  isInteractive: boolean;
   summary: string;
   highlight: string;
   metrics: { label: string; value: string; detail: string }[];
@@ -46,15 +57,24 @@ type RiskTopicSection = {
   bullets?: string[];
 };
 
-export function RiskPage({ client, showHeader = true }: RiskPageProps) {
+export function RiskPage({
+  client,
+  showHeader = true,
+  topicFilter: controlledTopicFilter,
+  onTopicFilterChange,
+}: RiskPageProps) {
   const demoMode = isDemoModeEnabled();
   const [lastRunAsns, setLastRunAsns] = useState<LastRunAsnCountItem[]>([]);
   const [lastRunNetworkTypes, setLastRunNetworkTypes] = useState<LastRunNetworkTypeCountItem[]>([]);
   const [latestRun, setLatestRun] = useState<CrawlRunListItem | null>(null);
   const [latestDetail, setLatestDetail] = useState<CrawlRunDetail | null>(null);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+  const [uncontrolledTopicFilter, setUncontrolledTopicFilter] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasControlledTopicFilter = controlledTopicFilter !== undefined && onTopicFilterChange !== undefined;
+  const topicFilter = controlledTopicFilter ?? uncontrolledTopicFilter;
+  const setTopicFilter = onTopicFilterChange ?? setUncontrolledTopicFilter;
 
   useEffect(() => {
     let cancelled = false;
@@ -161,11 +181,41 @@ export function RiskPage({ client, showHeader = true }: RiskPageProps) {
     ],
   );
   const selectedTopic = riskTopics.find((topic) => topic.id === selectedTopicId) ?? null;
+  const normalizedTopicFilter = topicFilter.trim().toLowerCase();
+  const filteredRiskTopics =
+    normalizedTopicFilter.length === 0
+      ? riskTopics
+      : riskTopics.filter((topic) =>
+          [
+            topic.title,
+            topic.category,
+            topic.summary,
+            topic.highlight,
+            topic.status,
+            topic.isInteractive ? "expandable article draft" : "coming soon",
+            ...topic.metrics.flatMap((metric) => [metric.label, metric.value, metric.detail]),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedTopicFilter),
+        );
   const hasRiskInputs =
     latestRun !== null ||
     lastRunAsns.length > 0 ||
     lastRunNetworkTypes.length > 0 ||
     networkOutcomes.length > 0;
+  const topicFilterControl = (
+    <div className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <TextInput
+        aria-label="Filter risk topics"
+        className="h-9 rounded-[8px] pl-9 pr-3 text-xs"
+        placeholder="Filter topics"
+        value={topicFilter}
+        onChange={(event) => setTopicFilter(event.target.value)}
+      />
+    </div>
+  );
 
   return (
     <Card>
@@ -192,33 +242,48 @@ export function RiskPage({ client, showHeader = true }: RiskPageProps) {
                 </span>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {riskTopics.length} clean evidence cards with expanded notes
+                {riskTopics.length} evidence topics; filter by signal, category, or status
               </p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Badge variant="muted">Crawler-visible</Badge>
-              <Badge variant="muted">Mocked details</Badge>
-              <Badge variant="muted">No attack claims</Badge>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 rounded-md px-0"
-                aria-label="Refresh risk metrics"
-                title="Refresh risk metrics"
-                onClick={() => void refreshRisk()}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCw className="h-4 w-4" />
-                )}
-              </Button>
+            <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
+              {topicFilterControl}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge variant="muted">Crawler-visible</Badge>
+                <Badge variant="muted">Evidence topics</Badge>
+                <Badge variant="muted">No verdict claims</Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 rounded-md px-0"
+                  aria-label="Refresh risk metrics"
+                  title="Refresh risk metrics"
+                  onClick={() => void refreshRisk()}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCw className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         ) : (
-          <h1 className="sr-only">Risk</h1>
+          <div
+            className={
+              hasControlledTopicFilter
+                ? "sr-only"
+                : "flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-4 sm:pb-5"
+            }
+          >
+            <h1 className="sr-only">Risk</h1>
+            <p className="min-w-0 font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+              {riskTopics.length} evidence topics
+            </p>
+            {hasControlledTopicFilter ? null : topicFilterControl}
+          </div>
         )}
 
         {isLoading ? (
@@ -245,15 +310,21 @@ export function RiskPage({ client, showHeader = true }: RiskPageProps) {
               <RiskTopicDetailView topic={selectedTopic} onBack={() => setSelectedTopicId(null)} />
             ) : (
               <section className="space-y-3">
-                <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-                  {riskTopics.map((topic) => (
-                    <RiskTopicCard
-                      key={topic.id}
-                      topic={topic}
-                      onSelect={() => setSelectedTopicId(topic.id)}
-                    />
-                  ))}
-                </div>
+                {filteredRiskTopics.length > 0 ? (
+                  <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {filteredRiskTopics.map((topic) => (
+                      <RiskTopicCard
+                        key={topic.id}
+                        topic={topic}
+                        onSelect={
+                          topic.isInteractive ? () => setSelectedTopicId(topic.id) : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <StatusPanel message={`No risk topics match "${topicFilter.trim()}".`} />
+                )}
               </section>
             )}
           </div>
@@ -283,15 +354,12 @@ function buildRiskTopics({
   return [
     {
       id: "identity-concentration",
-      title: "Identity Concentration Signals",
-      category: "Sybil-oriented evidence",
+      title: identityConcentrationArticle.title,
+      category: identityConcentrationArticle.category,
       status: "planned",
-      summary:
-        "Tracks endpoint concentration and software uniformity as crawler-visible review signals. It does not prove operator identity or shared control.",
-      highlight:
-        asnConcentrationPct === null
-          ? "Needs verified ASN distribution"
-          : `${asnConcentrationPct.toFixed(1)}% top ASN share`,
+      isInteractive: true,
+      summary: identityConcentrationArticle.summary,
+      highlight: "Open article notes",
       metrics: [
         {
           label: "Top ASN share",
@@ -351,10 +419,11 @@ function buildRiskTopics({
       id: "eclipse-exposure",
       title: "Eclipse Exposure Proxy",
       category: "Connectivity risk",
-      status: "ready",
+      status: "planned",
+      isInteractive: false,
       summary:
         "Combines concentration, transport skew, failed verification, and uncovered frontier pressure into one operational proxy.",
-      highlight: `${Math.round(eclipseExposureScore)} exposure proxy`,
+      highlight: "Not available yet",
       metrics: [
         {
           label: "Exposure proxy",
@@ -368,7 +437,7 @@ function buildRiskTopics({
         },
       ],
       limitations: [
-        "This is a proxy, not a direct attack measurement.",
+        "This is a proxy, not a direct security finding.",
         "Crawler coverage is incomplete and time-dependent.",
       ],
       sections: [
@@ -405,10 +474,11 @@ function buildRiskTopics({
       id: "observation-confidence",
       title: "Observation Confidence",
       category: "Measurement quality",
-      status: "ready",
+      status: "planned",
+      isInteractive: false,
       summary:
         "Shows how much trust to place in current public read-only analytics before interpreting risk signals.",
-      highlight: `${Math.round(observationConfidenceScore)} confidence score`,
+      highlight: "Not available yet",
       metrics: [
         {
           label: "Confidence score",
@@ -454,10 +524,11 @@ function buildRiskTopics({
       id: "decentralization-review",
       title: "Decentralization Review",
       category: "Network shape",
-      status: "ready",
+      status: "planned",
+      isInteractive: false,
       summary:
         "Summarizes concentration, transport spread, and frontier coverage as a clean review entry point for network-shape changes.",
-      highlight: `${Math.round(decentralizationScore)} health score`,
+      highlight: "Not available yet",
       metrics: [
         {
           label: "Health score",
@@ -512,55 +583,66 @@ function RiskTopicCard({
   onSelect,
 }: {
   topic: RiskTopic;
-  onSelect: () => void;
+  onSelect?: () => void;
 }) {
-  const Icon = topic.status === "ready" ? ShieldAlert : BookOpenText;
-  const previewMetrics = topic.metrics.slice(0, 2);
+  const baseClassName =
+    "group flex min-h-[12rem] flex-col rounded-[10px] border p-3 text-left shadow-[0_12px_22px_rgba(0,0,0,0.12)] transition-colors sm:p-4";
+  const interactiveClassName =
+    "cursor-pointer border-border/80 bg-background/70 hover:border-primary/45 hover:bg-background/86 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const unavailableClassName =
+    "cursor-not-allowed border-border/55 bg-muted/20 opacity-70";
+  const body = (
+    <>
+      <span className="flex items-start justify-between gap-3">
+        <span className="min-w-0 text-base font-semibold leading-6 text-foreground">{topic.title}</span>
+        <Badge variant={topic.isInteractive ? "default" : "muted"}>
+          {topic.isInteractive ? "Draft article" : "Coming soon"}
+        </Badge>
+      </span>
+      <span className="mt-3 min-w-0">
+        <span
+          className={
+            topic.isInteractive
+              ? "block font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary"
+              : "block font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+          }
+        >
+          {topic.category}
+        </span>
+        {topic.isInteractive ? (
+          <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+            {topic.summary}
+          </span>
+        ) : null}
+      </span>
+      <span className="mt-auto flex items-center justify-between gap-3 pt-4">
+        <span className="text-xs text-muted-foreground">{topic.highlight}</span>
+        {topic.isInteractive ? (
+          <span className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+            Open
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+
+  if (!topic.isInteractive) {
+    return (
+      <div className={`${baseClassName} ${unavailableClassName}`} aria-label={`${topic.title} is not available yet`}>
+        {body}
+      </div>
+    );
+  }
 
   return (
     <button
       type="button"
-      className="group flex min-h-[17rem] cursor-pointer flex-col rounded-[10px] border border-border/80 bg-background/70 p-3 text-left shadow-[0_12px_22px_rgba(0,0,0,0.12)] transition-colors hover:border-primary/45 hover:bg-background/86 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-4"
+      className={`${baseClassName} ${interactiveClassName}`}
       onClick={onSelect}
       aria-label={`Open ${topic.title}`}
     >
-      <span className="flex items-start justify-between gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] border border-primary/20 bg-primary/10 text-primary">
-          <Icon className="h-4 w-4" />
-        </span>
-        <Badge variant={topic.status === "ready" ? "muted" : "default"}>
-          {topic.status === "ready" ? "Available" : "Mocked"}
-        </Badge>
-      </span>
-      <span className="mt-4 min-w-0">
-        <span className="block font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-          {topic.category}
-        </span>
-        <span className="mt-2 block text-base font-semibold text-foreground">{topic.title}</span>
-        <span className="mt-2 block text-sm leading-6 text-muted-foreground">
-          {topic.summary}
-        </span>
-      </span>
-      <span className="mt-4 grid gap-2">
-        {previewMetrics.map((metric) => (
-          <span
-            key={metric.label}
-            className="flex items-center justify-between gap-3 border-t border-border/70 pt-2"
-          >
-            <span className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {metric.label}
-            </span>
-            <span className="shrink-0 font-mono text-xs text-foreground">{metric.value}</span>
-          </span>
-        ))}
-      </span>
-      <span className="mt-auto flex items-center justify-between gap-3 pt-4">
-        <span className="text-xs text-muted-foreground">{topic.highlight}</span>
-        <span className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-          Details
-          <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-        </span>
-      </span>
+      {body}
     </button>
   );
 }
@@ -572,7 +654,133 @@ function RiskTopicDetailView({
   topic: RiskTopic;
   onBack: () => void;
 }) {
-  const Icon = topic.status === "ready" ? ShieldAlert : BookOpenText;
+  const isSybilTopic = topic.id === "identity-concentration";
+  const [isSectionMenuOpen, setIsSectionMenuOpen] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState(() => {
+    return isSybilTopic ? identityConcentrationArticle.navItems[0].id : topic.sections[0]?.id ?? "metrics";
+  });
+  const [headerActionsElement, setHeaderActionsElement] = useState<HTMLElement | null>(null);
+  const menuItems = useMemo(
+    () =>
+      isSybilTopic
+        ? identityConcentrationArticle.navItems
+        : [
+            ...topic.sections.map((section) => ({
+              id: section.id,
+              label: section.label,
+            })),
+            { id: "metrics", label: "Metrics" },
+            { id: "limits", label: "Limits" },
+          ],
+    [isSybilTopic, topic.sections],
+  );
+
+  useEffect(() => {
+    setHeaderActionsElement(document.getElementById("risk-header-actions"));
+  }, []);
+
+  useEffect(() => {
+    const firstSectionId = isSybilTopic ? identityConcentrationArticle.navItems[0].id : topic.sections[0]?.id ?? "metrics";
+    setActiveSectionId(firstSectionId);
+  }, [isSybilTopic, topic.id, topic.sections]);
+
+  useEffect(() => {
+    const sectionPrefix = `risk-topic-${topic.id}-`;
+    let animationFrame = 0;
+
+    function updateActiveSection() {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        const readingAnchor = 180;
+        let nextActiveSectionId = "";
+        let closestSectionId = nextActiveSectionId;
+        let closestSectionDistance = Number.POSITIVE_INFINITY;
+        let hasMeasuredSection = false;
+
+        for (const item of menuItems) {
+          const element = document.getElementById(`${sectionPrefix}${item.id}`);
+
+          if (!element) {
+            continue;
+          }
+
+          const rect = element.getBoundingClientRect();
+
+          if (rect.height === 0 && rect.top === 0) {
+            continue;
+          }
+
+          hasMeasuredSection = true;
+          const sectionDistance = Math.abs(rect.top - readingAnchor);
+
+          if (sectionDistance < closestSectionDistance) {
+            closestSectionDistance = sectionDistance;
+            closestSectionId = item.id;
+          }
+
+          if (rect.top <= readingAnchor && rect.bottom > readingAnchor) {
+            nextActiveSectionId = item.id;
+            break;
+          }
+
+          if (rect.top <= readingAnchor) {
+            nextActiveSectionId = item.id;
+          }
+        }
+
+        if (hasMeasuredSection) {
+          const resolvedSectionId = (nextActiveSectionId || closestSectionId || menuItems[0]?.id) ?? "";
+          setActiveSectionId((current) =>
+            current === resolvedSectionId ? current : resolvedSectionId,
+          );
+        }
+      });
+    }
+
+    updateActiveSection();
+    window.addEventListener("scroll", updateActiveSection, { passive: true });
+    window.addEventListener("resize", updateActiveSection);
+    document.addEventListener("scroll", updateActiveSection, { capture: true, passive: true });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
+      document.removeEventListener("scroll", updateActiveSection, { capture: true });
+    };
+  }, [menuItems, topic.id]);
+
+  useEffect(() => {
+    if (!isSectionMenuOpen) {
+      return;
+    }
+
+    function closeSectionMenuOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Element && event.target.closest("[data-risk-section-menu]")) {
+        return;
+      }
+
+      setIsSectionMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeSectionMenuOnOutsidePointer);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeSectionMenuOnOutsidePointer);
+    };
+  }, [isSectionMenuOpen]);
+
+  function sectionDomId(sectionId: string) {
+    return `risk-topic-${topic.id}-${sectionId}`;
+  }
+
+  function scrollToSection(sectionId: string) {
+    document.getElementById(sectionDomId(sectionId))?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    setIsSectionMenuOpen(false);
+  }
 
   return (
     <article className="space-y-5">
@@ -582,54 +790,14 @@ function RiskTopicDetailView({
           Cards
         </Button>
         <Badge variant={topic.status === "ready" ? "muted" : "default"}>
-          {topic.status === "ready" ? "Available card" : "Mocked card"}
+          {topic.status === "ready" ? "Available card" : "Evidence article"}
         </Badge>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[14rem_minmax(0,1fr)]">
-        <nav
-          aria-label={`${topic.title} detail menu`}
-          className="h-max rounded-[10px] border border-border/80 bg-background/70 p-3 lg:sticky lg:top-4"
-        >
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-primary/20 bg-primary/10 text-primary">
-              <Icon className="h-4 w-4" />
-            </span>
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-              Menu
-            </p>
-          </div>
-          <div className="mt-3 grid gap-1">
-            {topic.sections.map((section) => (
-              <a
-                key={section.id}
-                href={`#${section.id}`}
-                className="rounded-[8px] px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {section.label}
-              </a>
-            ))}
-            <a
-              href="#metrics"
-              className="rounded-[8px] px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Metrics
-            </a>
-            <a
-              href="#limits"
-              className="rounded-[8px] px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Limits
-            </a>
-          </div>
-        </nav>
-
-        <div className="min-w-0 space-y-6">
+      <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_13rem]">
+        <div className="min-w-0 space-y-6 pb-[45vh]">
           <header>
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
-              {topic.category}
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-foreground sm:text-3xl">
+            <h2 className="text-2xl font-semibold text-foreground sm:text-3xl">
               {topic.title}
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -637,64 +805,272 @@ function RiskTopicDetailView({
             </p>
           </header>
 
-          {topic.sections.map((section) => (
-            <section key={section.id} id={section.id} className="scroll-mt-6 space-y-3">
-              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-                {section.label}
-              </p>
-              <h3 className="text-lg font-semibold text-foreground">{section.title}</h3>
-              {section.body.map((paragraph) => (
-                <p key={paragraph} className="text-sm leading-7 text-muted-foreground">
-                  {paragraph}
-                </p>
+          <CompactSectionMenu
+            isOpen={isSectionMenuOpen}
+            activeItemId={activeSectionId}
+            items={menuItems}
+            label={topic.title}
+            onSelect={scrollToSection}
+            onToggle={() => setIsSectionMenuOpen((current) => !current)}
+            portalElement={headerActionsElement}
+          />
+
+          {isSybilTopic ? (
+            <RiskArticleContent article={identityConcentrationArticle} sectionDomId={sectionDomId} />
+          ) : (
+            <>
+              {topic.sections.map((section) => (
+                <section key={section.id} id={sectionDomId(section.id)} className="scroll-mt-6 space-y-3">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                    {section.label}
+                  </p>
+                  <h3 className="text-lg font-semibold text-foreground">{section.title}</h3>
+                  {section.body.map((paragraph) => (
+                    <p key={paragraph} className="text-sm leading-7 text-muted-foreground">
+                      {paragraph}
+                    </p>
+                  ))}
+                  {section.bullets ? (
+                    <ul className="grid gap-2 text-sm leading-6 text-muted-foreground">
+                      {section.bullets.map((bullet) => (
+                        <li key={bullet} className="border-l border-primary/35 pl-3">
+                          {bullet}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </section>
               ))}
-              {section.bullets ? (
+
+              <section id={sectionDomId("metrics")} className="scroll-mt-6 space-y-3">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                  Metrics
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {topic.metrics.map((metric) => (
+                    <div key={metric.label} className="rounded-[10px] border border-border/70 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          {metric.label}
+                        </p>
+                        <p className="shrink-0 font-mono text-xs text-foreground">{metric.value}</p>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">{metric.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section id={sectionDomId("limits")} className="scroll-mt-6 space-y-3">
+                <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                  Limits
+                </p>
                 <ul className="grid gap-2 text-sm leading-6 text-muted-foreground">
-                  {section.bullets.map((bullet) => (
-                    <li key={bullet} className="border-l border-primary/35 pl-3">
-                      {bullet}
+                  {topic.limitations.map((limitation) => (
+                    <li key={limitation} className="border-l border-primary/35 pl-3">
+                      {limitation}
                     </li>
                   ))}
                 </ul>
-              ) : null}
-            </section>
-          ))}
-
-          <section id="metrics" className="scroll-mt-6 space-y-3">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-              Metrics
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {topic.metrics.map((metric) => (
-                <div key={metric.label} className="rounded-[10px] border border-border/70 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      {metric.label}
-                    </p>
-                    <p className="shrink-0 font-mono text-xs text-foreground">{metric.value}</p>
-                  </div>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{metric.detail}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section id="limits" className="scroll-mt-6 space-y-3">
-            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-              Limits
-            </p>
-            <ul className="grid gap-2 text-sm leading-6 text-muted-foreground">
-              {topic.limitations.map((limitation) => (
-                <li key={limitation} className="border-l border-primary/35 pl-3">
-                  {limitation}
-                </li>
-              ))}
-            </ul>
-          </section>
+              </section>
+            </>
+          )}
         </div>
+
+        <OnThisPageMenu
+          activeItemId={activeSectionId}
+          items={menuItems}
+          label={topic.title}
+          onSelect={scrollToSection}
+        />
       </div>
     </article>
   );
+}
+
+function OnThisPageMenu({
+  activeItemId,
+  items,
+  label,
+  onSelect,
+}: {
+  activeItemId: string;
+  items: { id: string; label: string }[];
+  label: string;
+  onSelect: (sectionId: string) => void;
+}) {
+  return (
+    <aside className="hidden xl:block">
+      <nav
+        aria-label={`${label} on this page`}
+        className="fixed right-6 top-[11rem] z-[8] w-56 max-h-[calc(100vh-12.5rem)] overflow-y-auto"
+      >
+        <div className="pb-2">
+          <p className="text-sm font-semibold text-foreground">On this page</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Article sections</p>
+        </div>
+        <div className="mt-3 grid gap-0.5 border-l border-border/80">
+          {items.map((item) => {
+            const isActive = item.id === activeItemId;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={isActive ? "true" : undefined}
+                className={
+                  isActive
+                    ? "-ml-px cursor-pointer rounded-r-[8px] border-l-2 border-primary bg-primary/10 py-1.5 pl-3 pr-2 text-left text-sm font-medium text-primary transition-colors"
+                    : "-ml-px cursor-pointer rounded-r-[8px] border-l-2 border-transparent py-1.5 pl-3 pr-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                }
+                onClick={() => onSelect(item.id)}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    </aside>
+  );
+}
+
+function CompactSectionMenu({
+  activeItemId,
+  isOpen,
+  items,
+  label,
+  onSelect,
+  onToggle,
+  portalElement,
+}: {
+  activeItemId: string;
+  isOpen: boolean;
+  items: { id: string; label: string }[];
+  label: string;
+  onSelect: (sectionId: string) => void;
+  onToggle: () => void;
+  portalElement: HTMLElement | null;
+}) {
+  const activeItemLabel = items.find((item) => item.id === activeItemId)?.label ?? "Overview";
+  const menu = (
+    <nav
+      aria-label={`${label} compact section menu`}
+      data-risk-section-menu=""
+      className={portalElement ? "relative xl:hidden" : "sticky top-[4.75rem] z-[2] xl:hidden"}
+    >
+      <button
+        type="button"
+        className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border border-border/80 bg-card px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+      >
+        <span>Sections</span>
+        <span className="hidden max-w-28 truncate text-muted-foreground sm:inline">
+          {activeItemLabel}
+        </span>
+        <ChevronRight
+          className={
+            isOpen
+              ? "h-4 w-4 rotate-90 text-primary transition-transform"
+              : "h-4 w-4 text-primary transition-transform"
+          }
+        />
+      </button>
+      {isOpen ? (
+        <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 grid max-h-[calc(100vh-6rem)] w-[min(calc(100vw-2rem),18rem)] gap-1 overflow-y-auto rounded-[10px] border border-border/80 bg-card/98 p-2 shadow-[0_18px_42px_rgba(0,0,0,0.34)] backdrop-blur">
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={item.id === activeItemId ? "true" : undefined}
+              className={
+                item.id === activeItemId
+                  ? "cursor-pointer rounded-[8px] bg-primary/10 px-3 py-2 text-left text-sm text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  : "cursor-pointer rounded-[8px] px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              }
+              onClick={() => onSelect(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </nav>
+  );
+
+  if (portalElement) {
+    return createPortal(menu, portalElement);
+  }
+
+  return menu;
+}
+
+function RiskArticleContent({
+  article,
+  sectionDomId,
+}: {
+  article: RiskArticleDocument;
+  sectionDomId: (sectionId: string) => string;
+}) {
+  return (
+    <div className="space-y-8">
+      {article.sections.map((section) => (
+        <RiskArticleSectionView
+          key={section.id}
+          section={section}
+          sectionDomId={sectionDomId}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RiskArticleSectionView({
+  section,
+  sectionDomId,
+}: {
+  section: RiskArticleSection;
+  sectionDomId: (sectionId: string) => string;
+}) {
+  return (
+    <section id={sectionDomId(section.id)} className="scroll-mt-6 space-y-4">
+      <h3
+        className={
+          section.id === "dashboard" || section.id === "references"
+            ? "text-lg font-semibold text-primary"
+            : "text-lg font-semibold text-foreground"
+        }
+      >
+        {section.label}
+      </h3>
+      <div className="space-y-3">
+        {section.blocks.map((block, index) => (
+          <RiskArticleBlockView key={`${section.id}-${index}`} block={block} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RiskArticleBlockView({ block }: { block: RiskArticleBlock }) {
+  if (block.type === "paragraph") {
+    return <p className="text-sm leading-7 text-muted-foreground">{block.text}</p>;
+  }
+
+  if (block.type === "list") {
+    return (
+      <ul className="grid gap-2 text-sm leading-6 text-muted-foreground">
+        {block.items.map((item) => (
+          <li key={item} className="border-l border-primary/35 pl-3">
+            {item}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return <RiskArticleWidget widgetType={block.widgetType} props={block.props} />;
 }
 
 function HeaderTooltip({ label, tooltip }: { label: string; tooltip: string }) {

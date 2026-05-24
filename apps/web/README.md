@@ -22,6 +22,34 @@ This app does not own:
 - Adapt blocks down to the repo's cleaner retro style instead of rebuilding those patterns from scratch
 - Drop to lower-level shadcn primitives only when no suitable block exists or the block would be heavier than the interface needs
 
+## Risk article content workflow
+
+Risk articles are human-owned source content, not runtime prompts.
+
+- Keep article copy in Markdown files under `src/content/risk/articles/`
+- Keep article registration and frontmatter parsing in `src/content/risk/article-registry.ts`
+- Keep approved widgets in `src/pages/risk-article-widgets.tsx`
+- Keep React page code in `src/pages/risk-page.tsx` focused on rendering, navigation, state, and layout
+- Treat AI as an editor or drafting assistant; the reviewed article file remains the source of truth
+- Write article prose as plain Markdown headings, paragraphs, and bullet lists
+- Use approved widget directives for dynamic UI or API-backed areas, for example `::widget{type="sybil-dashboard"}`
+- Markdown may request a widget, but it must not define widget behavior, API calls, or layout code
+- Unknown widget types render as visible placeholders so articles can be drafted before a widget exists
+- The `On this page` rail is generated from Markdown headings, so section labels should be short and human-readable
+- Include references as explicit links with human-readable titles and short details
+- Avoid claims the crawler cannot support; describe crawler-visible evidence, limitations, and review prompts
+- Do not add protocol parsing, crawler data shaping, or API calls inside article Markdown files
+
+Suggested contributor flow:
+
+1. Add or edit article Markdown under `src/content/risk/articles/`
+2. If a new widget is needed, add a directive such as `::widget{type="address-churn"}` in Markdown
+3. Implement the matching typed widget in `src/pages/risk-article-widgets.tsx`
+4. Add API client methods or backend work only in the existing API boundaries, never in Markdown
+5. Update `src/pages/risk-page.test.tsx` when adding sections, references, widgets, or navigation behavior
+6. Run `npm run test --prefix apps/web -- src/pages/risk-page.test.tsx src/App.test.tsx`
+7. Run `npm run build --prefix apps/web`
+
 ## Current Status
 
 Current state:

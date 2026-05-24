@@ -94,27 +94,89 @@ describe("RiskPage", () => {
 
     expect(await screen.findByText("Risk Library")).toBeTruthy();
     expect(screen.queryByText("Control Deck")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Filter risk topics" })).toBeTruthy();
     const identityCard = screen.getByRole("button", { name: "Open Identity Concentration Signals" });
     expect(identityCard.className).toContain("cursor-pointer");
     expect(screen.getByText("Identity Concentration Signals")).toBeTruthy();
     expect(screen.getByText("Sybil-oriented evidence")).toBeTruthy();
-    expect(screen.getByText("Top ASN share")).toBeTruthy();
-    expect(screen.getByText("Mocked details")).toBeTruthy();
+    expect(screen.getByText("Evidence topics")).toBeTruthy();
+    expect(screen.getByText("No verdict claims")).toBeTruthy();
+    expect(screen.getByText("Draft article")).toBeTruthy();
     expect(screen.getByText("Decentralization Review")).toBeTruthy();
-    expect(screen.queryByText("Sybil attack detected")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open Decentralization Review" })).toBeNull();
+    expect(screen.getByLabelText("Decentralization Review is not available yet")).toBeTruthy();
+    expect(screen.getAllByText("Coming soon").length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText("Top ASN share")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\b(attacker|malicious)\b/i);
+    expect(document.body.textContent).not.toMatch(/shared control|controlled by one entity/i);
+  });
+
+  it("filters the risk topic cards from the header", async () => {
+    render(<RiskPage client={makeClient()} />);
+
+    expect(await screen.findByText("Risk Library")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter risk topics" }), {
+      target: { value: "sybil" },
+    });
+
+    expect(screen.getByText("Identity Concentration Signals")).toBeTruthy();
+    expect(screen.queryByText("Observation Confidence")).toBeNull();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter risk topics" }), {
+      target: { value: "confidence" },
+    });
+
+    expect(screen.queryByText("Identity Concentration Signals")).toBeNull();
+    expect(screen.getByText("Observation Confidence")).toBeTruthy();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter risk topics" }), {
+      target: { value: "not-a-topic" },
+    });
+
+    expect(screen.getByText('No risk topics match "not-a-topic".')).toBeTruthy();
   });
 
   it("opens a selected risk card into a detail page with a clickable menu", async () => {
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
     render(<RiskPage client={makeClient()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Open Identity Concentration Signals" }));
 
-    expect(screen.getByRole("navigation", { name: "Identity Concentration Signals detail menu" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Current read" }).getAttribute("href")).toBe("#read");
-    expect(screen.getByRole("link", { name: "Mocked data" }).getAttribute("href")).toBe("#mocked-data");
-    expect(screen.getByText("Example analyst notes")).toBeTruthy();
-    expect(screen.getByText("Prefix cluster A: 14 endpoints, 92% matching service tuple.")).toBeTruthy();
-    expect(screen.getByText("Crawler data cannot prove real-world operator identity.")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Identity Concentration Signals on this page" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Identity Concentration Signals compact section menu" })).toBeTruthy();
+    expect(screen.getByText("On this page")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Overview" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Overview" })[0].getAttribute("aria-current")).toBe("true");
+    expect(screen.getAllByRole("button", { name: "Dashboard" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "References" }).length).toBeGreaterThan(0);
+    const sectionsButton = screen.getByRole("button", { name: /Sections/ });
+    expect(sectionsButton.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(sectionsButton);
+    expect(sectionsButton.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.pointerDown(screen.getByText("Top clusters to review"));
+    expect(sectionsButton.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(sectionsButton);
+    expect(sectionsButton.getAttribute("aria-expanded")).toBe("true");
+    const overviewButton = screen.getAllByRole("button", { name: "Overview" })[0];
+    expect(overviewButton.className).toContain("cursor-pointer");
+    expect(screen.queryByRole("link", { name: "Overview" })).toBeNull();
+    expect(screen.getByText("Verified nodes")).toBeTruthy();
+    expect(screen.getByText("Top clusters to review")).toBeTruthy();
+    expect(screen.getByText("A Sybil problem starts when one real participant can look like many independent participants. In a peer-to-peer network this matters because software often makes decisions from the identities it can see: which peers to connect to, which addresses to learn from, and how diverse the surrounding network appears.")).toBeTruthy();
+    expect(screen.getAllByText("Top ASN share").length).toBeGreaterThan(0);
+    expect(screen.getByText("ASN AS64512: Example Hosting ASN")).toBeTruthy();
+    expect(screen.getByText("The Sybil Attack - John R. Douceur")).toBeTruthy();
+    expect(screen.getByText("Bitcoin: A Peer-to-Peer Electronic Cash System")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\b(attacker|malicious)\b/i);
+    expect(document.body.textContent).not.toMatch(/shared control|controlled by one entity/i);
+
+    fireEvent.click(overviewButton);
+
+    expect(window.location.hash).toBe("");
+    expect(sectionsButton.getAttribute("aria-expanded")).toBe("false");
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
 
     fireEvent.click(screen.getByRole("button", { name: "Cards" }));
 
