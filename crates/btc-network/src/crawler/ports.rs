@@ -14,6 +14,7 @@ use super::{
     LastRunAsnOrganizationCountItem, LastRunCountryCountItem, LastRunNetworkTypeCountItem,
     LastRunNodePageCursor, LastRunNodeSummaryPage, LastRunProtocolVersionCountItem,
     LastRunServicesCountItem, LastRunStartHeightCountItem, LastRunUserAgentCountItem,
+    SybilMetricsReport,
 };
 use crate::status::{NodeStatusItem, NodeStatusRecord};
 
@@ -217,6 +218,21 @@ pub trait CrawlerAnalyticsReader: Send + Sync {
         limit: usize,
         cursor: Option<LastRunNodePageCursor>,
     ) -> RepositoryFuture<'a, Result<LastRunNodeSummaryPage, CrawlerRepositoryError>>;
+
+    /// Returns latest-run Sybil-oriented heuristic signals.
+    ///
+    /// Signals are typed crawler-visible review prompts, not confirmed attack
+    /// claims. API and frontend layers own explanatory copy and limitations.
+    fn get_last_run_sybil_metrics<'a>(
+        &'a self,
+        _phase_filter: CrawlRunPhaseFilter,
+    ) -> RepositoryFuture<'a, Result<Option<SybilMetricsReport>, CrawlerRepositoryError>> {
+        Box::pin(async {
+            Err(CrawlerRepositoryError::new(
+                "last-run sybil metrics reader is not implemented by this adapter",
+            ))
+        })
+    }
 
     /// Returns latest status plus bounded recent history for curated status targets.
     fn list_node_status<'a>(

@@ -25,7 +25,8 @@ pub use analytics::{
     LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodePageCursor,
     LastRunNodeSummaryItem, LastRunNodeSummaryPage, LastRunProtocolVersionCountItem,
     LastRunServicesCountItem, LastRunStartHeightCountItem, LastRunUserAgentCountItem,
-    NetworkOutcomeCount,
+    NetworkOutcomeCount, SybilClusterType, SybilMetricSignal, SybilMetricsReport, SybilSignalKind,
+    SybilSignalLevel,
 };
 pub use domain::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
