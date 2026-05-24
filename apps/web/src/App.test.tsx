@@ -356,6 +356,8 @@ describe("App sidebar shell", () => {
   });
 
   it("promotes risk to a primary sidebar page", async () => {
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
     mockCrawlerPreviewRun();
 
     render(<App />);
@@ -365,8 +367,30 @@ describe("App sidebar shell", () => {
     expect(screen.getByRole("heading", { name: "Risk" })).toBeTruthy();
     expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk Library");
     expect(await screen.findByText("Risk Library")).toBeTruthy();
+    const topicFilter = screen.getByRole("textbox", { name: "Filter risk topics" });
+    expect(screen.getAllByRole("textbox", { name: "Filter risk topics" })).toHaveLength(1);
     expect(screen.getByText("Identity Concentration Signals")).toBeTruthy();
+    expect(screen.queryByText("No verdict claims")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/\b(attack|attacker|malicious)\b/i);
+    expect(document.body.textContent).not.toMatch(/shared control|controlled by one entity/i);
     expect(screen.queryByRole("button", { name: "Show latest snapshot preview" })).toBeNull();
+
+    fireEvent.change(topicFilter, { target: { value: "confidence" } });
+
+    expect(screen.queryByText("Identity Concentration Signals")).toBeNull();
+    expect(screen.getByText("Observation Confidence")).toBeTruthy();
+
+    fireEvent.change(topicFilter, { target: { value: "" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Identity Concentration Signals" }));
+    fireEvent.click(screen.getByRole("button", { name: /Sections/ }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Overview" })[0]);
+
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hash).toBe("");
+    expect(screen.getByTestId("page-subview-label").textContent).toBe("Risk Library");
+    expect(screen.getByRole("heading", { name: "Risk" })).toBeTruthy();
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });
 
   it("renders the commercial API page from the analytics navigation", async () => {

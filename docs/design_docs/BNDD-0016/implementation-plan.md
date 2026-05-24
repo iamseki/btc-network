@@ -19,7 +19,7 @@ Status values:
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
 | Phase 1: BNDD and boundaries | `reviewing` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Defines metric scope, non-detection boundary, and rollout plan.` |
-| Phase 2: Mocked web evidence surface | `reviewing` | `2026-05-23` | `feat/BNDD-0016-risk-library` | `Render mocked review signals as Risk library topic cards without attack language.` |
+| Phase 2: Mocked web evidence surface | `reviewing` | `2026-05-23` | `improve/BNDD-0016-risk-language` | `Cleaned up mocked Risk library wording/tests so the web surface avoids disallowed attack-language claims.` |
 | Phase 3: Human approval gate | `pending` | `2026-05-23` | `not-started` | `Human reviews the mocked UI and explicitly approves backend/API implementation scope.` |
 | Phase 4: Shared read contract | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add report and typed signal models after approval.` |
 | Phase 5: PostgreSQL aggregations | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add run-scoped aggregate queries for concentration and uniformity.` |
