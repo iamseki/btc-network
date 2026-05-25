@@ -8,7 +8,8 @@ use btc_network::crawler::{
     AsnNodeCountItem, CrawlRunDetail, LastRunAsnCountItem, LastRunAsnOrganizationCountItem,
     LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodeSummaryItem,
     LastRunProtocolVersionCountItem, LastRunServicesCountItem, LastRunStartHeightCountItem,
-    LastRunUserAgentCountItem,
+    LastRunUserAgentCountItem, SybilClusterType, SybilMetricSignal, SybilMetricsReport,
+    SybilSignalKind, SybilSignalLevel,
 };
 use btc_network::status::{NodeStatusHistoryItem, NodeStatusItem};
 use utoipa::openapi::OpenApi as OpenApiDocument;
@@ -70,6 +71,7 @@ pub fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
         crate::handlers::last_run::start_heights::list_last_run_start_heights_docs,
         crate::handlers::last_run::asn_organizations::list_last_run_asn_organizations_docs,
         crate::handlers::last_run::nodes::list_last_run_nodes_docs,
+        crate::handlers::last_run::sybil_metrics::get_last_run_sybil_metrics_docs,
         crate::handlers::node_status::list_node_status_docs
     ),
     components(
@@ -86,6 +88,11 @@ pub fn openapi_document(docs_config: &DocsConfig) -> OpenApiDocument {
             RowsResponse<LastRunStartHeightCountItem>,
             RowsResponse<LastRunAsnOrganizationCountItem>,
             PageResponse<LastRunNodeSummaryItem>,
+            SybilMetricsReport,
+            SybilMetricSignal,
+            SybilSignalLevel,
+            SybilSignalKind,
+            SybilClusterType,
             NodeStatusItem,
             NodeStatusHistoryItem,
             ErrorResponse
@@ -128,6 +135,7 @@ mod tests {
             json["paths"]["/api/v1/network/historical/runs"]["get"]["tags"][0],
             "Network Analytics"
         );
+        assert!(json["paths"]["/api/v1/network/last-run/sybil-metrics"]["get"].is_object());
         assert_eq!(json["info"]["version"], env!("CARGO_PKG_VERSION"));
 
         Ok(())
@@ -148,6 +156,7 @@ mod tests {
         let body = std::str::from_utf8(&body)?;
         assert!(body.contains("OpenAPI"));
         assert!(body.contains("historical/runs"));
+        assert!(body.contains("last-run/sybil-metrics"));
         assert!(body.contains("limit"));
         assert!(body.contains("Cache"));
 

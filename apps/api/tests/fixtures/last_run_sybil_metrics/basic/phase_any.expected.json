@@ -1,0 +1,57 @@
+{
+  "runId": "00000000-0000-0000-0000-000000000602",
+  "phase": "crawling",
+  "observedAt": "2026-04-06T10:30:00+00:00",
+  "verifiedNodeCount": 3,
+  "signals": [
+    {
+      "level": "watch",
+      "kind": "top_prefix_share",
+      "clusterType": "prefix",
+      "clusterKey": "9.9.9.0/24",
+      "clusterLabel": "9.9.9.0/24",
+      "nodeCount": 3,
+      "share": 1.0,
+      "threshold": 0.05
+    },
+    {
+      "level": "watch",
+      "kind": "top_asn_share",
+      "clusterType": "asn",
+      "clusterKey": "64520",
+      "clusterLabel": "Live ASN",
+      "nodeCount": 2,
+      "share": 0.667,
+      "threshold": 0.08
+    },
+    {
+      "level": "watch",
+      "kind": "asn_hhi",
+      "clusterType": "asn",
+      "clusterKey": "all_asns",
+      "nodeCount": 3,
+      "threshold": 0.15,
+      "hhi": 0.556
+    },
+    {
+      "level": "watch",
+      "kind": "prefix_density",
+      "clusterType": "prefix",
+      "clusterKey": "9.9.9.0/24",
+      "clusterLabel": "9.9.9.0/24",
+      "nodeCount": 3,
+      "share": 1.0,
+      "threshold": 3.0,
+      "density": 3.0
+    },
+    {
+      "level": "info",
+      "kind": "top_country_share",
+      "clusterType": "country",
+      "clusterKey": "JP",
+      "clusterLabel": "JP",
+      "nodeCount": 2,
+      "share": 0.667
+    }
+  ]
+}

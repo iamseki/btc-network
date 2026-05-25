@@ -11,7 +11,7 @@ use btc_network::crawler::{
     CountNodesByAsnRow, CrawlEndpoint, CrawlNetwork, CrawlPhase, CrawlRunCheckpoint, CrawlRunId,
     CrawlRunMetrics, CrawlRunPhaseFilter, Crawler, CrawlerAnalyticsReader, CrawlerConfig,
     CrawlerRepository, IpEnrichment, IpEnrichmentProvider, PersistedNodeObservation,
-    RawNodeObservation, UnreachableNodeUpdate, UnreachableNodeUpdateKind,
+    RawNodeObservation, SybilSignalKind, UnreachableNodeUpdate, UnreachableNodeUpdateKind,
 };
 use btc_network::status::{NodeStatus, NodeStatusRecord, NodeStatusTarget};
 use btc_network::wire::{self, Command};
@@ -1365,6 +1365,137 @@ async fn analytics_reader_lists_last_run_node_rows_for_dashboard_table() -> Test
     Ok(())
 }
 
+#[tokio::test]
+async fn analytics_reader_returns_last_run_sybil_metrics_report() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+    let run_id = run_id(13);
+    let base_time = Utc::now();
+    let mut observations = Vec::new();
+
+    for offset in 1..=8 {
+        let asn_organization = if offset == 8 {
+            "Example ASN Alt"
+        } else {
+            "Example ASN"
+        };
+        observations.push(sample_verified_observation_with_identity(
+            &run_id,
+            &format!("2.2.2.{offset}"),
+            base_time + Duration::seconds(offset),
+            Some(64512),
+            Some(asn_organization),
+            Some("US"),
+            Some("2.2.2.0/24"),
+            "/Satoshi:27.0.0/",
+            900_000 + offset as i32,
+        ));
+    }
+    observations.push(sample_verified_observation_with_identity(
+        &run_id,
+        "3.3.3.1",
+        base_time + Duration::seconds(20),
+        Some(15169),
+        Some("Other ASN"),
+        Some("US"),
+        Some("3.3.3.0/24"),
+        "/Other:1.0.0/",
+        901_000,
+    ));
+    observations.push(sample_verified_observation_with_identity(
+        &run_id,
+        "3.3.3.2",
+        base_time + Duration::seconds(21),
+        Some(15169),
+        Some("Other ASN"),
+        Some("DE"),
+        Some("3.3.3.0/24"),
+        "/Other:2.0.0/",
+        901_200,
+    ));
+
+    repository.insert_observations_stream(observations).await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Finished,
+            base_time + Duration::seconds(30),
+            1,
+            Some("idle timeout".to_string()),
+        ))
+        .await?;
+
+    let report = CrawlerAnalyticsReader::get_last_run_sybil_metrics(
+        &repository,
+        CrawlRunPhaseFilter::Finished,
+    )
+    .await?
+    .expect("sybil metrics report");
+
+    assert_eq!(report.run_id, run_id.to_string());
+    assert_eq!(report.phase, "finished");
+    assert_eq!(report.verified_node_count, 10);
+    assert!(
+        report
+            .signals
+            .iter()
+            .any(|signal| signal.kind == SybilSignalKind::TopAsnShare
+                && signal.cluster_key == "64512"
+                && signal.share == Some(0.8))
+    );
+    assert!(report.signals.iter().any(|signal| signal.kind
+        == SybilSignalKind::ClusterFingerprintUniformity
+        && signal.cluster_key == "64512"
+        && signal.share == Some(1.0)));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn analytics_reader_sybil_metrics_handles_missing_enrichment_without_signals() -> TestResult {
+    let db = TestDatabase::start().await?;
+    db.apply_migrations().await?;
+    let repository = PostgresCrawlerRepository::new(&db.config)?;
+    let run_id = run_id(14);
+    let base_time = Utc::now();
+
+    repository
+        .insert_observations_stream(vec![
+            sample_verified_observation(&run_id, "4.4.4.1", base_time, None, None, None),
+            sample_verified_observation(
+                &run_id,
+                "4.4.4.2",
+                base_time + Duration::seconds(1),
+                None,
+                None,
+                None,
+            ),
+        ])
+        .await?;
+    repository
+        .insert_run_checkpoint(sample_checkpoint(
+            &run_id,
+            CrawlPhase::Finished,
+            base_time + Duration::seconds(2),
+            1,
+            Some("idle timeout".to_string()),
+        ))
+        .await?;
+
+    let report = CrawlerAnalyticsReader::get_last_run_sybil_metrics(
+        &repository,
+        CrawlRunPhaseFilter::Finished,
+    )
+    .await?
+    .expect("sybil metrics report");
+
+    assert_eq!(report.verified_node_count, 2);
+    assert!(report.signals.is_empty());
+
+    Ok(())
+}
+
 fn unique_database_name() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1404,6 +1535,43 @@ fn sample_verified_observation(
         asn_organization.map(ToString::to_string),
         country.map(ToString::to_string),
         asn.map(|_| format!("{host}/24")),
+    ))
+}
+
+fn sample_verified_observation_with_identity(
+    run_id: &CrawlRunId,
+    host: &str,
+    observed_at: chrono::DateTime<Utc>,
+    asn: Option<u32>,
+    asn_organization: Option<&str>,
+    country: Option<&str>,
+    prefix: Option<&str>,
+    user_agent: &str,
+    start_height: i32,
+) -> PersistedNodeObservation {
+    RawNodeObservation {
+        observed_at,
+        crawl_run_id: run_id.clone(),
+        endpoint: CrawlEndpoint::new(
+            host,
+            8333,
+            CrawlNetwork::Ipv4,
+            Some(IpAddr::V4(host.parse::<Ipv4Addr>().expect("valid ipv4"))),
+        ),
+        protocol_version: Some(70016),
+        services: Some(1),
+        user_agent: Some(user_agent.to_string()),
+        start_height: Some(start_height),
+        relay: Some(true),
+        discovered_peer_addresses_count: 8,
+        latency: Some(std::time::Duration::from_millis(125)),
+        failure_classification: None,
+    }
+    .into_persisted(IpEnrichment::matched(
+        asn,
+        asn_organization.map(ToString::to_string),
+        country.map(ToString::to_string),
+        prefix.map(ToString::to_string),
     ))
 }
 

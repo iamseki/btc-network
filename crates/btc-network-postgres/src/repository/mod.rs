@@ -5,7 +5,7 @@ use btc_network::crawler::{
     LastRunCountryCountItem, LastRunNetworkTypeCountItem, LastRunNodePageCursor,
     LastRunNodeSummaryPage, LastRunProtocolVersionCountItem, LastRunServicesCountItem,
     LastRunStartHeightCountItem, LastRunUserAgentCountItem, PersistedNodeObservation,
-    RepositoryFuture, RepositoryRuntimeMetrics, UnreachableNodeUpdate,
+    RepositoryFuture, RepositoryRuntimeMetrics, SybilMetricsReport, UnreachableNodeUpdate,
 };
 use btc_network::status::{NodeStatusItem, NodeStatusRecord};
 use chrono::{DateTime, Utc};
@@ -244,6 +244,15 @@ impl CrawlerAnalyticsReader for PostgresCrawlerRepository {
         cursor: Option<LastRunNodePageCursor>,
     ) -> RepositoryFuture<'a, Result<LastRunNodeSummaryPage, CrawlerRepositoryError>> {
         Box::pin(async move { analytics::list_last_run_nodes(&self.pool, limit, cursor).await })
+    }
+
+    fn get_last_run_sybil_metrics<'a>(
+        &'a self,
+        phase_filter: CrawlRunPhaseFilter,
+    ) -> RepositoryFuture<'a, Result<Option<SybilMetricsReport>, CrawlerRepositoryError>> {
+        Box::pin(
+            async move { analytics::get_last_run_sybil_metrics(&self.pool, phase_filter).await },
+        )
     }
 
     fn list_node_status<'a>(

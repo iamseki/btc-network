@@ -1,0 +1,97 @@
+{
+  "runId": "00000000-0000-0000-0000-000000000601",
+  "phase": "finished",
+  "observedAt": "2026-04-06T10:00:00+00:00",
+  "verifiedNodeCount": 10,
+  "signals": [
+    {
+      "level": "review",
+      "kind": "cluster_fingerprint_uniformity",
+      "clusterType": "prefix",
+      "clusterKey": "2.2.2.0/24",
+      "clusterLabel": "2.2.2.0/24",
+      "nodeCount": 8,
+      "share": 1.0,
+      "threshold": 0.8
+    },
+    {
+      "level": "review",
+      "kind": "cluster_fingerprint_uniformity",
+      "clusterType": "asn",
+      "clusterKey": "64512",
+      "clusterLabel": "Example ASN",
+      "nodeCount": 8,
+      "share": 1.0,
+      "threshold": 0.8
+    },
+    {
+      "level": "review",
+      "kind": "cluster_height_uniformity",
+      "clusterType": "prefix",
+      "clusterKey": "2.2.2.0/24",
+      "clusterLabel": "2.2.2.0/24",
+      "nodeCount": 8,
+      "share": 1.0,
+      "threshold": 0.8
+    },
+    {
+      "level": "review",
+      "kind": "cluster_height_uniformity",
+      "clusterType": "asn",
+      "clusterKey": "64512",
+      "clusterLabel": "Example ASN",
+      "nodeCount": 8,
+      "share": 1.0,
+      "threshold": 0.8
+    },
+    {
+      "level": "watch",
+      "kind": "top_prefix_share",
+      "clusterType": "prefix",
+      "clusterKey": "2.2.2.0/24",
+      "clusterLabel": "2.2.2.0/24",
+      "nodeCount": 8,
+      "share": 0.8,
+      "threshold": 0.05
+    },
+    {
+      "level": "watch",
+      "kind": "top_asn_share",
+      "clusterType": "asn",
+      "clusterKey": "64512",
+      "clusterLabel": "Example ASN",
+      "nodeCount": 8,
+      "share": 0.8,
+      "threshold": 0.08
+    },
+    {
+      "level": "watch",
+      "kind": "asn_hhi",
+      "clusterType": "asn",
+      "clusterKey": "all_asns",
+      "nodeCount": 10,
+      "threshold": 0.15,
+      "hhi": 0.68
+    },
+    {
+      "level": "watch",
+      "kind": "prefix_density",
+      "clusterType": "prefix",
+      "clusterKey": "2.2.2.0/24",
+      "clusterLabel": "2.2.2.0/24",
+      "nodeCount": 8,
+      "share": 0.8,
+      "threshold": 3.0,
+      "density": 8.0
+    },
+    {
+      "level": "info",
+      "kind": "top_country_share",
+      "clusterType": "country",
+      "clusterKey": "US",
+      "clusterLabel": "US",
+      "nodeCount": 9,
+      "share": 0.9
+    }
+  ]
+}

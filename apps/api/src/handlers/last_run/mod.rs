@@ -6,6 +6,7 @@ pub(crate) mod nodes;
 pub(crate) mod protocol_versions;
 pub(crate) mod services;
 pub(crate) mod start_heights;
+pub(crate) mod sybil_metrics;
 pub(crate) mod user_agents;
 
 pub(crate) use asn_organizations::{
@@ -20,6 +21,7 @@ pub(crate) use protocol_versions::{
 };
 pub(crate) use services::{LIST_LAST_RUN_SERVICES_PATH, list_last_run_services};
 pub(crate) use start_heights::{LIST_LAST_RUN_START_HEIGHTS_PATH, list_last_run_start_heights};
+pub(crate) use sybil_metrics::{GET_LAST_RUN_SYBIL_METRICS_PATH, get_last_run_sybil_metrics};
 pub(crate) use user_agents::{LIST_LAST_RUN_USER_AGENTS_PATH, list_last_run_user_agents};
 
 use btc_network::crawler::{CrawlPhase, CrawlRunPhaseFilter};

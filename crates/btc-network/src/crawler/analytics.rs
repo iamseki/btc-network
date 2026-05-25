@@ -239,6 +239,86 @@ pub struct LastRunNodeSummaryPage {
     pub next_cursor: Option<LastRunNodePageCursor>,
 }
 
+/// Latest-run Sybil-oriented metrics report.
+///
+/// This payload carries crawler-visible heuristic signals only. It must not be
+/// interpreted as confirmed attack detection or proof that endpoints share one
+/// operator. Interpretation text, confidence boundaries, and limitation copy
+/// belong in OpenAPI, agent docs, and frontend descriptors keyed by signal kind.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SybilMetricsReport {
+    pub run_id: String,
+    pub phase: String,
+    pub observed_at: String,
+    pub verified_node_count: u64,
+    pub signals: Vec<SybilMetricSignal>,
+}
+
+/// Conservative review level for a Sybil-oriented heuristic signal.
+///
+/// Levels describe how strongly crawler-visible metrics merit review. They are
+/// not attack labels and must not be surfaced as proof of shared control.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SybilSignalLevel {
+    Info,
+    Watch,
+    Review,
+}
+
+/// Stable signal kind emitted by the Sybil-oriented metrics report.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SybilSignalKind {
+    TopAsnShare,
+    AsnHhi,
+    TopPrefixShare,
+    PrefixDensity,
+    TopCountryShare,
+    ClusterFingerprintUniformity,
+    ClusterHeightUniformity,
+}
+
+/// Observed grouping that produced a Sybil-oriented signal.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SybilClusterType {
+    Asn,
+    Prefix,
+    Country,
+}
+
+/// Typed heuristic signal derived from crawler-observed latest-run metrics.
+///
+/// Keep signal fields explicit and sourceable to persisted crawler data. Avoid
+/// generic evidence arrays, response prose, opaque scores, and confirmed attack
+/// claims in this model.
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SybilMetricSignal {
+    pub level: SybilSignalLevel,
+    pub kind: SybilSignalKind,
+    pub cluster_type: SybilClusterType,
+    pub cluster_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_label: Option<String>,
+    pub node_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threshold: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hhi: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub density: Option<f64>,
+}
+
 /// Full crawl-run payload returned by analytics detail APIs.
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -325,5 +405,51 @@ mod tests {
     fn percentage_returns_zero_for_zero_denominator() {
         assert_eq!(percentage(5, 0), 0.0);
         assert_eq!(percentage_u64(5, 0), 0.0);
+    }
+
+    #[test]
+    fn sybil_metrics_report_serializes_typed_signal_contract() {
+        let report = SybilMetricsReport {
+            run_id: CrawlRunId::from_u128(1).to_string(),
+            phase: crawl_phase_to_str(CrawlPhase::Finished).to_string(),
+            observed_at: to_rfc3339(Utc.with_ymd_and_hms(2026, 5, 24, 12, 0, 0).unwrap()),
+            verified_node_count: 1_234,
+            signals: vec![SybilMetricSignal {
+                level: SybilSignalLevel::Watch,
+                kind: SybilSignalKind::TopAsnShare,
+                cluster_type: SybilClusterType::Asn,
+                cluster_key: "64512".to_string(),
+                cluster_label: Some("Example ASN".to_string()),
+                node_count: 120,
+                share: Some(0.097),
+                threshold: Some(0.08),
+                hhi: None,
+                density: None,
+            }],
+        };
+
+        let serialized = serde_json::to_value(report).expect("serialize report");
+
+        assert_eq!(
+            serialized,
+            serde_json::json!({
+                "runId": CrawlRunId::from_u128(1).to_string(),
+                "phase": "finished",
+                "observedAt": "2026-05-24T12:00:00+00:00",
+                "verifiedNodeCount": 1234,
+                "signals": [
+                    {
+                        "level": "watch",
+                        "kind": "top_asn_share",
+                        "clusterType": "asn",
+                        "clusterKey": "64512",
+                        "clusterLabel": "Example ASN",
+                        "nodeCount": 120,
+                        "share": 0.097,
+                        "threshold": 0.08
+                    }
+                ]
+            })
+        );
     }
 }

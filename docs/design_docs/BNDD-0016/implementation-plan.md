@@ -19,11 +19,11 @@ Status values:
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
 | Phase 1: BNDD and boundaries | `reviewing` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Defines metric scope, non-detection boundary, and rollout plan.` |
-| Phase 2: Mocked web evidence surface | `reviewing` | `2026-05-23` | `improve/BNDD-0016-risk-language` | `Cleaned up mocked Risk library wording/tests so the web surface avoids disallowed attack-language claims.` |
-| Phase 3: Human approval gate | `pending` | `2026-05-23` | `not-started` | `Human reviews the mocked UI and explicitly approves backend/API implementation scope.` |
-| Phase 4: Shared read contract | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add report and typed signal models after approval.` |
-| Phase 5: PostgreSQL aggregations | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add run-scoped aggregate queries for concentration and uniformity.` |
-| Phase 6: API and OpenAPI | `blocked` | `2026-05-23` | `not-started` | `Blocked until Phase 3 approval; add last-run sybil metrics endpoint and docs guardrails.` |
+| Phase 2: Mocked web evidence surface | `merged` | `2026-05-24` | `#39` | `Risk article UI and Markdown-backed content workflow merged.` |
+| Phase 3: Human approval gate | `merged` | `2026-05-24` | `conversation approval` | `Human approved continuing beyond the mocked UI, starting with Phase 4 shared read contract.` |
+| Phase 4: Shared read contract | `reviewing` | `2026-05-24` | `feat/BNDD-0016-shared-read-contract` | `Adds report and typed signal models used by the storage and API slices.` |
+| Phase 5: PostgreSQL aggregations | `reviewing` | `2026-05-24` | `feat/BNDD-0016-shared-read-contract` | `Adds latest-run concentration, HHI, prefix density, and uniformity signal aggregation.` |
+| Phase 6: API and OpenAPI | `reviewing` | `2026-05-24` | `feat/BNDD-0016-shared-read-contract` | `Adds the last-run Sybil metrics endpoint, OpenAPI schema, API guide notes, and tests.` |
 
 ## Explicit Agent Constraints
 
