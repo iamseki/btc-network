@@ -18,17 +18,14 @@ Status values:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: Shared crawler connect admission control | `reviewing` | `2026-04-12` | `current branch` | `Added max_in_flight_connects and wired the connect path through a dedicated semaphore so worker parallelism no longer equals outbound connect pressure.` |
-| Phase 2: Runtime pressure telemetry expansion | `reviewing` | `2026-04-12` | `current branch` | `Progress summaries now expose connect-slot usage plus connectable task, retry, and failure counters alongside process and PostgreSQL runtime metrics.` |
-| Phase 3: Operator config and documentation alignment | `reviewing` | `2026-04-12` | `current branch` | `Compose and crawler docs now describe separate worker/connect budgets, realistic local nofile defaults, and how to interpret the expanded pressure metrics.` |
-| Phase 4: Delayed retry requeueing | `reviewing` | `2026-04-12` | `current branch` | `Retryable connect failures are requeued with delayed backoff metadata and owned by crawler task shutdown rather than detached runtime tasks.` |
+| Phase 1: Shared crawler connect admission control | `merged` | `2026-04-12` | `#21` | `Added max_in_flight_connects and wired the connect path through a dedicated semaphore so worker parallelism no longer equals outbound connect pressure.` |
+| Phase 2: Runtime pressure telemetry expansion | `merged` | `2026-04-12` | `#21` | `Progress summaries expose connect-slot usage plus connectable task, retry, and failure counters alongside process and PostgreSQL runtime metrics.` |
+| Phase 3: Operator config and documentation alignment | `merged` | `2026-04-12` | `#21` | `Compose and crawler docs describe separate worker/connect budgets, realistic local nofile defaults, and how to interpret the expanded pressure metrics.` |
+| Phase 4: Delayed retry requeueing | `merged` | `2026-04-12` | `#21` | `Retryable connect failures are requeued with delayed backoff metadata and owned by crawler task shutdown rather than detached runtime tasks.` |
 
-## Immediate Next Slice
+## Current State
 
-- add `max_in_flight_connects` to shared crawler config and CLI/Compose adapters
-- guard the TCP connect path with a dedicated semaphore rather than using raw worker count as the connect budget
-- add progress metrics for live connect-slot usage
-- decide whether timeout and retry counters belong in `CrawlerStats` or a dedicated networking-pressure struct
+- BNDD-0009 is implemented. Future crawler pressure work should preserve the separate worker/connect budgets and owned retry scheduling model unless a newer BNDD changes that direction.
 
 ## Explicit Agent Constraints
 

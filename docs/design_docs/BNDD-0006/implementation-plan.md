@@ -18,14 +18,12 @@ Status values:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: Shared analytics contract and API app | `reviewing` | `2026-04-01` | `PR #16` | `Shared crawler analytics read models, the storage-backed reader, the new Axum API app, and the initial public-read hardening layer remain on [PR #16](https://github.com/iamseki/btc-network/pull/16).` |
-| Phase 2: Web and desktop analytics UI wiring | `reviewing` | `2026-04-01` | `PR #16` | `The web shell includes analytics-first pages, page-level secondary navigation, the shared HTTP analytics helper, the hosted browser demo-mode fallback, the global latest-snapshot preview, the globe-first `Network Analytics` home page with compact `Risk Brief` and full-width `Risk Drivers`, compact header-row analytics summaries, lightweight inline charts, and the responsive crawler-runs inspection surface on [PR #16](https://github.com/iamseki/btc-network/pull/16).` |
+| Phase 1: Shared analytics contract and API app | `merged` | `2026-04-02` | `#16` | `Shared crawler analytics read models, the storage-backed reader, the Axum API app, and the initial public-read hardening layer are merged.` |
+| Phase 2: Web and desktop analytics UI wiring | `merged` | `2026-04-02` | `#16` | `The analytics-first web/desktop shell, shared HTTP analytics helper, hosted browser demo-mode fallback, latest-snapshot preview, Network Analytics home, compact summaries, lightweight charts, and responsive crawler-runs inspection surface are merged.` |
 
-## Immediate Next Slice
+## Current State
 
-- review and merge [PR #16](https://github.com/iamseki/btc-network/pull/16)
-- keep the BNDD and compact agent docs aligned with the optional browser demo-mode path, including the client-only latest-snapshot replay behavior, globe-first home-page guidance, `Risk Brief` and `Risk Drivers` layout rules, compact header-row summaries, and lightweight chart guidance while the public API remains undeployed
-- keep follow-up work out of this slice unless it preserves the read-only API and the current analytics-first shell direction
+- BNDD-0006 is implemented. Follow-up analytics work should keep the read-only API boundary and analytics-first shell direction unless a newer BNDD supersedes them.
 
 ## Explicit Agent Constraints
 

@@ -46,11 +46,11 @@ Update rules:
 | Phase 4: ClickHouse Crate and Migrations | `merged` | `2026-03-29` | `main` | `ClickHouse adapter, checked-in migrations, live Testcontainers-backed integration tests, deterministic checkpoint ordering, migration workflow docs, and internal module split by concern are merged.` |
 | Phase 5: MMDB Enrichment Adapter | `merged` | `2026-03-29` | `main` | `MMDB enrichment now lives in a dedicated adapter crate with local IPv4/IPv6 lookup, startup dataset-type validation, and focused tests that generate temporary MMDB fixtures.` |
 | Phase 6: App Wiring | `merged` | `2026-03-29` | `main` | `The crawler app now wires the shared workflow to ClickHouse and MMDB adapters, exposes explicit migration plus crawler tuning CLI flags, supports the local MMDB packages used by dev setup, adds bounded connect retries, and keeps the app shell thin with a small tested config surface.` |
-| Phase 7: End-to-End Verification | `reviewing` | `2026-03-29` | `PR #15` | `Shared crawler tests now cover durable resume-state snapshots plus startup recovery, live ClickHouse integration tests assert checkpoint resume-state round-trips, live MMDB plus ClickHouse tests verify real enrichment persistence semantics, and the crawler CLI rejects invalid zero-valued control inputs.` |
+| Phase 7: End-to-End Verification | `merged` | `2026-03-29` | `#15` | `Shared crawler tests cover durable resume-state snapshots plus startup recovery, live ClickHouse integration tests assert checkpoint resume-state round-trips, live MMDB plus ClickHouse tests verify real enrichment persistence semantics, and the crawler CLI rejects invalid zero-valued control inputs.` |
 
-## Immediate Next Slice
+## Current State
 
-- Review and merge PR #15, then mark Phase 7 as `merged`
+- BNDD-0005 is fully landed and now retained for historical context because PostgreSQL superseded ClickHouse as the default persistence backend.
 
 ## Explicit Agent Constraints
 

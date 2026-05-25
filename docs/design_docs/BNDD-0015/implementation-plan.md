@@ -18,11 +18,11 @@ Status values:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: BNDD and endpoint classification | `reviewing` | `2026-05-05` | `improve/BNDD-0015-bounded-scans` | `BNDD status and index aligned with implementation.` |
-| Phase 2: Last-run nodes keyset | `reviewing` | `2026-05-05` | `improve/BNDD-0015-bounded-scans` | `Added node_observation_id, keyset query, page envelope, and token tests.` |
-| Phase 3: Historical aggregate bounds | `reviewing` | `2026-05-05` | `improve/BNDD-0015-bounded-scans` | `Historical ASN aggregation now requires bounded start/end window.` |
-| Phase 4: API and OpenAPI updates | `reviewing` | `2026-05-05` | `improve/BNDD-0015-bounded-scans` | `OpenAPI and guardrail tests keep pageToken/date params targeted.` |
-| Phase 5: Web, demo, and docs | `reviewing` | `2026-05-05` | `improve/BNDD-0015-bounded-scans` | `Web clients, demo pagination, /agents.md, and agent docs updated.` |
+| Phase 1: BNDD and endpoint classification | `merged` | `2026-05-06` | `#36` | `BNDD status and index aligned with implementation.` |
+| Phase 2: Last-run nodes keyset | `merged` | `2026-05-06` | `#36` | `Added node_observation_id, keyset query, page envelope, and token tests.` |
+| Phase 3: Historical aggregate bounds | `merged` | `2026-05-06` | `#36` | `Historical ASN aggregation now requires bounded start/end window.` |
+| Phase 4: API and OpenAPI updates | `merged` | `2026-05-06` | `#36` | `OpenAPI and guardrail tests keep pageToken/date params targeted.` |
+| Phase 5: Web, demo, and docs | `merged` | `2026-05-06` | `#36` | `Web clients, demo pagination, /agents.md, and agent docs updated.` |
 
 ## Explicit Agent Constraints
 

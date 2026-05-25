@@ -18,12 +18,12 @@ Status values:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: BNDD and boundaries | `reviewing` | `2026-05-07` | `docs/BNDD-0016-sybil-metrics` | `Defines metric scope, non-detection boundary, and rollout plan.` |
+| Phase 1: BNDD and boundaries | `merged` | `2026-05-25` | `main` | `Defines metric scope, non-detection boundary, and rollout plan.` |
 | Phase 2: Mocked web evidence surface | `merged` | `2026-05-24` | `#39` | `Risk article UI and Markdown-backed content workflow merged.` |
 | Phase 3: Human approval gate | `merged` | `2026-05-24` | `conversation approval` | `Human approved continuing beyond the mocked UI, starting with Phase 4 shared read contract.` |
-| Phase 4: Shared read contract | `reviewing` | `2026-05-24` | `feat/BNDD-0016-shared-read-contract` | `Adds report and typed signal models used by the storage and API slices.` |
-| Phase 5: PostgreSQL aggregations | `reviewing` | `2026-05-24` | `feat/BNDD-0016-shared-read-contract` | `Adds latest-run concentration, HHI, prefix density, and uniformity signal aggregation.` |
-| Phase 6: API and OpenAPI | `reviewing` | `2026-05-24` | `feat/BNDD-0016-shared-read-contract` | `Adds the last-run Sybil metrics endpoint, OpenAPI schema, API guide notes, and tests.` |
+| Phase 4: Shared read contract | `merged` | `2026-05-25` | `#40` | `Adds report and typed signal models used by the storage and API slices.` |
+| Phase 5: PostgreSQL aggregations | `merged` | `2026-05-25` | `#40` | `Adds latest-run concentration, HHI, prefix density, and uniformity signal aggregation.` |
+| Phase 6: API and OpenAPI | `merged` | `2026-05-25` | `#40` | `Adds the last-run Sybil metrics endpoint, OpenAPI schema, API guide notes, and tests.` |
 
 ## Explicit Agent Constraints
 

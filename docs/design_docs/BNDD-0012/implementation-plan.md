@@ -18,11 +18,11 @@ Status values:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: BNDD and schema | `reviewing` | `2026-04-26` | `current branch` | `Added BNDD-0012 plus unreachable_nodes migration.` |
-| Phase 2: Normal crawler exclusion | `reviewing` | `2026-04-26` | `current branch` | `Normal crawler loads unreachable nodes into HashSet<String> and skips seeds/discoveries before enqueue.` |
-| Phase 3: Terminal failure capture | `reviewing` | `2026-04-26` | `current branch` | `Retryable reachable endpoint failures requeue; terminal reachable endpoint failures record unreachable state after attempt budget exhaustion.` |
-| Phase 4: Recovery path | `reviewing` | `2026-04-26` | `current branch` | `Added recover-unreachable crawler subcommand that processes only unreachable nodes and soft-deletes recovered rows.` |
-| Phase 5: Docs and verification | `reviewing` | `2026-04-26` | `current branch` | `Crawler docs updated; smallest Rust test scopes run.` |
+| Phase 1: BNDD and schema | `merged` | `2026-04-30` | `72e73af` | `Added BNDD-0012 plus unreachable_nodes migration.` |
+| Phase 2: Normal crawler exclusion | `merged` | `2026-04-30` | `72e73af` | `Normal crawler loads unreachable nodes into HashSet<String> and skips seeds/discoveries before enqueue.` |
+| Phase 3: Terminal failure capture | `merged` | `2026-04-30` | `72e73af` | `Retryable reachable endpoint failures requeue; terminal reachable endpoint failures record unreachable state after attempt budget exhaustion.` |
+| Phase 4: Recovery path | `merged` | `2026-04-30` | `72e73af` | `Added recover-unreachable crawler subcommand that processes only unreachable nodes and soft-deletes recovered rows.` |
+| Phase 5: Docs and verification | `merged` | `2026-04-30` | `72e73af` | `Crawler docs updated; smallest Rust test scopes run.` |
 
 ## Explicit Agent Constraints
 
