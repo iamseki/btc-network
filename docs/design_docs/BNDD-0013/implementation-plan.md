@@ -18,13 +18,13 @@ Status values:
 
 | Phase | Status | Last Updated | Branch or PR | Notes |
 | --- | --- | --- | --- | --- |
-| Phase 1: BNDD and target contract | `reviewing` | `2026-05-02` | `current branch` | `Accepted design is reflected in BNDD-0013.` |
-| Phase 2: Shared status workflow | `reviewing` | `2026-05-02` | `current branch` | `Added shared status types and DNS plus handshake checker with five-attempt default.` |
-| Phase 3: PostgreSQL state | `reviewing` | `2026-05-02` | `current branch` | `Added node_status history migration, quoted NODE_STATUS enum, reads, writes, and retention.` |
-| Phase 4: Crawler subcommand | `reviewing` | `2026-05-02` | `current branch` | `Added status-check command and default config/status-targets.toml.` |
-| Phase 5: API endpoint | `reviewing` | `2026-05-02` | `current branch` | `Added GET /api/nodes/status simple array endpoint and OpenAPI docs.` |
-| Phase 6: Web status UI | `reviewing` | `2026-05-02` | `current branch` | `Added home Status section, /status route, polling, stale state, and demo data.` |
-| Phase 7: Docs and verification | `reviewing` | `2026-05-02` | `current branch` | `Updated docs and ran focused verification gates.` |
+| Phase 1: BNDD and target contract | `merged` | `2026-05-03` | `#35` | `Accepted design is reflected in BNDD-0013.` |
+| Phase 2: Shared status workflow | `merged` | `2026-05-03` | `#35` | `Added shared status types and DNS plus handshake checker with five-attempt default.` |
+| Phase 3: PostgreSQL state | `merged` | `2026-05-03` | `#35` | `Added node_status history migration, quoted NODE_STATUS enum, reads, writes, and retention.` |
+| Phase 4: Crawler subcommand | `merged` | `2026-05-03` | `#35` | `Added status-check command and default config/status-targets.toml.` |
+| Phase 5: API endpoint | `merged` | `2026-05-03` | `#35` | `Added GET /api/nodes/status simple array endpoint and OpenAPI docs.` |
+| Phase 6: Web status UI | `merged` | `2026-05-03` | `#35` | `Added home Status section, /status route, polling, stale state, and demo data.` |
+| Phase 7: Docs and verification | `merged` | `2026-05-03` | `#35` | `Updated docs and ran focused verification gates.` |
 
 ## Explicit Agent Constraints
 
